@@ -1,116 +1,153 @@
 package level0
 
 import (
-	"encoding/binary"
+	"io"
 
 	"github.com/zeebo/errs"
 	"github.com/zeebo/lsm"
 	"github.com/zeebo/lsm/filesystem"
 )
 
+const (
+	l0EntryHeaderSize = 24
+	l0DataSize        = 2 << 20
+	l0IndexSize       = 128 << 10
+	l0BufferSize      = 64 << 10
+)
+
 type T struct {
 	buf  []byte
 	fh   filesystem.File
 	len  uint32
-	mcap uint32
-	fcap uint32
 	keys keyHeap
-	pos  map[lsm.Key][2]uint32
+	pos  map[lsm.Key]uint16
+	err  error
 	done bool
 }
 
-func (t *T) Init(fh filesystem.File, mcap, fcap uint32) {
+func (t *T) Init(fh filesystem.File) error {
+	// TODO: should try to resume
+	// TODO: should check done
+
+	if err := fh.Fallocate(l0DataSize + l0IndexSize); err != nil {
+		return errs.Wrap(err)
+	}
+
 	*t = T{
-		buf:  make([]byte, 0, mcap),
 		fh:   fh,
-		mcap: mcap,
-		fcap: fcap,
-		pos:  make(map[lsm.Key][2]uint32),
+		buf:  t.buf[:0],
+		keys: t.keys[:0],
+		pos:  t.pos,
+	}
+
+	if t.pos == nil {
+		t.pos = make(map[lsm.Key]uint16)
+	} else {
+		// compiles into a runtime map-clear call
+		for key := range t.pos {
+			delete(t.pos, key)
+		}
+	}
+
+	return nil
+}
+
+func (t *T) Append(key lsm.Key, ts uint32, value []byte) (bool, error) {
+	ok, err := t.append(key, ts, value)
+	if err != nil {
+		return false, err
+	} else if !ok {
+		return false, t.finish()
+	} else if len(t.buf) >= l0BufferSize {
+		return true, t.flush()
+	} else {
+		return true, nil
 	}
 }
 
-func (t *T) appendUint32(x uint32) {
-	var lbuf [4]byte
-	binary.BigEndian.PutUint32(lbuf[:], x)
-	t.buf = append(t.buf, lbuf[:]...)
-}
-
-func (t *T) appendMem(key lsm.Key, value []byte) (err error) {
-	if t.done {
-		return errs.New("write to finished level0 log file")
+func (t *T) append(key lsm.Key, ts uint32, value []byte) (bool, error) {
+	if t.err != nil {
+		return false, t.err
+	} else if t.len&^31 != t.len {
+		return false, t.storeErr(errs.New("unaligned corrupted length in level0 file"))
 	}
 
+	// reserved header
+	if t.len == 0 {
+		t.buf = append(t.buf, make([]byte, 32)...)
+		t.len = 32
+	}
+
+	length := l0EntryHeaderSize + uint32(len(value))
+	pad := ((length + 31) &^ 31) - length
+
+	if t.len+length > l0DataSize {
+		return false, nil
+	}
+
+	t.buf = appendUint32(t.buf, length)
 	t.buf = append(t.buf, key[:]...)
-	t.appendUint32(uint32(len(value)))
+	t.buf = appendUint32(t.buf, ts)
 	t.buf = append(t.buf, value...)
+
+	// REVISIT: this checks if pad is non-negative for no reason
+	t.buf = append(t.buf, make([]byte, pad)...)
 
 	if _, ok := t.pos[key]; !ok {
 		t.keys = t.keys.Push(key)
 	}
-	entrySize := uint32(len(value)) + uint32(len(key)) + 4
-	t.pos[key] = [2]uint32{t.len, entrySize}
-	t.len += entrySize
+	t.pos[key] = uint16(t.len / 32)
+	t.len += length + pad
 
-	return nil
+	// if we can't fit the smallest possible value, we're done
+	return true, nil
 }
 
-func (t *T) Append(key lsm.Key, value []byte) (bool, error) {
-	if err := t.appendMem(key, value); err != nil {
-		return false, err
-	} else if t.len >= t.fcap {
-		return true, t.fullFlush()
-	} else if uint32(len(t.buf)) > t.mcap {
-		return false, t.memFlush()
-	} else {
-		return false, nil
-	}
+func (t *T) storeErr(err error) error {
+	t.err = errs.Wrap(err)
+	return t.err
 }
 
-func (t *T) fullFlush() (err error) {
-	// flush any pending
-	if len(t.buf) > 0 {
-		if err := t.memFlush(); err != nil {
-			return err
-		}
-	}
-
-	// write out the index and index start position
-	var key lsm.Key
-	for len(t.keys) > 0 {
-		t.keys, key = t.keys.Pop()
-		ent := t.pos[key]
-		t.appendUint32(ent[0])
-		t.appendUint32(ent[1])
-	}
-	t.appendUint32(t.len)
-
-	// flush the index
-	if err := t.memFlush(); err != nil {
-		return err
-	}
-
-	t.done = true
-	return nil
-}
-
-func (t *T) memFlush() (err error) {
+func (t *T) flush() error {
 	if _, err := t.fh.Write(t.buf); err != nil {
-		t.done = true
-		return err
-	} else if err = t.fh.Sync(); err != nil {
-		t.done = true
-		return err
+		return t.storeErr(err)
 	}
 
 	t.buf = t.buf[:0]
 	return nil
 }
 
-func (t *T) Iterator() (it Iterator, err error) {
-	if t.done {
-		it.Init(t.fh)
-	} else {
-		err = errs.New("iterator on unfinished level0 file")
+func (t *T) finish() error {
+	if len(t.buf) > 0 && t.flush() != nil {
+		return t.err
 	}
-	return
+
+	if _, err := t.fh.Seek(l0DataSize, io.SeekStart); err != nil {
+		return t.storeErr(err)
+	}
+
+	var buf []byte
+	var key lsm.Key
+	for len(t.keys) > 0 {
+		t.keys, key = t.keys.Pop()
+		buf = appendUint16(buf, t.pos[key])
+	}
+
+	if _, err := t.fh.Write(buf); err != nil {
+		return t.storeErr(err)
+	}
+
+	t.done = true
+	return nil
+}
+
+func (t *T) Iterator() (it Iterator, err error) {
+	if t.err != nil {
+		err = t.err
+	} else if !t.done {
+		err = errs.New("iterate on incomplete level0 file")
+	} else {
+		it.Init(t.fh)
+	}
+	return it, err
 }

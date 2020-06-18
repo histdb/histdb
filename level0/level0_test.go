@@ -1,10 +1,10 @@
 package level0
 
 import (
-	"encoding/binary"
 	"io"
 	"io/ioutil"
 	"testing"
+	"time"
 
 	"github.com/zeebo/assert"
 	"github.com/zeebo/lsm/filesystem"
@@ -12,7 +12,7 @@ import (
 
 func TestLevel0(t *testing.T) {
 	t.Run("Append", func(t *testing.T) {
-		l0, _, cleanup := newLevel0(t, new(filesystem.T), 4096, 2<<20)
+		l0, _, cleanup := newLevel0(t, new(filesystem.T))
 		defer cleanup()
 
 		_, err := l0.fh.Seek(0, io.SeekStart)
@@ -21,7 +21,31 @@ func TestLevel0(t *testing.T) {
 		data, err := ioutil.ReadAll(l0.fh)
 		assert.NoError(t, err)
 
-		assert.Equal(t, len(data), (2<<20)+8*((2<<20)/32)+4)
-		assert.Equal(t, binary.BigEndian.Uint32(data[len(data)-4:]), 2<<20)
+		assert.Equal(t, len(data), l0DataSize+l0IndexSize)
+
+		// TODO: some better checks
+	})
+}
+
+func BenchmarkLevel0(b *testing.B) {
+	b.Run("AppendAll", func(b *testing.B) {
+		l0, entries, cleanup := newLevel0(b, new(filesystem.T))
+		defer cleanup()
+
+		now := time.Now()
+		b.ReportAllocs()
+		b.ResetTimer()
+
+		for i := 0; i < b.N; i++ {
+			assert.NoError(b, l0.Init(l0.fh))
+			for _, ent := range entries {
+				_, err := l0.Append(ent.key, ent.ts, ent.value)
+				assert.NoError(b, err)
+			}
+		}
+
+		b.StopTimer()
+		b.ReportMetric(float64(len(entries)*b.N)/time.Since(now).Seconds(), "keys/sec")
+		b.ReportMetric(float64(time.Since(now).Nanoseconds())/float64(len(entries)*b.N), "ns/key")
 	})
 }

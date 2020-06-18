@@ -29,13 +29,15 @@ func (fh File) Read(p []byte) (n int, err error) {
 	return n, errs.Wrap(err)
 }
 
-var _ = (*os.File).Stat
+var _ = (*os.File).ReadAt
 
 func (fh File) ReadAt(p []byte, off int64) (n int, err error) {
 	for len(p) > 0 {
 		m, err := syscall.Pread(int(fh.fd), p, off)
 		if err != nil {
 			return n, errs.Wrap(err)
+		} else if m == 0 {
+			return n, io.EOF
 		}
 		n += m
 		p = p[m:]

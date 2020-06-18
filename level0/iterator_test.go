@@ -10,7 +10,7 @@ import (
 
 func TestIterator(t *testing.T) {
 	t.Run("Next", func(t *testing.T) {
-		l0, entries, cleanup := newLevel0(t, new(filesystem.T), 128, 1024)
+		l0, entries, cleanup := newLevel0(t, new(filesystem.T))
 		defer cleanup()
 
 		it, err := l0.Iterator()
@@ -27,7 +27,7 @@ func TestIterator(t *testing.T) {
 	})
 
 	t.Run("Seek", func(t *testing.T) {
-		l0, entries, cleanup := newLevel0(t, new(filesystem.T), 128, 1024)
+		l0, entries, cleanup := newLevel0(t, new(filesystem.T))
 		defer cleanup()
 
 		it, err := l0.Iterator()
@@ -62,55 +62,42 @@ func TestIterator(t *testing.T) {
 
 func BenchmarkIterator(b *testing.B) {
 	b.Run("Next", func(b *testing.B) {
-		run := func(b *testing.B, n int) {
-			l0, _, cleanup := newLevel0(b, new(filesystem.T), 32*1024, 32*n)
-			defer cleanup()
-			var it Iterator
+		l0, entries, cleanup := newLevel0(b, new(filesystem.T))
+		defer cleanup()
+		var it Iterator
 
-			now := time.Now()
-			b.ReportAllocs()
-			b.ResetTimer()
+		now := time.Now()
+		b.ReportAllocs()
+		b.ResetTimer()
 
-			for i := 0; i < b.N; i++ {
-				j := 0
-				it.Init(l0.fh)
-				for ; it.Next(); j++ {
-					_, _ = it.Key(), it.Value()
-				}
-				assert.NoError(b, it.Err())
-				assert.Equal(b, j, n)
+		for i := 0; i < b.N; i++ {
+			it.Init(l0.fh)
+			for it.Next() {
+				_, _ = it.Key(), it.Value()
 			}
-
-			b.StopTimer()
-			b.ReportMetric(float64(b.N*n)/time.Since(now).Seconds(), "keys/sec")
+			assert.NoError(b, it.Err())
 		}
 
-		b.Run("1", func(b *testing.B) { run(b, 1) })
-		b.Run("1Ki", func(b *testing.B) { run(b, 1024) })
-		b.Run("128Ki", func(b *testing.B) { run(b, 128*1024) })
+		b.StopTimer()
+		b.ReportMetric(float64(b.N*len(entries))/time.Since(now).Seconds(), "keys/sec")
+		b.ReportMetric(float64(time.Since(now).Nanoseconds())/float64(len(entries)*b.N), "ns/key")
 	})
 
 	b.Run("Seek", func(b *testing.B) {
-		run := func(b *testing.B, n int) {
-			l0, _, cleanup := newLevel0(b, new(filesystem.T), 32*1024, 32*n)
-			defer cleanup()
+		l0, _, cleanup := newLevel0(b, new(filesystem.T))
+		defer cleanup()
 
-			var it Iterator
-			it.Init(l0.fh)
+		var it Iterator
+		it.Init(l0.fh)
 
-			b.ReportAllocs()
-			b.ResetTimer()
+		b.ReportAllocs()
+		b.ResetTimer()
 
-			for i := 0; i < b.N; i++ {
-				it.Seek(newKey(b))
-			}
-
-			b.StopTimer()
-			b.ReportMetric(float64(it.perf.read)/float64(b.N), "reads/op")
+		for i := 0; i < b.N; i++ {
+			it.Seek(newKey(b))
 		}
 
-		b.Run("1", func(b *testing.B) { run(b, 1) })
-		b.Run("1Ki", func(b *testing.B) { run(b, 1024) })
-		b.Run("128Ki", func(b *testing.B) { run(b, 128*1024) })
+		b.StopTimer()
+		b.ReportMetric(float64(it.perf.read)/float64(b.N), "reads/op")
 	})
 }

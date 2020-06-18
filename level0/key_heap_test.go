@@ -13,7 +13,7 @@ func TestKeyHeap(t *testing.T) {
 		var kh keyHeap
 		var keys []lsm.Key
 
-		for i := 0; i < 1024; i++ {
+		for i := 0; i < 100000; i++ {
 			key := newKey(t)
 
 			kh = kh.Push(key)

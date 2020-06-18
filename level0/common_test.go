@@ -47,6 +47,7 @@ func newTempfile(tb testing.TB, fs *filesystem.T) (filesystem.File, func()) {
 
 type testEntry struct {
 	key   lsm.Key
+	ts    uint32
 	value []byte
 }
 
@@ -54,7 +55,7 @@ func (l0e testEntry) String() string {
 	return fmt.Sprintf("(%s %x)", l0e.key, l0e.value)
 }
 
-func newLevel0(tb testing.TB, fs *filesystem.T, mcap, fcap int) (*T, []testEntry, func()) {
+func newLevel0(tb testing.TB, fs *filesystem.T) (*T, []testEntry, func()) {
 	ok := false
 	fh, cleanup := newTempfile(tb, fs)
 	defer func() {
@@ -64,19 +65,23 @@ func newLevel0(tb testing.TB, fs *filesystem.T, mcap, fcap int) (*T, []testEntry
 	}()
 
 	var l0 T
-	l0.Init(fh, uint32(mcap), uint32(fcap))
+	assert.NoError(tb, l0.Init(fh))
 
 	var entries []testEntry
 	for {
-		ent := testEntry{key: newKey(tb), value: newValue(tb, 12)}
+		ent := testEntry{
+			key:   newKey(tb),
+			ts:    pcg.Uint32(),
+			value: newValue(tb, 8),
+		}
 
-		entries = append(entries, ent)
-
-		done, err := l0.Append(ent.key, ent.value)
+		ok, err := l0.Append(ent.key, ent.ts, ent.value)
 		assert.NoError(tb, err)
-		if done {
+		if !ok {
 			break
 		}
+
+		entries = append(entries, ent)
 	}
 
 	sort.Slice(entries, func(i, j int) bool {
