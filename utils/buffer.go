@@ -1,15 +1,15 @@
-package level0
+package utils
 
-type buffer struct {
+type Buffer struct {
 	data []byte
 	cap  int
 }
 
-func newBuffer(cap int) buffer {
-	return buffer{cap: cap}
+func NewBuffer(cap int) Buffer {
+	return Buffer{cap: cap}
 }
 
-func (b *buffer) append(data []byte) bool {
+func (b *Buffer) Append(data []byte) bool {
 	if len(b.data)+len(data) > b.cap {
 		return false
 	}
@@ -17,21 +17,21 @@ func (b *buffer) append(data []byte) bool {
 	return true
 }
 
-func (b *buffer) appendUint16(v uint16) bool {
-	return b.append((&[2]byte{
+func (b *Buffer) AppendUint16(v uint16) bool {
+	return b.Append((&[2]byte{
 		byte(v >> 0x08), byte(v >> 0x00),
 	})[:])
 }
 
-func (b *buffer) appendUint32(v uint32) bool {
-	return b.append((&[4]byte{
+func (b *Buffer) AppendUint32(v uint32) bool {
+	return b.Append((&[4]byte{
 		byte(v >> 0x18), byte(v >> 0x10),
 		byte(v >> 0x08), byte(v >> 0x00),
 	})[:])
 }
 
-func (b *buffer) appendUint64(v uint64) bool {
-	return b.append((&[8]byte{
+func (b *Buffer) AppendUint64(v uint64) bool {
+	return b.Append((&[8]byte{
 		byte(v >> 0x38), byte(v >> 0x30),
 		byte(v >> 0x28), byte(v >> 0x20),
 		byte(v >> 0x18), byte(v >> 0x10),
@@ -39,7 +39,7 @@ func (b *buffer) appendUint64(v uint64) bool {
 	})[:])
 }
 
-func (b *buffer) take() []byte {
+func (b *Buffer) Take() []byte {
 	data := b.data
 	if rem := b.cap - len(data); rem > 0 {
 		data = append(data, make([]byte, rem)...)

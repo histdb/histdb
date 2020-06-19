@@ -6,6 +6,7 @@ import (
 	"github.com/zeebo/errs"
 	"github.com/zeebo/lsm"
 	"github.com/zeebo/lsm/filesystem"
+	"github.com/zeebo/lsm/utils"
 )
 
 const (
@@ -52,6 +53,10 @@ func (t *T) Init(fh filesystem.File) error {
 	return nil
 }
 
+func (t *T) File() filesystem.File {
+	return t.fh
+}
+
 func (t *T) Append(key lsm.Key, ts uint32, value []byte) (bool, error) {
 	ok, err := t.append(key, ts, value)
 	if err != nil {
@@ -85,12 +90,12 @@ func (t *T) append(key lsm.Key, ts uint32, value []byte) (bool, error) {
 		return false, nil
 	}
 
-	t.buf = appendUint32(t.buf, length)
+	t.buf = utils.AppendUint32(t.buf, length)
 	t.buf = append(t.buf, key[:]...)
-	t.buf = appendUint32(t.buf, ts)
+	t.buf = utils.AppendUint32(t.buf, ts)
 	t.buf = append(t.buf, value...)
 
-	// REVISIT: this checks if pad is non-negative for no reason
+	// REVISIT: this checks if pad is non-negative for no reason (it's a uint32)
 	t.buf = append(t.buf, make([]byte, pad)...)
 
 	if _, ok := t.pos[key]; !ok {
@@ -126,11 +131,11 @@ func (t *T) finish() error {
 		return t.storeErr(err)
 	}
 
-	var buf []byte
+	buf := make([]byte, 0, len(t.keys)*2)
 	var key lsm.Key
 	for len(t.keys) > 0 {
 		t.keys, key = t.keys.Pop()
-		buf = appendUint16(buf, t.pos[key])
+		buf = utils.AppendUint16(buf, t.pos[key])
 	}
 
 	if _, err := t.fh.Write(buf); err != nil {

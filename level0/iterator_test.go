@@ -6,19 +6,21 @@ import (
 
 	"github.com/zeebo/assert"
 	"github.com/zeebo/lsm/filesystem"
+	"github.com/zeebo/lsm/testhelp"
+	"github.com/zeebo/pcg"
 )
 
 func TestIterator(t *testing.T) {
 	t.Run("Next", func(t *testing.T) {
-		l0, entries, cleanup := newLevel0(t, new(filesystem.T))
+		l0, entries, cleanup := Level0(t, new(filesystem.T))
 		defer cleanup()
 
 		it, err := l0.Iterator()
 		assert.NoError(t, err)
 
 		for it.Next() {
-			assert.Equal(t, entries[0].key, it.Key())
-			assert.Equal(t, string(entries[0].value), string(it.Value()))
+			assert.Equal(t, entries[0].Key, it.Key())
+			assert.Equal(t, string(entries[0].Value), string(it.Value()))
 			entries = entries[1:]
 		}
 
@@ -27,32 +29,35 @@ func TestIterator(t *testing.T) {
 	})
 
 	t.Run("Seek", func(t *testing.T) {
-		l0, entries, cleanup := newLevel0(t, new(filesystem.T))
+		l0, entries, cleanup := Level0(t, new(filesystem.T))
 		defer cleanup()
 
 		it, err := l0.Iterator()
 		assert.NoError(t, err)
 
-		for i, ent := range entries {
-			lt, gt := ent.key, ent.key
+		for j := 0; j < 1000; j++ {
+			i := int(pcg.Uint32()) % len(entries)
+			ent := entries[i]
+
+			lt, gt := ent.Key, ent.Key
 			lt[len(lt)-1]--
 			gt[len(gt)-1]++
 
-			it.Seek(ent.key)
+			it.Seek(ent.Key)
 			assert.That(t, it.Next())
-			assert.Equal(t, it.Key(), ent.key)
-			assert.Equal(t, string(it.Value()), string(ent.value))
+			assert.Equal(t, it.Key(), ent.Key)
+			assert.Equal(t, string(it.Value()), string(ent.Value))
 
 			it.Seek(lt)
 			assert.That(t, it.Next())
-			assert.Equal(t, it.Key(), ent.key)
-			assert.Equal(t, string(it.Value()), string(ent.value))
+			assert.Equal(t, it.Key(), ent.Key)
+			assert.Equal(t, string(it.Value()), string(ent.Value))
 
 			if i+1 < len(entries) {
 				it.Seek(gt)
 				assert.That(t, it.Next())
-				assert.Equal(t, it.Key(), entries[i+1].key)
-				assert.Equal(t, string(it.Value()), string(entries[i+1].value))
+				assert.Equal(t, it.Key(), entries[i+1].Key)
+				assert.Equal(t, string(it.Value()), string(entries[i+1].Value))
 			}
 		}
 
@@ -62,7 +67,7 @@ func TestIterator(t *testing.T) {
 
 func BenchmarkIterator(b *testing.B) {
 	b.Run("Next", func(b *testing.B) {
-		l0, entries, cleanup := newLevel0(b, new(filesystem.T))
+		l0, entries, cleanup := Level0(b, new(filesystem.T))
 		defer cleanup()
 		var it Iterator
 
@@ -84,7 +89,7 @@ func BenchmarkIterator(b *testing.B) {
 	})
 
 	b.Run("Seek", func(b *testing.B) {
-		l0, _, cleanup := newLevel0(b, new(filesystem.T))
+		l0, _, cleanup := Level0(b, new(filesystem.T))
 		defer cleanup()
 
 		var it Iterator
@@ -94,10 +99,7 @@ func BenchmarkIterator(b *testing.B) {
 		b.ResetTimer()
 
 		for i := 0; i < b.N; i++ {
-			it.Seek(newKey(b))
+			it.Seek(testhelp.Key())
 		}
-
-		b.StopTimer()
-		b.ReportMetric(float64(it.perf.read)/float64(b.N), "reads/op")
 	})
 }

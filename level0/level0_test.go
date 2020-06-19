@@ -12,7 +12,7 @@ import (
 
 func TestLevel0(t *testing.T) {
 	t.Run("Append", func(t *testing.T) {
-		l0, _, cleanup := newLevel0(t, new(filesystem.T))
+		l0, _, cleanup := Level0(t, new(filesystem.T))
 		defer cleanup()
 
 		_, err := l0.fh.Seek(0, io.SeekStart)
@@ -29,7 +29,7 @@ func TestLevel0(t *testing.T) {
 
 func BenchmarkLevel0(b *testing.B) {
 	b.Run("AppendAll", func(b *testing.B) {
-		l0, entries, cleanup := newLevel0(b, new(filesystem.T))
+		l0, entries, cleanup := Level0(b, new(filesystem.T))
 		defer cleanup()
 
 		now := time.Now()
@@ -39,7 +39,7 @@ func BenchmarkLevel0(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			assert.NoError(b, l0.Init(l0.fh))
 			for _, ent := range entries {
-				_, err := l0.Append(ent.key, ent.ts, ent.value)
+				_, err := l0.Append(ent.Key, ent.Timestamp, ent.Value)
 				assert.NoError(b, err)
 			}
 		}

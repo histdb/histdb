@@ -16,11 +16,6 @@ type Iterator struct {
 
 	idx []byte
 	err error
-
-	// perf counters
-	perf struct {
-		read int
-	}
 }
 
 func (it *Iterator) Init(fh filesystem.File) {
@@ -36,7 +31,6 @@ func (it *Iterator) readIndex() {
 		it.idxb = make([]byte, l0IndexSize)
 	}
 
-	it.perf.read++
 	if _, it.err = it.fh.ReadAt(it.idxb, l0DataSize); it.err != nil {
 		return
 	}
@@ -68,7 +62,6 @@ func (it *Iterator) Next() bool {
 }
 
 func (it *Iterator) readEntryHeader(offset int64) {
-	it.perf.read++
 	if _, it.err = it.fh.ReadAt(it.hbuf[:], offset); it.err != nil {
 		return
 	}
@@ -87,7 +80,6 @@ func (it *Iterator) readValue(offset int64) {
 		it.vbuf = it.vbuf[:length]
 	}
 
-	it.perf.read++
 	if _, it.err = it.fh.ReadAt(it.vbuf, offset+l0EntryHeaderSize); it.err != nil {
 		return
 	}
@@ -96,6 +88,10 @@ func (it *Iterator) readValue(offset int64) {
 func (it *Iterator) Key() (k lsm.Key) {
 	copy(k[:], it.hbuf[4:20])
 	return k
+}
+
+func (it *Iterator) Timestamp() uint32 {
+	return binary.BigEndian.Uint32(it.hbuf[20:24])
 }
 
 func (it *Iterator) Value() []byte {

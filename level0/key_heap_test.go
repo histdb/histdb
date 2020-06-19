@@ -6,6 +6,7 @@ import (
 
 	"github.com/zeebo/assert"
 	"github.com/zeebo/lsm"
+	"github.com/zeebo/lsm/testhelp"
 )
 
 func TestKeyHeap(t *testing.T) {
@@ -14,7 +15,7 @@ func TestKeyHeap(t *testing.T) {
 		var keys []lsm.Key
 
 		for i := 0; i < 100000; i++ {
-			key := newKey(t)
+			key := testhelp.Key()
 
 			kh = kh.Push(key)
 			keys = append(keys, key)

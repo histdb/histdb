@@ -1,0 +1,59 @@
+package level0
+
+import (
+	"fmt"
+	"sort"
+	"testing"
+
+	"github.com/zeebo/assert"
+	"github.com/zeebo/lsm"
+	"github.com/zeebo/lsm/filesystem"
+	"github.com/zeebo/lsm/testhelp"
+)
+
+type Entry struct {
+	Key       lsm.Key
+	Timestamp uint32
+	Value     []byte
+}
+
+func (e Entry) String() string {
+	return fmt.Sprintf("(%s %d %x)", e.Key, e.Timestamp, e.Value)
+}
+
+func Level0(tb testing.TB, fs *filesystem.T) (*T, []Entry, func()) {
+	ok := false
+	fh, cleanup := testhelp.Tempfile(tb, fs)
+	defer func() {
+		if !ok {
+			cleanup()
+		}
+	}()
+
+	var l0 T
+	assert.NoError(tb, l0.Init(fh))
+
+	var entries []Entry
+	for {
+		ent := Entry{
+			Key:       testhelp.Key(),
+			Timestamp: testhelp.Timestamp(),
+			Value:     testhelp.Value(8),
+		}
+
+		ok, err := l0.Append(ent.Key, ent.Timestamp, ent.Value)
+		assert.NoError(tb, err)
+		if !ok {
+			break
+		}
+
+		entries = append(entries, ent)
+	}
+
+	sort.Slice(entries, func(i, j int) bool {
+		return lsm.KeyCmp.Less(entries[i].Key, entries[j].Key)
+	})
+
+	ok = true
+	return &l0, entries, cleanup
+}
