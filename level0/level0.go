@@ -1,6 +1,7 @@
 package level0
 
 import (
+	"encoding/binary"
 	"io"
 
 	"github.com/zeebo/errs"
@@ -12,7 +13,7 @@ import (
 const (
 	l0EntryHeaderSize = 24
 	l0DataSize        = 2 << 20
-	l0IndexSize       = 128 << 10
+	l0IndexSize       = 256 << 10
 	l0BufferSize      = 64 << 10
 )
 
@@ -132,14 +133,17 @@ func (t *T) finish() error {
 		return t.storeErr(err)
 	}
 
-	buf := make([]byte, 0, len(t.keys)*2)
+	buf := make([]byte, 0, len(t.keys)*4)
 	var key lsm.Key
 	for len(t.keys) > 0 {
 		t.keys, key = t.keys.Pop()
 		ibuf := t.pos[key]
+		kp := binary.BigEndian.Uint16(key[0:2])
 
+		buf = utils.AppendUint16(buf, kp)
 		buf = utils.AppendUint16(buf, ibuf.x)
 		for _, idx := range ibuf.b {
+			buf = utils.AppendUint16(buf, kp)
 			buf = utils.AppendUint16(buf, idx)
 		}
 	}

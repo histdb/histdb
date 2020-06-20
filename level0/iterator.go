@@ -44,16 +44,16 @@ func (it *Iterator) Next() bool {
 	} else if it.idx == nil {
 		it.readIndex()
 	}
-	if len(it.idx) < 2 {
+	if len(it.idx) < 4 {
 		return false
 	}
 
-	offset := int64(binary.BigEndian.Uint16(it.idx[0:2])) * 32
+	offset := int64(binary.BigEndian.Uint16(it.idx[2:4])) * 32
 	if offset == 0 {
 		return false
 	}
 
-	it.idx = it.idx[2:]
+	it.idx = it.idx[4:]
 
 	it.readEntryHeader(offset)
 	it.readValue(offset)
@@ -104,16 +104,27 @@ func (it *Iterator) Seek(key lsm.Key) {
 	} else if it.idx == nil {
 		it.readIndex()
 	}
-	if len(it.idxb) < 2 {
+	if len(it.idxb) < 4 {
 		return
 	}
 
-	i, j := 0, len(it.idxb)/2
+	kp := binary.BigEndian.Uint16(key[0:2])
+	i, j := 0, len(it.idxb)/4
 	for i < j {
 		h := int(uint(i+j) / 2)
 
-		offset := int64(binary.BigEndian.Uint16(it.idxb[2*h:])) * 32
+		offset := int64(binary.BigEndian.Uint16(it.idxb[4*h+2:])) * 32
 		if offset == 0 {
+			j = h
+			continue
+		}
+
+		kph := binary.BigEndian.Uint16(it.idxb[4*h:])
+		if kph < kp {
+			i = h + 1
+			continue
+		}
+		if kph > kp {
 			j = h
 			continue
 		}
@@ -130,5 +141,5 @@ func (it *Iterator) Seek(key lsm.Key) {
 		}
 	}
 
-	it.idx = it.idxb[2*i:]
+	it.idx = it.idxb[4*i:]
 }
