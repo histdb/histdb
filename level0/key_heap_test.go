@@ -25,10 +25,10 @@ func TestKeyHeap(t *testing.T) {
 			return lsm.KeyCmp.Less(keys[i], keys[j])
 		})
 
-		var k lsm.Key
+		var key lsm.Key
 		for len(kh) > 0 {
-			kh, k = kh.Pop()
-			assert.Equal(t, k.String(), keys[0].String())
+			kh, key = kh.Pop()
+			assert.Equal(t, key.String(), keys[0].String())
 			keys = keys[1:]
 		}
 	})

@@ -12,13 +12,12 @@ import (
 )
 
 type Entry struct {
-	Key       lsm.Key
-	Timestamp uint32
-	Value     []byte
+	Key   lsm.Key
+	Value []byte
 }
 
 func (e Entry) String() string {
-	return fmt.Sprintf("(%s %d %x)", e.Key, e.Timestamp, e.Value)
+	return fmt.Sprintf("(%s %x)", e.Key, e.Value)
 }
 
 func Level0(tb testing.TB, fs *filesystem.T) (*T, []Entry, func()) {
@@ -36,12 +35,11 @@ func Level0(tb testing.TB, fs *filesystem.T) (*T, []Entry, func()) {
 	var entries []Entry
 	for {
 		ent := Entry{
-			Key:       testhelp.Key(),
-			Timestamp: testhelp.Timestamp(),
-			Value:     testhelp.Value(8),
+			Key:   testhelp.Key(),
+			Value: testhelp.Value(8),
 		}
 
-		ok, err := l0.Append(ent.Key, ent.Timestamp, ent.Value)
+		ok, err := l0.Append(ent.Key, ent.Value)
 		assert.NoError(tb, err)
 		if !ok {
 			break

@@ -1,6 +1,8 @@
 package level0
 
-import "github.com/zeebo/lsm"
+import (
+	"github.com/zeebo/lsm"
+)
 
 type keyHeap []lsm.Key
 

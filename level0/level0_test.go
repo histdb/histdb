@@ -39,7 +39,7 @@ func BenchmarkLevel0(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			assert.NoError(b, l0.Init(l0.fh))
 			for _, ent := range entries {
-				_, err := l0.Append(ent.Key, ent.Timestamp, ent.Value)
+				_, err := l0.Append(ent.Key, ent.Value)
 				assert.NoError(b, err)
 			}
 		}

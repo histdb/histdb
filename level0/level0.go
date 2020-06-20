@@ -21,7 +21,7 @@ type T struct {
 	fh   filesystem.File
 	len  uint32
 	keys keyHeap
-	pos  map[lsm.Key]uint16
+	pos  map[lsm.Key]idxBuf
 	err  error
 	done bool
 }
@@ -42,7 +42,7 @@ func (t *T) Init(fh filesystem.File) error {
 	}
 
 	if t.pos == nil {
-		t.pos = make(map[lsm.Key]uint16)
+		t.pos = make(map[lsm.Key]idxBuf)
 	} else {
 		// compiles into a runtime map-clear call
 		for key := range t.pos {
@@ -57,8 +57,8 @@ func (t *T) File() filesystem.File {
 	return t.fh
 }
 
-func (t *T) Append(key lsm.Key, ts uint32, value []byte) (bool, error) {
-	ok, err := t.append(key, ts, value)
+func (t *T) Append(key lsm.Key, value []byte) (bool, error) {
+	ok, err := t.append(key, value)
 	if err != nil {
 		return false, err
 	} else if !ok {
@@ -70,7 +70,7 @@ func (t *T) Append(key lsm.Key, ts uint32, value []byte) (bool, error) {
 	}
 }
 
-func (t *T) append(key lsm.Key, ts uint32, value []byte) (bool, error) {
+func (t *T) append(key lsm.Key, value []byte) (bool, error) {
 	if t.err != nil {
 		return false, t.err
 	} else if t.len&^31 != t.len {
@@ -92,7 +92,6 @@ func (t *T) append(key lsm.Key, ts uint32, value []byte) (bool, error) {
 
 	t.buf = utils.AppendUint32(t.buf, length)
 	t.buf = append(t.buf, key[:]...)
-	t.buf = utils.AppendUint32(t.buf, ts)
 	t.buf = append(t.buf, value...)
 
 	// REVISIT: this checks if pad is non-negative for no reason (it's a uint32)
@@ -101,10 +100,12 @@ func (t *T) append(key lsm.Key, ts uint32, value []byte) (bool, error) {
 	if _, ok := t.pos[key]; !ok {
 		t.keys = t.keys.Push(key)
 	}
-	t.pos[key] = uint16(t.len / 32)
-	t.len += length + pad
 
-	// if we can't fit the smallest possible value, we're done
+	ibuf := t.pos[key]
+	ibuf.Append(uint16(t.len / 32))
+	t.pos[key] = ibuf
+
+	t.len += length + pad
 	return true, nil
 }
 
@@ -135,7 +136,12 @@ func (t *T) finish() error {
 	var key lsm.Key
 	for len(t.keys) > 0 {
 		t.keys, key = t.keys.Pop()
-		buf = utils.AppendUint16(buf, t.pos[key])
+		ibuf := t.pos[key]
+
+		buf = utils.AppendUint16(buf, ibuf.x)
+		for _, idx := range ibuf.b {
+			buf = utils.AppendUint16(buf, idx)
+		}
 	}
 
 	if _, err := t.fh.Write(buf); err != nil {
@@ -155,4 +161,19 @@ func (t *T) Iterator() (it Iterator, err error) {
 		it.Init(t.fh)
 	}
 	return it, err
+}
+
+//////////////////////////////////////
+
+type idxBuf struct {
+	b []uint16
+	x uint16
+}
+
+func (i *idxBuf) Append(x uint16) {
+	if i.x == 0 {
+		i.x = x
+	} else {
+		i.b = append(i.b, x)
+	}
 }

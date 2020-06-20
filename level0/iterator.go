@@ -86,12 +86,8 @@ func (it *Iterator) readValue(offset int64) {
 }
 
 func (it *Iterator) Key() (k lsm.Key) {
-	copy(k[:], it.hbuf[4:20])
+	copy(k[:], it.hbuf[4:4+len(k)])
 	return k
-}
-
-func (it *Iterator) Timestamp() uint32 {
-	return binary.BigEndian.Uint32(it.hbuf[20:24])
 }
 
 func (it *Iterator) Value() []byte {

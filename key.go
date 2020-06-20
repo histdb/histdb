@@ -2,13 +2,14 @@ package lsm
 
 import (
 	"bytes"
-	"encoding/hex"
+	"encoding/binary"
+	"fmt"
 )
 
-type Key [16]byte
+type Key [20]byte
 
 func (k Key) String() string {
-	return hex.EncodeToString(k[:])
+	return fmt.Sprintf("(key %x %x %08x)", k.TagHash(), k.MetricHash(), k.Timestamp())
 }
 
 func (k *Key) SetTagHash(th [8]byte) { copy(k[0:8], th[0:8]) }
@@ -21,6 +22,11 @@ func (k *Key) SetMetricHash(mh [8]byte) { copy(k[8:16], mh[0:8]) }
 func (k Key) MetricHash() (mh [8]byte) {
 	copy(mh[0:8], k[8:16])
 	return mh
+}
+
+func (k *Key) SetTimestamp(ts uint32) { binary.BigEndian.PutUint32(k[16:20], ts) }
+func (k Key) Timestamp() uint32 {
+	return binary.BigEndian.Uint32(k[16:20])
 }
 
 type keyCmp struct{}
