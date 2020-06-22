@@ -248,48 +248,36 @@ at an incomplete file and resume it.
 Level N
 -------
 
-Files at level N > 0 are written out as a sequence of blocks. Each
-block is a 4 KiB key index structure followed by 124 KiB of
-value data, whichever fills first. This means there is a key block
-every 128 KiB.
 
-The key index structure combines common tag key hash and tag value
-hashes so that each entry begins like the following.
 
- 0                   1                   2                   3
- 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
-+---------------------------------------------------------------+
-|                             Length                            |
-+---------------------------------------------------------------+
-|                                                               |
-+                          Tag Key Hash                         +
-|                                                               |
-+---------------------------------------------------------------+
-|                                                               |
-+                          Metric Hash                          +
-|                                                               |
-+---------------------------------------------------------------+
-|                          Value Offset                         |
-+---------------------------------------------------------------+
 
-The value offset is the absolute offset in to the 124 KiB block of
-values where the first value starts. It is followed by pairs of
-varint encoded timestamp and length values. Additionaly, the
-timestamps are delta encoded.
 
-The length is still the overall length including all of the timestamp
-and length pairs. It is possible that there are more timestamp/length
-pairs than can fit in the remaining space of the block. If so
-the next block will contain another entry for the same key.
 
-This scheme was chosen because it allows efficient encoding of all of
-the keys by only storing them once (except in rare cases) and delta
-encoding the timestamps. It still allows efficient binary search
-by splitting the file into 128 KiB blocks and searching there. Since
-reads from disk happen in large blocks anyway, we pack as much data
-about the index as possible. Because we don't have a single index
-at the start or end of the file, we don't have to hold all of it in
-memory at once, so we can do compation and seeks in O(1) space.
 
-A final 128 KiB block is appended and reserved. It is expected to be
-used to store bloom filters, version information or other metadata.
+
+
+
+
+
+
+
+Papers / References
+-------------------
+
+The Unwritten Contract of Solid State Drives
+http://pages.cs.wisc.edu/~jhe/eurosys17-he.pdf
+
+The five-minute rule twenty years later, and how flash memory changes the rules
+http://www.cs.cmu.edu/~damon2007/pdf/graefe07fiveminrule.pdf
+
+An Efficient Memory-Mapped Key-Value Store for Flash Storage
+https://www.exanest.eu/pub/SoCC18_efficient_kv_store.pdf
+
+LLAMA: A Cache/Storage Subsystem for Modern Hardware
+https://www.microsoft.com/en-us/research/wp-content/uploads/2016/02/llama-vldb2013.pdf
+
+The Design and Implementation of a Log-Structured File System
+https://people.eecs.berkeley.edu/~brewer/cs262/LFS.pdf
+
+TinyLFU: A Highly Efficient Cache Admission Policy
+https://arxiv.org/pdf/1512.00727.pdf

@@ -12,6 +12,11 @@ func (k Key) String() string {
 	return fmt.Sprintf("(key %x %x %08x)", k.TagHash(), k.MetricHash(), k.Timestamp())
 }
 
+func (k Key) Hash() (h [16]byte) {
+	copy(h[0:16], k[0:16])
+	return h
+}
+
 func (k *Key) SetTagHash(th [8]byte) { copy(k[0:8], th[0:8]) }
 func (k Key) TagHash() (th [8]byte) {
 	copy(th[0:8], k[0:8])

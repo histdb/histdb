@@ -9,6 +9,10 @@ func NewBuffer(cap int) Buffer {
 	return Buffer{cap: cap}
 }
 
+func (b *Buffer) Len() int {
+	return len(b.data)
+}
+
 func (b *Buffer) Append(data []byte) bool {
 	if len(b.data)+len(data) > b.cap {
 		return false

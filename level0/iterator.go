@@ -113,12 +113,14 @@ func (it *Iterator) Seek(key lsm.Key) {
 	for i < j {
 		h := int(uint(i+j) / 2)
 
+		// check if we have a value there at all
 		offset := int64(binary.BigEndian.Uint16(it.idxb[4*h+2:])) * 32
 		if offset == 0 {
 			j = h
 			continue
 		}
 
+		// check if the prefix is definitely larger/smaller
 		kph := binary.BigEndian.Uint16(it.idxb[4*h:])
 		if kph < kp {
 			i = h + 1
@@ -129,6 +131,7 @@ func (it *Iterator) Seek(key lsm.Key) {
 			continue
 		}
 
+		// have to read the whole entry
 		it.readEntryHeader(offset)
 		if it.err != nil {
 			return
