@@ -1,6 +1,8 @@
 package btree
 
 import (
+	"math"
+
 	"github.com/zeebo/lsm"
 )
 
@@ -9,260 +11,110 @@ type entry struct {
 	value uint32
 }
 
-// T is an in memory B+ tree tuned to store entries
+const (
+	invalidNode    = math.MaxUint32
+	payloadEntries = 170
+)
+
+// node are nodes in the btree.
+type node struct {
+	next    uint32 // pointer to the next node (or if not leaf, the rightmost edge)
+	prev    uint32 // backpointer from next node (unused if not leaf)
+	parent  uint32 // set to invalidNode on the root node
+	count   uint16 // used values in payload
+	leaf    bool   // set if is a leaf
+	payload [payloadEntries]entry
+}
+
+// appendEntry appends the entry into the node. it must compare greater than any
+// element inside of the node, already, and should never be called on a node that
+// would have to split.
+func (n *node) appendEntry(ent entry) {
+	n.payload[0] = ent
+	n.count++
+}
+
+// T is an in memory B+ tree tuned to store fixed size keys and values.
 type T struct {
-	root  *node
-	rid   uint32
-	right uint32
-	nodes []*node
-}
-
-// Reset clears the btree back to an empty state
-func (b *T) Reset() {
-	b.root.reset()
-	b.rid = 0
-	b.right = 0
-	b.nodes = b.nodes[:0]
-}
-
-// search returns the leaf node that should contain the key.
-func (b *T) search(ent entry) (*node, uint32) {
-	n, nid := b.root, b.rid
-
-	for !n.leaf {
-		i, j := uint16(0), n.count
-		for i < j {
-			h := (i + j) >> 1
-			if lsm.KeyCmp.Less(ent.key, n.payload[h].key) {
-				j = h
-			} else {
-				i = h + 1
-			}
-		}
-		if i == n.count {
-			nid = n.next
-		} else {
-			nid = n.payload[i].value
-		}
-		n = b.nodes[nid]
-	}
-
-	return n, nid
+	root    *node
+	right   *node
+	nodes   []*node
+	rootid  uint32
+	rightid uint32
 }
 
 // alloc creates a fresh node.
 func (b *T) alloc(leaf bool) (n *node, id uint32) {
-	if len(b.nodes) < cap(b.nodes) {
-		n = b.nodes[:len(b.nodes)+1][len(b.nodes)]
-		n.reset()
-	}
-	if n == nil {
-		n = new(node)
+	n = &node{
+		next:   invalidNode,
+		prev:   invalidNode,
+		parent: invalidNode,
+		leaf:   leaf,
 	}
 
-	n.next = invalidNode
-	n.prev = invalidNode
-	n.parent = invalidNode
-	n.leaf = leaf
-	n.ok = true
 	b.nodes = append(b.nodes, n)
-
 	return n, uint32(len(b.nodes) - 1)
 }
 
-// split the node in half, returning a new node containing the
-// smaller half of the keys.
-func (b *T) split(n *node, nid uint32) (*node, uint32) {
-	s, sid := b.alloc(n.leaf)
-	s.parent = n.parent
-
-	// split the entries between the two nodes
-	s.count = uint16(copy(s.payload[:], n.payload[:payloadSplit]))
-
-	copyAt := payloadSplit
-	if !n.leaf {
-		// if it's not a leaf, we don't want to include the split btreeEntry
-		copyAt++
-
-		// additionally, the next pointer should be what the split btreeEntry
-		// points at.
-		s.next = n.payload[payloadSplit].value
-
-		// additionally, every element that it points at needs to have
-		// their parent updated
-		b.nodes[s.next].parent = sid
-		for i := uint16(0); i < s.count; i++ {
-			b.nodes[s.payload[i].value].parent = sid
-		}
-	} else {
-		// if it is a leaf, fix up the next and previous pointers
-		s.next = nid
-		if n.prev != invalidNode {
-			s.prev = n.prev
-			b.nodes[s.prev].next = sid
-		}
-		n.prev = sid
-	}
-	n.count = uint16(copy(n.payload[:], n.payload[copyAt:]))
-
-	return s, sid
-}
-
-// Insert puts the btreeEntry into the btree, using the buf to read keys
-// to determine the position. It returns true if the insert created
-// a new btreeEntry.
-func (b *T) Insert(key lsm.Key, value uint32) {
+// Append adds the key and value to the tree. The key must be greater than
+// or equal to any previously appended keys.
+func (b *T) Append(key lsm.Key, value uint32) {
 	ent := entry{key: key, value: value}
 
-	// easy case: if we have no root, we can just allocate it
-	// and insert the btreeEntry.
-	if b.root == nil || !b.root.ok {
-		b.root, b.rid = b.alloc(true)
-		b.right = b.rid
-		b.root.insertEntry(ent)
-		return
-	}
-
-	// search for the leaf that should contain the node
-	n, nid := b.search(ent)
-	for {
-		n.insertEntry(ent)
-
-		// easy case: if the node still has enough room, we're done.
-		if n.count < payloadEntries {
-			return
-		}
-
-		// update the btreeEntry we're going to insert to be the btreeEntry we're
-		// splitting the node on.
-		ent = n.payload[payloadSplit]
-
-		// split the node. s is a new node that contains keys
-		// smaller than the splitbtreeEntry.
-		s, sid := b.split(n, nid)
-
-		// find the parent, allocating a new node if we're looking
-		// at the root, and set the parent of the split node.
-		var p *node
-		var pid uint32
-		if n.parent != invalidNode {
-			p, pid = b.nodes[n.parent], n.parent
-		} else {
-			// create a new parent node, and make it point at the
-			// larger side of the split node for it's next pointer.
-			p, pid = b.alloc(false)
-			p.next = nid
-			n.parent = pid
-			s.parent = pid
-
-			// store it as the root
-			b.root, b.rid = p, pid
-		}
-
-		// make a pointer out of the split btreeEntry to point at the
-		// newly split node, and try to insert it.
-		ent.value = sid
-		n, nid = p, pid
-	}
-}
-
-// append adds the entry to the node, splitting if necessary. the entry must
-// be greater than any entry already in the node. n remains to the right of
-// and at least as low than any newly created nodes.
-func (b *T) Append(key lsm.Key, value uint32) {
-	ent := entry{
-		key:   key,
-		value: value,
-	}
-
 	// allocate a root entry if necessary
-	if b.root == nil || !b.root.ok {
-		b.root, b.rid = b.alloc(true)
-		b.right = b.rid
+	if b.root == nil {
+		b.root, b.rootid = b.alloc(true)
+		b.right, b.rightid = b.root, b.rootid
 		b.root.appendEntry(ent)
 		return
 	}
 
 	// use our reference to the rightmost node
-	n, nid := b.nodes[b.right], b.right
-
-	// easy case: if the node still has enough room, we're done.
+	n, nid := b.right, b.rightid
 	if n.count < payloadEntries {
 		n.appendEntry(ent)
 		return
 	}
 
-	// allocate a new leaf node on the right
+	// it's full. allocate a new leaf.
 	s, sid := b.alloc(true)
-	s.parent = n.parent
-	s.prev, n.next = nid, sid
-	b.right = sid
+	n.next = sid
+	s.prev = nid
+	b.right, b.rightid = s, sid
 
-	// append the entry into the new leaf
+	// we can insert into the leaf
 	s.appendEntry(ent)
 
-	// find the parent, allocating a new node if we're looking
-	// at the root, and set the parent of the split node.
-	var p *node
-	var pid uint32
-	if n.parent != invalidNode {
-		p, pid = b.nodes[n.parent], n.parent
-		p.next = sid
-	} else {
-		// create a new parent node, and make it point at the
-		// larger side of the split node for it's next pointer.
-		p, pid = b.alloc(false)
-		p.next = sid
-		n.parent = pid
-		s.parent = pid
-
-		// store it as the root
-		b.root, b.rid = p, pid
-	}
-
-	// update the entry to point at the left leaf and walk to the parent
-	ent.value = nid
-	n, nid = p, pid
-
+	// we now have to insert a pointer to a parent, so walk up
+	// allocating new parents until we find one with a slot or
+	// we find that we need a new root.
 	for {
-		// we're always appending
-		n.appendEntry(ent)
+		var p *node
+		var pid uint32
 
-		// easy case: if the node still has enough room, we're done.
-		if n.count < payloadEntries {
+		if n.parent == invalidNode {
+			p, pid = b.alloc(false)
+			b.root, b.rootid = p, pid
+		} else {
+			p, pid = b.nodes[n.parent], n.parent
+		}
+
+		// if the parent has room, insert it and set the next pointer
+		if p.count < payloadEntries {
+			ent.value = nid
+			p.appendEntry(ent)
+			s.parent = pid
+			p.next = sid
 			return
 		}
 
-		// update the btreeEntry we're going to insert to be the btreeEntry we're
-		// splitting the node on.
-		ent = n.payload[payloadSplit]
+		// allocate a new node and traverse upwards
+		q, qid := b.alloc(false)
+		q.next = sid
+		s.parent = qid
 
-		// split the node. s is a new node that contains keys
-		// smaller than the splitbtreeEntry.
-		s, sid := b.split(n, nid)
-
-		// find the parent, allocating a new node if we're looking
-		// at the root, and set the parent of the split node.
-		var p *node
-		var pid uint32
-		if n.parent != invalidNode {
-			p, pid = b.nodes[n.parent], n.parent
-		} else {
-			// create a new parent node, and make it point at the
-			// larger side of the split node for it's next pointer.
-			p, pid = b.alloc(false)
-			p.next = nid
-			n.parent = pid
-			s.parent = pid
-
-			// store it as the root
-			b.root, b.rid = p, pid
-		}
-
-		// make a pointer out of the split btreeEntry to point at the
-		// newly split node, and try to insert it.
-		ent.value = sid
 		n, nid = p, pid
+		s, sid = q, qid
 	}
 }
 
@@ -273,12 +125,10 @@ func (b *T) Iterator() Iterator {
 		return Iterator{}
 	}
 
-	for !n.leaf {
-		nid := n.payload[0].value
-		if n.count == 0 {
-			nid = n.next
-		}
-		n = b.nodes[nid]
+next:
+	if !n.leaf {
+		n = b.nodes[n.payload[0].value]
+		goto next
 	}
 
 	return Iterator{

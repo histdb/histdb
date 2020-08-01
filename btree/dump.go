@@ -3,8 +3,8 @@ package btree
 import "fmt"
 
 var (
-	dumpLeaf = true
-	dumpKeys = true
+	dumpLeaf = false
+	dumpKeys = false
 )
 
 // dump constructs a dot graph of the btree
@@ -26,8 +26,8 @@ func dump(b *T) {
 			twalk(b.nodes[cid], cid)
 		}
 	}
-	order = append(order, b.rid)
-	twalk(b.root, b.rid)
+	order = append(order, b.rootid)
+	twalk(b.root, b.rootid)
 
 	output := func(nid uint32) {
 		n := b.nodes[nid]
