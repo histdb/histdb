@@ -10,8 +10,8 @@ import (
 	"github.com/zeebo/lsm/filesystem"
 )
 
-// dump constructs a dot graph of the btree
-func dump(fh filesystem.File) {
+// dump constructs a dot graph of the node layout in an index
+func dump(fh filesystem.File) { //nolint
 	check := func(err error) {
 		if err != nil {
 			log.Fatalf("%+v", errs.Wrap(err))

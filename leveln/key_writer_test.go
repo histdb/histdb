@@ -11,7 +11,7 @@ import (
 	"github.com/zeebo/lsm/testhelp"
 )
 
-func TestWritePage(t *testing.T) {
+func TestKeyWriterPage(t *testing.T) {
 	fh, cleanup := testhelp.Tempfile(t, new(filesystem.T))
 	defer cleanup()
 
@@ -20,12 +20,12 @@ func TestWritePage(t *testing.T) {
 
 	// build a page
 	kw.hdr = [16]byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16}
-	for i := range kw.payload {
+	for i := range kw.ents {
 		var val [kwEntrySize]byte
 		for j := range val {
 			val[j] = byte(i)
 		}
-		kw.payload[i] = val
+		kw.ents[i] = val
 	}
 
 	// write it out
@@ -51,7 +51,7 @@ func TestWritePage(t *testing.T) {
 	}
 }
 
-func BenchmarkAppend(b *testing.B) {
+func BenchmarkKeyWriterAppend(b *testing.B) {
 	fh, cleanup := testhelp.Tempfile(b, new(filesystem.T))
 	defer cleanup()
 
@@ -85,4 +85,5 @@ func BenchmarkAppend(b *testing.B) {
 	b.Run("1e4", func(b *testing.B) { run(b, 1e4) })
 	b.Run("1e5", func(b *testing.B) { run(b, 1e5) })
 	b.Run("1e6", func(b *testing.B) { run(b, 1e6) })
+	b.Run("1e7", func(b *testing.B) { run(b, 1e7) })
 }

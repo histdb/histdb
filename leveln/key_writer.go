@@ -12,17 +12,37 @@ import (
 
 // constants for the page
 const (
-	kwPageSize   = 4096
+	// The page size is the most important thing to tune here. Be sure that the value
+	// makes kwEntries an integer value. Powers of 4 are useful values to ensure that.
+	//
+	// The smaller the page size, the more frequently we have to write and the more nodes
+	// there are in the index, decreasing write performance and potentially causing more
+	// reads. It also reduces the amount of memory used in caches and potentially makes
+	// reads have lower latencies.
+	//
+	// On the other hand, larger pages increase write performance, make the index have
+	// a smaller depth, and potentially require less reads. It also increases the amount
+	// of memory used in caches and potentially increases read latencies.
+	//
+	// The memory usage is because we keep a page per depth in both the reader and writer.
+	kwPageSize   = 4096 * 4
 	kwEntrySize  = 24
 	kwHeaderSize = 16
 	kwEntries    = (kwPageSize - kwHeaderSize) / kwEntrySize
 )
 
+// kwEntry is the byte representation of an entry in the index.
 type kwEntry [kwEntrySize]byte
+
+// Key returns a pointer to the key portion of the entry.
+func (k *kwEntry) Key() *lsm.Key { return (*lsm.Key)(unsafe.Pointer(k)) }
+
+// Offset returns the offset encoded into the entry
+func (k *kwEntry) Offset() uint32 { return binary.BigEndian.Uint32(k[20:24]) }
 
 // kwEncode is used to encode a key and offset into a 24 byte entry. it is an
 // external function so that the append call can be outlined.
-func kwEncode(key lsm.Key, offset uint32) (ent kwEntry) {
+func kwEncode(key lsm.Key, offset uint32) (ent kwEntry) { // nolint
 	copy(ent[0:20], key[0:20])
 	binary.BigEndian.PutUint32(ent[20:24], offset)
 	return ent
@@ -48,9 +68,21 @@ func (k *kwPageHeader) SetLeaf(leaf bool) {
 
 // kwPage is a struct with the same layout as a page.
 type kwPage struct {
-	hdr     kwPageHeader
-	payload [kwEntries]kwEntry
+	hdr  kwPageHeader
+	ents [kwEntries]kwEntry
 }
+
+// Ensure the offsets of the page fields are what we expect
+const (
+	_ uintptr = unsafe.Offsetof(kwPage{}.hdr) - 0
+	_ uintptr = 0 - unsafe.Offsetof(kwPage{}.hdr)
+
+	_ uintptr = unsafe.Offsetof(kwPage{}.ents) - kwHeaderSize
+	_ uintptr = kwHeaderSize - unsafe.Offsetof(kwPage{}.ents)
+)
+
+// Buf returns an unsafe pointer to the memory backing the page.
+func (k *kwPage) Buf() *[kwPageSize]byte { return (*[kwPageSize]byte)(unsafe.Pointer(k)) }
 
 // keyWriter allows one to append sorted keys and writes out a static b+ tree
 // using log(n) in memory space.
@@ -59,12 +91,13 @@ type keyWriter struct {
 	pages []*kwPage
 	id    uint32
 
-	count   uint16       // duplicated from hdr so append can be outlined
-	_       [2]byte      // padding so the hdr field is aligned appropriately
-	hdr     kwPageHeader // inlined kwPage so append can be outlined
-	payload [kwEntries]kwEntry
+	count uint16       // duplicated from hdr so append can be outlined
+	_     [2]byte      // padding so the hdr field is aligned appropriately
+	hdr   kwPageHeader // inlined kwPage so append can be outlined
+	ents  [kwEntries]kwEntry
 }
 
+// Ensure the inlined kwPage is at the offsets we expect (a page from the end)
 const (
 	kwEndSize = unsafe.Sizeof(keyWriter{}) - unsafe.Offsetof(keyWriter{}.hdr)
 
@@ -89,7 +122,7 @@ func (k *keyWriter) page() *kwPage {
 // should be made after either returns an error.
 func (k *keyWriter) Append(ent kwEntry) error {
 	if k.count < kwEntries-1 {
-		k.payload[k.count] = ent
+		k.ents[k.count] = ent
 		k.count++
 		return nil
 	}
@@ -98,7 +131,7 @@ func (k *keyWriter) Append(ent kwEntry) error {
 
 func (k *keyWriter) appendSlow(ent kwEntry) error {
 	// add the value as the last entry in the leaf
-	k.payload[kwEntries-1] = ent
+	k.ents[kwEntries-1] = ent
 	k.count++
 
 	// we have to flush the leaf first, and then start flushing
@@ -131,7 +164,7 @@ func (k *keyWriter) appendSlow(ent kwEntry) error {
 		// if we had room left over, then we're done after the insertion.
 		if count := page.hdr.Count(); count < kwEntries {
 			binary.BigEndian.PutUint32(ent[20:24], k.id-1)
-			page.payload[count] = ent
+			page.ents[count] = ent
 			page.hdr.SetCount(count + 1)
 			return nil
 		}
@@ -148,7 +181,7 @@ func (k *keyWriter) appendSlow(ent kwEntry) error {
 	// all the pages were full. allocate a new one to hold the entry.
 	p := new(kwPage)
 	binary.BigEndian.PutUint32(ent[20:24], k.id-1)
-	p.payload[0] = ent
+	p.ents[0] = ent
 	p.hdr.SetNext(next)
 	p.hdr.SetCount(1)
 	k.pages = append(k.pages, p)
@@ -182,6 +215,6 @@ func (k *keyWriter) Finish() error {
 }
 
 func (k *keyWriter) writePage(page *kwPage) error {
-	_, err := k.fh.Write((*[kwPageSize]byte)(unsafe.Pointer(page))[:])
+	_, err := k.fh.Write(page.Buf()[:])
 	return err
 }
