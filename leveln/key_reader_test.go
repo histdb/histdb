@@ -12,7 +12,7 @@ import (
 )
 
 func TestKeyReader(t *testing.T) {
-	const count = 1e6
+	const count = 1e5
 
 	fh, cleanup := testhelp.Tempfile(t, new(filesystem.T))
 	defer cleanup()

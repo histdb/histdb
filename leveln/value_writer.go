@@ -38,7 +38,7 @@ func (v *valueWriter) CanAppend(value []byte) []byte {
 
 func (v *valueWriter) Append(buf []byte, key lsm.Key, value []byte) {
 	_ = buf[6]
-	binary.BigEndian.PutUint16(buf[0:2], uint16(4+len(value)))
+	binary.BigEndian.PutUint16(buf[0:2], uint16(6+len(value)))
 	copy(buf[2:6], key[16:20]) // inlined to allow Append to be inlined
 	copy(buf[6:], value)
 	v.sn += 6 + uint(len(value))

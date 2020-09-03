@@ -96,7 +96,9 @@ func (t *T) append(key lsm.Key, value []byte) (bool, error) {
 	t.buf = append(t.buf, value...)
 
 	// REVISIT: this checks if pad is non-negative for no reason (it's a uint32)
-	t.buf = append(t.buf, make([]byte, pad)...)
+	if pad > 0 {
+		t.buf = append(t.buf, make([]byte, pad)...)
+	}
 
 	if _, ok := t.pos[key]; !ok {
 		t.keys = t.keys.Push(key)
