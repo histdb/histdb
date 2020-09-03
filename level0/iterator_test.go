@@ -43,21 +43,20 @@ func TestIterator(t *testing.T) {
 			lt[len(lt)-1]--
 			gt[len(gt)-1]++
 
-			it.Seek(ent.Key)
-			assert.That(t, it.Next())
+			assert.That(t, it.Seek(ent.Key))
 			assert.Equal(t, it.Key(), ent.Key)
 			assert.Equal(t, string(it.Value()), string(ent.Value))
 
-			it.Seek(lt)
-			assert.That(t, it.Next())
+			assert.That(t, it.Seek(lt))
 			assert.Equal(t, it.Key(), ent.Key)
 			assert.Equal(t, string(it.Value()), string(ent.Value))
 
 			if i+1 < len(entries) {
-				it.Seek(gt)
-				assert.That(t, it.Next())
+				assert.That(t, it.Seek(gt))
 				assert.Equal(t, it.Key(), entries[i+1].Key)
 				assert.Equal(t, string(it.Value()), string(entries[i+1].Value))
+			} else {
+				assert.That(t, !it.Seek(gt))
 			}
 		}
 
@@ -78,7 +77,7 @@ func BenchmarkIterator(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			it.Init(l0.fh)
 			for it.Next() {
-				_, _ = it.Key(), it.Value()
+				_, _, _ = it.Key(), it.Name(), it.Value()
 			}
 			assert.NoError(b, it.Err())
 		}

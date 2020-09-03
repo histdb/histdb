@@ -11,7 +11,7 @@ import (
 )
 
 const (
-	l0EntryHeaderSize = 24
+	l0EntryHeaderSize = 32
 	l0DataSize        = 2 << 20
 	l0IndexSize       = 256 << 10
 	l0BufferSize      = 64 << 10
@@ -58,8 +58,8 @@ func (t *T) File() filesystem.File {
 	return t.fh
 }
 
-func (t *T) Append(key lsm.Key, value []byte) (bool, error) {
-	ok, err := t.append(key, value)
+func (t *T) Append(key lsm.Key, name, value []byte) (bool, error) {
+	ok, err := t.append(key, name, value)
 	if err != nil {
 		return false, err
 	} else if !ok {
@@ -71,7 +71,7 @@ func (t *T) Append(key lsm.Key, value []byte) (bool, error) {
 	}
 }
 
-func (t *T) append(key lsm.Key, value []byte) (bool, error) {
+func (t *T) append(key lsm.Key, name, value []byte) (bool, error) {
 	if t.err != nil {
 		return false, t.err
 	} else if t.len&^31 != t.len {
@@ -84,7 +84,7 @@ func (t *T) append(key lsm.Key, value []byte) (bool, error) {
 		t.len = 32
 	}
 
-	length := l0EntryHeaderSize + uint32(len(value))
+	length := l0EntryHeaderSize + uint32(len(name)) + uint32(len(value))
 	pad := ((length + 31) &^ 31) - length
 
 	if t.len+length > l0DataSize {
@@ -92,7 +92,10 @@ func (t *T) append(key lsm.Key, value []byte) (bool, error) {
 	}
 
 	t.buf = utils.AppendUint32(t.buf, length)
+	t.buf = utils.AppendUint32(t.buf, uint32(len(name)))
+	t.buf = utils.AppendUint32(t.buf, uint32(len(value)))
 	t.buf = append(t.buf, key[:]...)
+	t.buf = append(t.buf, name...)
 	t.buf = append(t.buf, value...)
 
 	// REVISIT: this checks if pad is non-negative for no reason (it's a uint32)

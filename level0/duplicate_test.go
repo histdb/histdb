@@ -18,17 +18,17 @@ func TestDuplicate(t *testing.T) {
 	key := testhelp.Key()
 
 	// write duplicate keys with a non-duplicate in between
-	ok, err := l0.Append(key, []byte{0})
+	ok, err := l0.Append(key, []byte{10}, []byte{0})
 	assert.NoError(t, err)
 	assert.That(t, ok)
 
 	key[len(key)-1]++
-	ok, err = l0.Append(key, []byte{1})
+	ok, err = l0.Append(key, []byte{11}, []byte{1})
 	assert.NoError(t, err)
 	assert.That(t, ok)
 
 	key[len(key)-1]--
-	ok, err = l0.Append(key, []byte{2})
+	ok, err = l0.Append(key, []byte{12}, []byte{2})
 	assert.NoError(t, err)
 	assert.That(t, ok)
 
@@ -41,34 +41,37 @@ func TestDuplicate(t *testing.T) {
 
 	assert.That(t, it.Next())
 	assert.Equal(t, it.Key().String(), key.String())
+	assert.DeepEqual(t, it.Name(), []byte{10})
 	assert.DeepEqual(t, it.Value(), []byte{0})
 
 	assert.That(t, it.Next())
 	assert.Equal(t, it.Key().String(), key.String())
+	assert.DeepEqual(t, it.Name(), []byte{12})
 	assert.DeepEqual(t, it.Value(), []byte{2})
 
 	key[len(key)-1]++
 	assert.That(t, it.Next())
 	assert.Equal(t, it.Key().String(), key.String())
+	assert.DeepEqual(t, it.Name(), []byte{11})
 	assert.DeepEqual(t, it.Value(), []byte{1})
 
 	assert.That(t, !it.Next())
 	assert.NoError(t, it.Err())
 
 	// check seeking
-	it.Seek(key)
-	assert.That(t, it.Next())
+	t.Log(key)
+	assert.That(t, it.Seek(key))
 	assert.Equal(t, it.Key().String(), key.String())
+	assert.DeepEqual(t, it.Name(), []byte{11})
 	assert.DeepEqual(t, it.Value(), []byte{1})
 
 	key[len(key)-1]--
-	it.Seek(key)
-	assert.That(t, it.Next())
+	assert.That(t, it.Seek(key))
 	assert.Equal(t, it.Key().String(), key.String())
+	assert.DeepEqual(t, it.Name(), []byte{10})
 	assert.DeepEqual(t, it.Value(), []byte{0})
 
 	key[len(key)-1] += 2
-	it.Seek(key)
-	assert.That(t, !it.Next())
+	assert.That(t, !it.Seek(key))
 	assert.NoError(t, it.Err())
 }

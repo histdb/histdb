@@ -17,6 +17,14 @@ func Timestamp() uint32 {
 	return pcg.Uint32()
 }
 
+func Name(n int) []byte {
+	v := make([]byte, n)
+	for i := range v {
+		v[i] = byte(pcg.Uint32n(256))
+	}
+	return v
+}
+
 func Value(n int) []byte {
 	v := make([]byte, n)
 	for i := range v {

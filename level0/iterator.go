@@ -3,16 +3,17 @@ package level0
 import (
 	"encoding/binary"
 
-	"github.com/zeebo/errs"
 	"github.com/zeebo/lsm"
 	"github.com/zeebo/lsm/filesystem"
 )
 
 type Iterator struct {
-	fh   filesystem.File
-	hbuf [24]byte
-	vbuf []byte
-	idxb []byte
+	fh    filesystem.File
+	hbuf  [l0EntryHeaderSize]byte
+	nvbuf []byte
+	nbuf  []byte // reference into nvbuf
+	vbuf  []byte // referenec into nvbuf
+	idxb  []byte
 
 	idx []byte
 	err error
@@ -56,7 +57,7 @@ func (it *Iterator) Next() bool {
 	it.idx = it.idx[4:]
 
 	it.readEntryHeader(offset)
-	it.readValue(offset)
+	it.readNameAndValue(offset)
 
 	return it.err == nil
 }
@@ -67,27 +68,30 @@ func (it *Iterator) readEntryHeader(offset int64) {
 	}
 }
 
-func (it *Iterator) readValue(offset int64) {
-	length := int64(binary.BigEndian.Uint32(it.hbuf[0:4])) - l0EntryHeaderSize
-	if length < 0 {
-		it.err = errs.New("invalid read: length too short")
-		return
+func (it *Iterator) readNameAndValue(offset int64) {
+	nlen := int64(binary.BigEndian.Uint32(it.hbuf[4:8]))
+	vlen := int64(binary.BigEndian.Uint32(it.hbuf[8:12]))
+	nvlen := nlen + vlen
+
+	if int64(cap(it.nvbuf)) < nvlen {
+		it.nvbuf = make([]byte, nvlen)
 	}
 
-	if int64(len(it.vbuf)) < length {
-		it.vbuf = make([]byte, length)
-	} else {
-		it.vbuf = it.vbuf[:length]
-	}
+	it.nbuf = it.nvbuf[:nlen]
+	it.vbuf = it.nvbuf[nlen:]
 
-	if _, it.err = it.fh.ReadAt(it.vbuf, offset+l0EntryHeaderSize); it.err != nil {
+	if _, it.err = it.fh.ReadAt(it.nvbuf[:nvlen], offset+l0EntryHeaderSize); it.err != nil {
 		return
 	}
 }
 
 func (it *Iterator) Key() (k lsm.Key) {
-	copy(k[:], it.hbuf[4:4+len(k)])
+	copy(k[:], it.hbuf[12:12+len(k)])
 	return k
+}
+
+func (it *Iterator) Name() []byte {
+	return it.nbuf
 }
 
 func (it *Iterator) Value() []byte {
@@ -98,14 +102,14 @@ func (it *Iterator) Err() error {
 	return it.err
 }
 
-func (it *Iterator) Seek(key lsm.Key) {
+func (it *Iterator) Seek(key lsm.Key) bool {
 	if it.err != nil {
-		return
+		return false
 	} else if it.idx == nil {
 		it.readIndex()
 	}
 	if len(it.idxb) < 4 {
-		return
+		return false
 	}
 
 	kp := binary.BigEndian.Uint16(key[0:2])
@@ -134,7 +138,7 @@ func (it *Iterator) Seek(key lsm.Key) {
 		// have to read the whole entry
 		it.readEntryHeader(offset)
 		if it.err != nil {
-			return
+			return false
 		}
 
 		if lsm.KeyCmp.Less(it.Key(), key) {
@@ -145,4 +149,5 @@ func (it *Iterator) Seek(key lsm.Key) {
 	}
 
 	it.idx = it.idxb[4*i:]
+	return it.Next()
 }

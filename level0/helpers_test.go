@@ -13,6 +13,7 @@ import (
 
 type Entry struct {
 	Key   lsm.Key
+	Name  []byte
 	Value []byte
 }
 
@@ -36,10 +37,11 @@ func Level0(tb testing.TB, fs *filesystem.T) (*T, []Entry, func()) {
 	for {
 		ent := Entry{
 			Key:   testhelp.Key(),
+			Name:  testhelp.Name(8),
 			Value: testhelp.Value(8),
 		}
 
-		ok, err := l0.Append(ent.Key, ent.Value)
+		ok, err := l0.Append(ent.Key, ent.Name, ent.Value)
 		assert.NoError(tb, err)
 		if !ok {
 			break
