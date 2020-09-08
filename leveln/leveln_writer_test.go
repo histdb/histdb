@@ -37,7 +37,7 @@ func BenchmarkLevelNAppend(b *testing.B) {
 			for j := 0; j < n; j++ {
 				binary.BigEndian.PutUint64(key[0:8], uint64(j)/32)
 				binary.BigEndian.PutUint32(key[16:20], uint32(j))
-				_ = ln.Append(key, value[0:256+rng.Uint32()%256])
+				_ = ln.Append(key, nil, value[0:256+rng.Uint32()%256])
 			}
 			_ = ln.Finish()
 		}

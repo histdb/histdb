@@ -32,8 +32,14 @@ type Iterator struct {
 	values filesystem.File
 	offset uint32
 	skey   lsm.Key
+	size   int
+	sbuf   []byte
 	span   []byte
 	value  []byte
+
+	stats struct {
+		valueReads int64
+	}
 }
 
 func (it *Iterator) Init(keys, values filesystem.File) {
@@ -68,25 +74,32 @@ func (it *Iterator) Next() bool {
 func (it *Iterator) readNextSpan() {
 	if it.err != nil {
 		return
-	} else if cap(it.span) < vwSpanSize {
-		it.span = make([]byte, vwSpanSize)
-	} else {
-		it.span = it.span[:vwSpanSize]
 	}
 
-	n, err := it.values.ReadAt(it.span, int64(it.offset)*vwSpanAlign)
+	// lazily allocate the span backing byte slice
+	if it.sbuf == nil {
+		it.sbuf = make([]byte, vwSpanSize)
+	}
+
+	// increment offset by the number of alignment blocks necessary
+	it.offset += uint32(((it.size - len(it.span)) + vwSpanAlign - 1) / vwSpanAlign)
+
+	// read a span into the buffer
+	it.stats.valueReads++
+	n, err := it.values.ReadAt(it.sbuf, int64(it.offset)*vwSpanAlign)
 	if n >= 16 {
-		it.span = it.span[:n]
+		it.size = n
+		it.span = it.sbuf[:n:n]
 	} else if err != nil {
 		it.err = err
 		return
 	} else {
 		it.err = errs.New("iterator short read")
+		return
 	}
 
 	copy(it.skey[0:16], it.span[:16])
 	it.span = it.span[16:]
-	it.offset++
 }
 
 func (it *Iterator) Key() lsm.Key {
@@ -111,21 +124,20 @@ func (it *Iterator) Seek(key lsm.Key) bool {
 		return false
 	}
 
-	origKey := key
-	binary.BigEndian.PutUint32(key[16:20], 0)
-	key, offset, ok, err := it.kr.Seek(key)
+	offset, _, _, err := it.kr.Search(key)
 	if err != nil {
 		it.err = err
 		return false
-	} else if !ok {
-		it.err = io.EOF
-		return false
-	} else {
-		it.skey = key
-		it.offset = offset
-		it.readNextSpan()
-		for it.Next() && lsm.KeyCmp.Less(it.Key(), origKey) {
-		}
 	}
+
+	it.size = 0
+	it.span = nil
+	it.offset = offset
+	it.readNextSpan()
+
+	// no fancy comparisons because the prefix likely matches.
+	for it.Next() && lsm.KeyCmp.Less(it.Key(), key) {
+	}
+
 	return it.err == nil
 }

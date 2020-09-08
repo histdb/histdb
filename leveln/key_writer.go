@@ -26,8 +26,8 @@ const (
 	//
 	// The memory usage is because we keep a page per depth in both the reader and writer.
 	kwPageSize   = 4096 * 4
-	kwEntrySize  = 24
-	kwHeaderSize = 16
+	kwEntrySize  = 32
+	kwHeaderSize = 32
 	kwEntries    = (kwPageSize - kwHeaderSize) / kwEntrySize
 )
 
@@ -40,29 +40,30 @@ func (k *kwEntry) Key() *lsm.Key { return (*lsm.Key)(unsafe.Pointer(k)) }
 // Offset returns the offset encoded into the entry
 func (k *kwEntry) Offset() uint32 { return binary.BigEndian.Uint32(k[20:24]) }
 
-// kwEncode is used to encode a key and offset into a 24 byte entry. it is an
-// external function so that the append call can be outlined.
-func kwEncode(key lsm.Key, offset uint32) (ent kwEntry) { // nolint
-	copy(ent[0:20], key[0:20])
-	binary.BigEndian.PutUint32(ent[20:24], offset)
-	return ent
-}
+// Length returns the length encoded into the entry
+func (k *kwEntry) Length() uint32 { return binary.BigEndian.Uint32(k[24:28]) }
 
-// kwPageHeader is the header starting every 4096 byte index page.
-type kwPageHeader [16]byte
+// NameOffset returns the name offset encoded into the entry
+func (k *kwEntry) NameOffset() uint32 { return binary.BigEndian.Uint32(k[28:32]) }
+
+// kwPageHeader is the header starting every page.
+type kwPageHeader [kwHeaderSize]byte
 
 func (k *kwPageHeader) Next() uint32        { return binary.BigEndian.Uint32(k[0:4]) }
 func (k *kwPageHeader) SetNext(next uint32) { binary.BigEndian.PutUint32(k[0:4], next) }
 
-func (k *kwPageHeader) Count() uint16         { return binary.BigEndian.Uint16(k[4:6]) }
-func (k *kwPageHeader) SetCount(count uint16) { binary.BigEndian.PutUint16(k[4:6], count) }
+func (k *kwPageHeader) Prev() uint32        { return binary.BigEndian.Uint32(k[4:8]) }
+func (k *kwPageHeader) SetPrev(prev uint32) { binary.BigEndian.PutUint32(k[4:8], prev) }
 
-func (k *kwPageHeader) Leaf() bool { return k[6] > 0 }
+func (k *kwPageHeader) Count() uint16         { return binary.BigEndian.Uint16(k[8:10]) }
+func (k *kwPageHeader) SetCount(count uint16) { binary.BigEndian.PutUint16(k[8:10], count) }
+
+func (k *kwPageHeader) Leaf() bool { return k[10] > 0 }
 func (k *kwPageHeader) SetLeaf(leaf bool) {
 	if leaf {
-		k[6] = 1
+		k[10] = 1
 	} else {
-		k[6] = 0
+		k[10] = 0
 	}
 }
 
@@ -112,6 +113,7 @@ func (k *keyWriter) Init(fh filesystem.File) {
 	k.id = 0
 	k.count = 0
 	k.hdr = kwPageHeader{}
+	k.hdr.SetPrev(^uint32(0))
 }
 
 func (k *keyWriter) page() *kwPage {
@@ -154,6 +156,7 @@ func (k *keyWriter) appendSlow(ent kwEntry) error {
 	if err := k.writePage(k.page()); err != nil {
 		return errs.Wrap(err)
 	}
+	k.hdr.SetPrev(k.id) // set prev pointer for next leaf
 	k.id++
 	k.count = 0
 

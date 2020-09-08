@@ -24,6 +24,7 @@ func TestKeyReader(t *testing.T) {
 		var ent kwEntry
 		binary.BigEndian.PutUint32(ent[16:20], uint32(i*2+1))
 		binary.BigEndian.PutUint32(ent[20:24], uint32(i))
+		binary.BigEndian.PutUint32(ent[24:28], uint32(i))
 		assert.NoError(t, kw.Append(ent))
 	}
 	assert.NoError(t, kw.Finish())
@@ -31,27 +32,26 @@ func TestKeyReader(t *testing.T) {
 	var kr keyReader
 	kr.Init(fh)
 
-	check := func(i int, key lsm.Key) func(lsm.Key, uint32, bool, error) {
-		return func(keyp lsm.Key, offset uint32, ok bool, err error) {
+	check := func(i int, key lsm.Key) func(uint32, uint32, bool, error) {
+		return func(offset, length uint32, ok bool, err error) {
+			t.Helper()
 			assert.NoError(t, err)
-			assert.That(t, !lsm.KeyCmp.Less(keyp, key))
 			assert.Equal(t, i, offset)
+			assert.Equal(t, i, length)
 			assert.That(t, ok)
 		}
 	}
-	_ = check
 
 	for i := 0; i < count; i++ {
 		var key lsm.Key
-		binary.BigEndian.PutUint32(key[16:20], uint32(i*2))
-		check(i, key)(kr.Seek(key))
 		binary.BigEndian.PutUint32(key[16:20], uint32(i*2+1))
-		check(i, key)(kr.Seek(key))
+		check(i, key)(kr.Search(key))
+		binary.BigEndian.PutUint32(key[16:20], uint32(i*2+2))
+		check(i, key)(kr.Search(key))
 	}
 
 	var key lsm.Key
-	binary.BigEndian.PutUint32(key[16:20], uint32(count*2+1))
-	_, _, ok, err := kr.Seek(key)
+	_, _, ok, err := kr.Search(key)
 	assert.NoError(t, err)
 	assert.That(t, !ok)
 }
@@ -70,6 +70,7 @@ func BenchmarkKeyReader(b *testing.B) {
 			var ent kwEntry
 			binary.BigEndian.PutUint32(ent[0:4], uint32(i))
 			binary.BigEndian.PutUint32(ent[20:24], uint32(i))
+			binary.BigEndian.PutUint32(ent[24:28], uint32(i))
 			assert.NoError(b, kw.Append(ent))
 		}
 		assert.NoError(b, kw.Finish())
@@ -78,11 +79,12 @@ func BenchmarkKeyReader(b *testing.B) {
 		var kr keyReader
 		kr.Init(fh)
 
+		b.ReportAllocs()
 		b.ResetTimer()
 
 		for i := 0; i < b.N; i++ {
 			binary.BigEndian.PutUint64(key[0:8], rng.Uint64())
-			_, _, _, _ = kr.Seek(key)
+			_, _, _, _ = kr.Search(key)
 		}
 
 		b.ReportMetric(float64(kr.stats.reads)/float64(b.N), "reads/op")

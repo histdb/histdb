@@ -62,7 +62,7 @@ func (k *keyReader) cachePage(depth uint, id uint32) (*kwPage, error) {
 	return p.page, err
 }
 
-func (k *keyReader) Seek(key lsm.Key) (_ lsm.Key, _ uint32, _ bool, err error) {
+func (k *keyReader) Search(key lsm.Key) (_, _ uint32, _ bool, err error) {
 	keyp := binary.BigEndian.Uint64(key[0:8])
 	id := k.root
 
@@ -78,33 +78,47 @@ func (k *keyReader) Seek(key lsm.Key) (_ lsm.Key, _ uint32, _ bool, err error) {
 		}
 
 		count := page.hdr.Count()
-		i, j := uint16(0), count
-		for i < j {
-			h := (i + j) >> 1
+		i, j := -1, int(count)
+		for j-i > 1 {
+			h := int(uint(i+j) >> 1)
 			ent := &page.ents[h]
 
 			// LessPtr does a call into the runtime when the first 8 bytes will
 			// frequently be enough to compare unequal, so try that first.
 			if keyhp := binary.BigEndian.Uint64(ent[0:8]); keyhp < keyp {
-				i = h + 1
+				i = h
 			} else if keyhp > keyp {
 				j = h
-			} else if lsm.KeyCmp.LessPtr(ent.Key(), &key) {
-				i = h + 1
+			} else if !lsm.KeyCmp.LessPtr(&key, ent.Key()) {
+				i = h
 			} else {
 				j = h
 			}
 		}
 
 		if page.hdr.Leaf() {
-			if i >= count || i >= kwEntries {
-				return lsm.Key{}, 0, false, nil
+			if i == -1 {
+				prev := page.hdr.Prev()
+				if prev == ^uint32(0) {
+					return 0, 0, false, nil
+				}
+				page, err = k.cachePage(depth, prev)
+				if err != nil {
+					return
+				}
+				count := page.hdr.Count()
+				if count == 0 {
+					return 0, 0, false, nil
+				}
+				ent := &page.ents[count-1]
+				return ent.Offset(), ent.Length(), true, nil
 			}
 			ent := &page.ents[i]
-			return *ent.Key(), ent.Offset(), true, nil
+			return ent.Offset(), ent.Length(), true, nil
 		}
 
-		if i >= count || i >= kwEntries {
+		i++
+		if i >= int(count) || i >= kwEntries {
 			id = page.hdr.Next()
 		} else {
 			id = page.ents[i].Offset()

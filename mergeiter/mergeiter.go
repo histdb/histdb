@@ -9,7 +9,6 @@ import (
 type Iterator interface {
 	Next() bool
 	Key() lsm.Key
-	Timestamp() uint32
 	Value() []byte
 	Err() error
 }
@@ -72,13 +71,6 @@ func (m *T) Err() error { return m.err }
 func (m *T) Key() (k lsm.Key) {
 	if uint(m.win) < uint(len(m.iters)) {
 		k = m.iters[m.win].Key()
-	}
-	return
-}
-
-func (m *T) Timestamp() (ts uint32) {
-	if uint(m.win) < uint(len(m.iters)) {
-		ts = m.iters[m.win].Timestamp()
 	}
 	return
 }

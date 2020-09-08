@@ -87,7 +87,7 @@ func BenchmarkMergedIterator(b *testing.B) {
 				}
 				mi.Init(mis)
 				for mi.Next() {
-					_, _, _ = mi.Key(), mi.Timestamp(), mi.Value()
+					_, _ = mi.Key(), mi.Value()
 					keys++
 				}
 				assert.NoError(b, mi.Err())

@@ -19,7 +19,9 @@ func TestKeyWriterPage(t *testing.T) {
 	kw.Init(fh)
 
 	// build a page
-	kw.hdr = [16]byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16}
+	for i := range &kw.hdr {
+		kw.hdr[i] = byte(i + 1)
+	}
 	for i := range kw.ents {
 		var val [kwEntrySize]byte
 		for j := range val {
@@ -39,8 +41,10 @@ func TestKeyWriterPage(t *testing.T) {
 	assert.Equal(t, len(data), kwPageSize)
 
 	// check header bytes
-	assert.DeepEqual(t, data[0:16], []byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16})
-	data = data[16:]
+	for i := range data[0:kwHeaderSize] {
+		assert.Equal(t, data[i], i+1)
+	}
+	data = data[kwHeaderSize:]
 
 	// check payload bytes
 	for i := 0; len(data) > 0; i++ {
@@ -64,7 +68,7 @@ func BenchmarkKeyWriterAppend(b *testing.B) {
 			kw := new(keyWriter)
 			kw.Init(fh)
 
-			var key [24]byte
+			var key kwEntry
 
 			for j := 0; j < n; j++ {
 				_ = kw.Append(key)

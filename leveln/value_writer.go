@@ -49,11 +49,11 @@ func (v *valueWriter) BeginSpan(key lsm.Key) {
 	copy(v.span[0:16], key[:])
 }
 
-func (v *valueWriter) FinishSpan() (offset uint32, err error) {
+func (v *valueWriter) FinishSpan() (offset, length uint32, err error) {
 	// record span beginning offset and check for overflow
 	offset = uint32(v.n / vwSpanAlign)
 	if uint64(offset)*vwSpanAlign != v.n {
-		return offset, errs.New("values file too large")
+		return 0, 0, errs.New("values file too large")
 	}
 
 	// round up to the alignment and increase bytes written
@@ -65,5 +65,5 @@ func (v *valueWriter) FinishSpan() (offset uint32, err error) {
 	v.span[v.sn+1] = 0
 
 	_, err = v.fh.Write(v.span[:sn])
-	return offset, errs.Wrap(err)
+	return offset, uint32(sn / vwSpanAlign), errs.Wrap(err)
 }
