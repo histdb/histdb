@@ -90,6 +90,7 @@ func (k *kwPage) Buf() *[kwPageSize]byte { return (*[kwPageSize]byte)(unsafe.Poi
 type keyWriter struct {
 	fh    filesystem.File
 	pages []*kwPage
+	off   int64
 	id    uint32
 
 	count uint16       // duplicated from hdr so append can be outlined
@@ -218,6 +219,9 @@ func (k *keyWriter) Finish() error {
 }
 
 func (k *keyWriter) writePage(page *kwPage) error {
-	_, err := k.fh.Write(page.Buf()[:])
+	// REVISIT: don't need to use WriteAt once Write doesn't leak params
+	_, err := k.fh.WriteAt(page.Buf()[:], k.off)
+	k.off += kwPageSize
+
 	return err
 }

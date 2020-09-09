@@ -19,7 +19,7 @@ func Tempfile(tb testing.TB, fs *filesystem.T) (filesystem.File, func()) {
 	if tmpdir == "" {
 		tmpdir = "/tmp"
 	}
-	name := filepath.Join(tmpdir, fmt.Sprint(time.Now().UnixNano())+"\x00")
+	name := filepath.Join(tmpdir, fmt.Sprint(time.Now().UnixNano()))
 
 	fh, err := fs.Create(name)
 	assert.NoError(tb, err)

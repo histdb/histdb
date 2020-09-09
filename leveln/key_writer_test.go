@@ -62,6 +62,9 @@ func BenchmarkKeyWriterAppend(b *testing.B) {
 	run := func(b *testing.B, n int) {
 		now := time.Now()
 
+		b.ReportAllocs()
+		b.ResetTimer()
+
 		for i := 0; i < b.N; i++ {
 			_, _ = fh.Seek(0, io.SeekStart)
 
