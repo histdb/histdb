@@ -2,6 +2,7 @@ package leveln
 
 import (
 	"encoding/binary"
+	"unsafe"
 
 	"github.com/zeebo/errs"
 	"github.com/zeebo/lsm"
@@ -9,10 +10,11 @@ import (
 )
 
 const (
-	vwSpanSize      = 4096 * 4
-	vwSpanAlignBits = 8
-	vwSpanAlign     = 1 << vwSpanAlignBits
-	vwSpanMask      = vwSpanAlign - 1
+	vwSpanSize        = 4096 * 4
+	vwSpanAlignBits   = 8
+	vwSpanAlign       = 1 << vwSpanAlignBits
+	vwSpanMask        = vwSpanAlign - 1
+	vwEntryHeaderSize = 6
 )
 
 type valueWriter struct {
@@ -29,7 +31,7 @@ func (v *valueWriter) Init(fh filesystem.File) {
 func (v *valueWriter) CanAppend(value []byte) []byte {
 	length := uint(len(value))
 	begin := v.sn
-	end := 2 + begin + 4 + length + 2
+	end := begin + vwEntryHeaderSize + length + 2 // final 2 for trailer 0s
 	if begin < end && end < vwSpanSize {
 		return v.span[begin:end]
 	}
@@ -37,16 +39,19 @@ func (v *valueWriter) CanAppend(value []byte) []byte {
 }
 
 func (v *valueWriter) Append(buf []byte, key lsm.Key, value []byte) {
-	_ = buf[6]
-	binary.BigEndian.PutUint16(buf[0:2], uint16(6+len(value)))
-	copy(buf[2:6], key[16:20]) // inlined to allow Append to be inlined
-	copy(buf[6:], value)
-	v.sn += 6 + uint(len(value))
+	if len(buf) >= vwEntryHeaderSize {
+		len := vwEntryHeaderSize + uint(len(value))
+		binary.BigEndian.PutUint16(buf[0:2], uint16(len))
+		// reduces code amount by a lot and allows Append to be inlined
+		*(*[4]byte)(unsafe.Pointer(&buf[2])) = *(*[4]byte)(unsafe.Pointer(&key[16]))
+		copy(buf[vwEntryHeaderSize:], value)
+		v.sn += len
+	}
 }
 
 func (v *valueWriter) BeginSpan(key lsm.Key) {
-	v.sn = 16
-	copy(v.span[0:16], key[:])
+	v.sn = lsm.HashSize
+	copy(v.span[0:lsm.HashSize], key[:lsm.HashSize])
 }
 
 func (v *valueWriter) FinishSpan() (offset, length uint32, err error) {

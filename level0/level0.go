@@ -11,7 +11,8 @@ import (
 )
 
 const (
-	l0EntryHeaderSize = 32
+	l0EntryHeaderSize = 1 << 5
+	l0EntryHeaderMask = l0EntryHeaderSize - 1
 	l0DataSize        = 2 << 20
 	l0IndexSize       = 256 << 10
 	l0BufferSize      = 64 << 10
@@ -80,12 +81,12 @@ func (t *T) append(key lsm.Key, name, value []byte) (bool, error) {
 
 	// reserved header
 	if t.len == 0 {
-		t.buf = append(t.buf, make([]byte, 32)...)
-		t.len = 32
+		t.buf = append(t.buf, make([]byte, l0EntryHeaderSize)...)
+		t.len = l0EntryHeaderSize
 	}
 
 	length := l0EntryHeaderSize + uint32(len(name)) + uint32(len(value))
-	pad := ((length + 31) &^ 31) - length
+	pad := ((length + l0EntryHeaderMask) &^ l0EntryHeaderMask) - length
 
 	if t.len+length > l0DataSize {
 		return false, nil
@@ -108,7 +109,7 @@ func (t *T) append(key lsm.Key, name, value []byte) (bool, error) {
 		t.keys = t.keys.Push(key)
 	}
 
-	ibuf.Append(uint16(t.len / 32))
+	ibuf.Append(uint16(t.len / l0EntryHeaderSize))
 	t.pos[key] = ibuf
 
 	t.len += length + pad

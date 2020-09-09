@@ -56,7 +56,7 @@ func (it *Iterator) Done() bool {
 func (it *Iterator) Next() bool {
 	if it.err != nil {
 		return false
-	} else if len(it.span) < 6 || binary.BigEndian.Uint16(it.span[0:2]) < 6 {
+	} else if len(it.span) < vwEntryHeaderSize || binary.BigEndian.Uint16(it.span[0:2]) < vwEntryHeaderSize {
 		it.readNextSpan()
 		if it.err != nil {
 			return false
@@ -64,8 +64,8 @@ func (it *Iterator) Next() bool {
 	}
 
 	vend := binary.BigEndian.Uint16(it.span[0:2])
-	copy(it.skey[16:20], it.span[2:6])
-	it.value = it.span[6:vend]
+	it.skey.SetTimestamp(binary.BigEndian.Uint32(it.span[2:6]))
+	it.value = it.span[vwEntryHeaderSize:vend]
 	it.span = it.span[vend:]
 
 	return true
@@ -82,12 +82,12 @@ func (it *Iterator) readNextSpan() {
 	}
 
 	// increment offset by the number of alignment blocks necessary
-	it.offset += uint32(((it.size - len(it.span)) + vwSpanAlign - 1) / vwSpanAlign)
+	it.offset += uint32(((it.size - len(it.span)) + vwSpanMask) / vwSpanAlign)
 
 	// read a span into the buffer
 	it.stats.valueReads++
 	n, err := it.values.ReadAt(it.sbuf, int64(it.offset)*vwSpanAlign)
-	if n >= 16 {
+	if n >= lsm.HashSize {
 		it.size = n
 		it.span = it.sbuf[:n:n]
 	} else if err != nil {
@@ -98,8 +98,8 @@ func (it *Iterator) readNextSpan() {
 		return
 	}
 
-	copy(it.skey[0:16], it.span[:16])
-	it.span = it.span[16:]
+	copy(it.skey.HashPtr()[:], it.span[:lsm.HashSize])
+	it.span = it.span[lsm.HashSize:]
 }
 
 func (it *Iterator) Key() lsm.Key {
