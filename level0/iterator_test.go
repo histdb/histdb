@@ -12,7 +12,7 @@ import (
 
 func TestIterator(t *testing.T) {
 	t.Run("Next", func(t *testing.T) {
-		l0, entries, cleanup := Level0(t, new(filesystem.T))
+		l0, entries, cleanup := Level0(t, new(filesystem.T), 4, 4)
 		defer cleanup()
 
 		it, err := l0.Iterator()
@@ -29,7 +29,7 @@ func TestIterator(t *testing.T) {
 	})
 
 	t.Run("Seek", func(t *testing.T) {
-		l0, entries, cleanup := Level0(t, new(filesystem.T))
+		l0, entries, cleanup := Level0(t, new(filesystem.T), 0, 0)
 		defer cleanup()
 
 		it, err := l0.Iterator()
@@ -62,11 +62,37 @@ func TestIterator(t *testing.T) {
 
 		assert.NoError(t, it.Err())
 	})
+
+	count := func(it *Iterator) (n int) {
+		for it.Next() {
+			n++
+		}
+		return n
+	}
+
+	t.Run("Long", func(t *testing.T) {
+		l0, _, cleanup := Level0(t, new(filesystem.T), 0, 0)
+		defer cleanup()
+
+		it, err := l0.Iterator()
+		assert.NoError(t, err)
+		assert.Equal(t, count(&it), 65535)
+	})
+
+	t.Run("Short", func(t *testing.T) {
+		l0, _, cleanup := Level0(t, new(filesystem.T), 256, 256)
+		defer cleanup()
+
+		it, err := l0.Iterator()
+		assert.NoError(t, err)
+		assert.Equal(t, count(&it), 3855)
+	})
+
 }
 
 func BenchmarkIterator(b *testing.B) {
 	b.Run("Next", func(b *testing.B) {
-		l0, entries, cleanup := Level0(b, new(filesystem.T))
+		l0, entries, cleanup := Level0(b, new(filesystem.T), 0, 0)
 		defer cleanup()
 		var it Iterator
 
@@ -88,7 +114,7 @@ func BenchmarkIterator(b *testing.B) {
 	})
 
 	b.Run("Seek", func(b *testing.B) {
-		l0, _, cleanup := Level0(b, new(filesystem.T))
+		l0, _, cleanup := Level0(b, new(filesystem.T), 0, 0)
 		defer cleanup()
 
 		var it Iterator

@@ -8,35 +8,29 @@ import (
 )
 
 type Iterator struct {
-	fh    filesystem.File
-	hbuf  [l0EntryHeaderSize]byte
 	nvbuf []byte
 	nbuf  []byte // reference into nvbuf
-	vbuf  []byte // referenec into nvbuf
-	idxb  []byte
+	vbuf  []byte // reference into nvbuf
+	idx   []byte // reference into idxb
+	err   error
 
-	idx []byte
-	err error
+	fh   filesystem.File
+	hbuf [l0EntryHeaderSize]byte
+	idxb [l0IndexSize]byte
 }
 
 func (it *Iterator) Init(fh filesystem.File) {
-	*it = Iterator{
-		fh:   fh,
-		idxb: it.idxb,
-		vbuf: it.vbuf,
-	}
+	it.fh = fh
+	it.err = nil
+	it.idx = nil
 }
 
 func (it *Iterator) readIndex() {
-	if it.idxb == nil {
-		it.idxb = make([]byte, l0IndexSize)
-	}
-
-	if _, it.err = it.fh.ReadAt(it.idxb, l0DataSize); it.err != nil {
+	var n int
+	if n, it.err = it.fh.ReadAt(it.idxb[:], l0DataSize); it.err != nil {
 		return
 	}
-
-	it.idx = it.idxb
+	it.idx = it.idxb[:n]
 }
 
 func (it *Iterator) Next() bool {

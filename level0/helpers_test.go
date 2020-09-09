@@ -21,7 +21,7 @@ func (e Entry) String() string {
 	return fmt.Sprintf("(%s %x)", e.Key, e.Value)
 }
 
-func Level0(tb testing.TB, fs *filesystem.T) (*T, []Entry, func()) {
+func Level0(tb testing.TB, fs *filesystem.T, nlen, vlen int) (*T, []Entry, func()) {
 	ok := false
 	fh, cleanup := testhelp.Tempfile(tb, fs)
 	defer func() {
@@ -37,8 +37,8 @@ func Level0(tb testing.TB, fs *filesystem.T) (*T, []Entry, func()) {
 	for {
 		ent := Entry{
 			Key:   testhelp.Key(),
-			Name:  testhelp.Name(8),
-			Value: testhelp.Value(8),
+			Name:  testhelp.Name(nlen),
+			Value: testhelp.Value(vlen),
 		}
 
 		ok, err := l0.Append(ent.Key, ent.Name, ent.Value)

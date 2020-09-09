@@ -103,11 +103,11 @@ func (t *T) append(key lsm.Key, name, value []byte) (bool, error) {
 		t.buf = append(t.buf, make([]byte, pad)...)
 	}
 
-	if _, ok := t.pos[key]; !ok {
+	ibuf, ok := t.pos[key]
+	if !ok {
 		t.keys = t.keys.Push(key)
 	}
 
-	ibuf := t.pos[key]
 	ibuf.Append(uint16(t.len / 32))
 	t.pos[key] = ibuf
 
