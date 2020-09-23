@@ -4,7 +4,7 @@ import (
 	"encoding/binary"
 	"unsafe"
 
-	"github.com/zeebo/errs"
+	"github.com/zeebo/errs/v2"
 	"github.com/zeebo/lsm"
 	"github.com/zeebo/lsm/filesystem"
 )
@@ -59,7 +59,7 @@ func (v *valueWriter) FinishSpan() (offset, length uint32, err error) {
 	// record span beginning offset and check for overflow
 	offset = uint32(v.n / vwSpanAlign)
 	if uint64(offset)*vwSpanAlign != v.n {
-		return 0, 0, errs.New("values file too large")
+		return 0, 0, errs.Errorf("values file too large")
 	}
 
 	// round up to the alignment and increase bytes written

@@ -2,11 +2,12 @@ package leveln
 
 import (
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"log"
 
-	"github.com/zeebo/errs"
+	"github.com/zeebo/errs/v2"
 	"github.com/zeebo/lsm/filesystem"
 )
 
@@ -28,7 +29,7 @@ func dump(fh filesystem.File) { //nolint
 
 	for i := 0; ; i++ {
 		_, err := io.ReadFull(fh, buf[:])
-		if err == io.EOF {
+		if errors.Is(err, io.EOF) {
 			break
 		}
 		check(err)

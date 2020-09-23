@@ -2,17 +2,31 @@ package filesystem
 
 import (
 	"os"
+	"path/filepath"
 	"syscall"
 
-	"github.com/zeebo/errs"
+	"github.com/zeebo/errs/v2"
 )
 
 type File struct {
+	fs *T
 	fh *os.File
+}
+
+func (fh File) Filesystem() *T {
+	return fh.fs
 }
 
 func (fh File) Fd() int {
 	return int(fh.fh.Fd())
+}
+
+func (fh File) Name() string {
+	return fh.fh.Name()
+}
+
+func (fh File) Child(name string) string {
+	return filepath.Join(fh.fh.Name(), name)
 }
 
 func (fh File) Close() (err error) {
@@ -67,4 +81,9 @@ intr:
 		goto intr
 	}
 	return errs.Wrap(err)
+}
+
+func (fh File) Readdirnames(n int) (names []string, err error) {
+	names, err = fh.fh.Readdirnames(n)
+	return names, errs.Wrap(err)
 }

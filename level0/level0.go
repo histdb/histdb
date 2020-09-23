@@ -4,7 +4,7 @@ import (
 	"encoding/binary"
 	"io"
 
-	"github.com/zeebo/errs"
+	"github.com/zeebo/errs/v2"
 	"github.com/zeebo/lsm"
 	"github.com/zeebo/lsm/filesystem"
 	"github.com/zeebo/lsm/utils"
@@ -76,7 +76,7 @@ func (t *T) append(key lsm.Key, name, value []byte) (bool, error) {
 	if t.err != nil {
 		return false, t.err
 	} else if t.len&^31 != t.len {
-		return false, t.storeErr(errs.New("unaligned corrupted length in level0 file"))
+		return false, t.storeErr(errs.Errorf("unaligned corrupted length in level0 file"))
 	}
 
 	// reserved header
@@ -166,7 +166,7 @@ func (t *T) Iterator() (it Iterator, err error) {
 	if t.err != nil {
 		err = t.err
 	} else if !t.done {
-		err = errs.New("iterate on incomplete level0 file")
+		err = errs.Errorf("iterate on incomplete level0 file")
 	} else {
 		it.Init(t.fh)
 	}

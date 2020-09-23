@@ -3,7 +3,7 @@ package leveln
 import (
 	"encoding/binary"
 
-	"github.com/zeebo/errs"
+	"github.com/zeebo/errs/v2"
 	"github.com/zeebo/lsm"
 	"github.com/zeebo/lsm/filesystem"
 )
@@ -71,7 +71,7 @@ func (w *Writer) Append(key lsm.Key, name, value []byte) error {
 		w.vw.Append(buf, key, value)
 		return nil
 	}
-	return w.storeErr(errs.New("value too large"))
+	return w.storeErr(errs.Errorf("value too large"))
 }
 
 func (w *Writer) Finish() error {

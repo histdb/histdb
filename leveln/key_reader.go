@@ -3,7 +3,7 @@ package leveln
 import (
 	"encoding/binary"
 
-	"github.com/zeebo/errs"
+	"github.com/zeebo/errs/v2"
 	"github.com/zeebo/lsm"
 	"github.com/zeebo/lsm/filesystem"
 )

@@ -2,9 +2,10 @@ package leveln
 
 import (
 	"encoding/binary"
+	"errors"
 	"io"
 
-	"github.com/zeebo/errs"
+	"github.com/zeebo/errs/v2"
 	"github.com/zeebo/lsm"
 	"github.com/zeebo/lsm/filesystem"
 )
@@ -94,7 +95,7 @@ func (it *Iterator) readNextSpan() {
 		it.err = err
 		return
 	} else {
-		it.err = errs.New("iterator short read")
+		it.err = errs.Errorf("iterator short read")
 		return
 	}
 
@@ -111,14 +112,14 @@ func (it *Iterator) Value() []byte {
 }
 
 func (it *Iterator) Err() error {
-	if it.err != io.EOF {
+	if !errors.Is(it.err, io.EOF) {
 		return it.err
 	}
 	return nil
 }
 
 func (it *Iterator) Seek(key lsm.Key) bool {
-	if it.err == io.EOF {
+	if errors.Is(it.err, io.EOF) {
 		it.err = nil
 	} else if it.err != nil {
 		return false
