@@ -21,10 +21,10 @@ func BenchmarkLevelNAppend(b *testing.B) {
 
 		for i := 0; i < b.N; i++ {
 			func() {
-				keys, cleanup := testhelp.Tempfile(b, new(filesystem.T))
+				keys, cleanup := testhelp.Tempfile(b, filesystem.Temp)
 				defer cleanup()
 
-				values, cleanup := testhelp.Tempfile(b, new(filesystem.T))
+				values, cleanup := testhelp.Tempfile(b, filesystem.Temp)
 				defer cleanup()
 
 				var key lsm.Key

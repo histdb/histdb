@@ -12,7 +12,7 @@ import (
 
 func TestLevel0(t *testing.T) {
 	t.Run("Append", func(t *testing.T) {
-		l0, _, cleanup := Level0(t, new(filesystem.T), 8, 8)
+		l0, _, cleanup := Level0(t, filesystem.Temp, 8, 8)
 		defer cleanup()
 
 		_, err := l0.fh.Seek(0, io.SeekStart)
@@ -29,7 +29,7 @@ func TestLevel0(t *testing.T) {
 
 func BenchmarkLevel0(b *testing.B) {
 	run := func(b *testing.B, nlen, vlen int) {
-		l0, entries, cleanup := Level0(b, new(filesystem.T), nlen, vlen)
+		l0, entries, cleanup := Level0(b, filesystem.Temp, nlen, vlen)
 		defer cleanup()
 
 		now := time.Now()

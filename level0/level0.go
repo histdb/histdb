@@ -20,7 +20,7 @@ const (
 
 type T struct {
 	buf  []byte
-	fh   filesystem.File
+	fh   filesystem.Handle
 	len  uint32
 	keys keyHeap
 	pos  map[lsm.Key]idxBuf
@@ -28,7 +28,7 @@ type T struct {
 	done bool
 }
 
-func (t *T) Init(fh filesystem.File) error {
+func (t *T) Init(fh filesystem.Handle) error {
 	// TODO: should try to resume
 	// TODO: should check done
 
@@ -55,7 +55,7 @@ func (t *T) Init(fh filesystem.File) error {
 	return nil
 }
 
-func (t *T) File() filesystem.File {
+func (t *T) File() filesystem.Handle {
 	return t.fh
 }
 

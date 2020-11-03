@@ -9,7 +9,7 @@ import (
 )
 
 func TestDuplicate(t *testing.T) {
-	fh, cleanup := testhelp.Tempfile(t, new(filesystem.T))
+	fh, cleanup := testhelp.Tempfile(t, filesystem.Temp)
 	defer cleanup()
 
 	var l0 T

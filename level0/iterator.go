@@ -14,12 +14,12 @@ type Iterator struct {
 	idx   []byte // reference into idxb
 	err   error
 
-	fh   filesystem.File
+	fh   filesystem.Handle
 	hbuf [l0EntryHeaderSize]byte
 	idxb [l0IndexSize]byte
 }
 
-func (it *Iterator) Init(fh filesystem.File) {
+func (it *Iterator) Init(fh filesystem.Handle) {
 	it.fh = fh
 	it.err = nil
 	it.idx = nil

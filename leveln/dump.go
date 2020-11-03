@@ -12,7 +12,7 @@ import (
 )
 
 // dump constructs a dot graph of the node layout in an index
-func dump(fh filesystem.File) { //nolint
+func dump(fh filesystem.Handle) { //nolint
 	check := func(err error) {
 		if err != nil {
 			log.Fatalf("%+v", errs.Wrap(err))

@@ -14,10 +14,10 @@ import (
 func TestLevelNSeek(t *testing.T) {
 	const count = 1e4
 
-	keys, cleanup := testhelp.Tempfile(t, new(filesystem.T))
+	keys, cleanup := testhelp.Tempfile(t, filesystem.Temp)
 	defer cleanup()
 
-	values, cleanup := testhelp.Tempfile(t, new(filesystem.T))
+	values, cleanup := testhelp.Tempfile(t, filesystem.Temp)
 	defer cleanup()
 
 	var lnw Writer
@@ -58,10 +58,10 @@ func TestLevelNSeek(t *testing.T) {
 }
 
 func TestLevelNSeekBoundaries(t *testing.T) {
-	keys, cleanup := testhelp.Tempfile(t, new(filesystem.T))
+	keys, cleanup := testhelp.Tempfile(t, filesystem.Temp)
 	defer cleanup()
 
-	values, cleanup := testhelp.Tempfile(t, new(filesystem.T))
+	values, cleanup := testhelp.Tempfile(t, filesystem.Temp)
 	defer cleanup()
 
 	var lnw Writer
@@ -104,10 +104,10 @@ func BenchmarkLevelNReader(b *testing.B) {
 	run := func(b *testing.B, n int) {
 		var rng pcg.T
 
-		keys, cleanup := testhelp.Tempfile(b, new(filesystem.T))
+		keys, cleanup := testhelp.Tempfile(b, filesystem.Temp)
 		defer cleanup()
 
-		values, cleanup := testhelp.Tempfile(b, new(filesystem.T))
+		values, cleanup := testhelp.Tempfile(b, filesystem.Temp)
 		defer cleanup()
 
 		var lnw Writer

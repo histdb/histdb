@@ -11,10 +11,10 @@ import (
 )
 
 func TestLevelNWriterReader(t *testing.T) {
-	keys, cleanup := testhelp.Tempfile(t, new(filesystem.T))
+	keys, cleanup := testhelp.Tempfile(t, filesystem.Temp)
 	defer cleanup()
 
-	values, cleanup := testhelp.Tempfile(t, new(filesystem.T))
+	values, cleanup := testhelp.Tempfile(t, filesystem.Temp)
 	defer cleanup()
 
 	var lnw Writer

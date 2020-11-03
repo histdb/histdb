@@ -88,7 +88,7 @@ func (k *kwPage) Buf() *[kwPageSize]byte { return (*[kwPageSize]byte)(unsafe.Poi
 // keyWriter allows one to append sorted keys and writes out a static b+ tree
 // using log(n) in memory space.
 type keyWriter struct {
-	fh    filesystem.File
+	fh    filesystem.Handle
 	pages []*kwPage
 	off   int64
 	id    uint32
@@ -108,7 +108,7 @@ const (
 )
 
 // Init resets the keyWriter to write to the provided file handle.
-func (k *keyWriter) Init(fh filesystem.File) {
+func (k *keyWriter) Init(fh filesystem.Handle) {
 	k.fh = fh
 	k.pages = nil
 	k.id = 0

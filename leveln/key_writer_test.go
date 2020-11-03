@@ -12,7 +12,7 @@ import (
 )
 
 func TestKeyWriterPage(t *testing.T) {
-	fh, cleanup := testhelp.Tempfile(t, new(filesystem.T))
+	fh, cleanup := testhelp.Tempfile(t, filesystem.Temp)
 	defer cleanup()
 
 	var kw keyWriter
@@ -56,7 +56,7 @@ func TestKeyWriterPage(t *testing.T) {
 }
 
 func BenchmarkKeyWriterAppend(b *testing.B) {
-	fh, cleanup := testhelp.Tempfile(b, new(filesystem.T))
+	fh, cleanup := testhelp.Tempfile(b, filesystem.Temp)
 	defer cleanup()
 
 	run := func(b *testing.B, n int) {

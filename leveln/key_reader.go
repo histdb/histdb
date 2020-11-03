@@ -14,7 +14,7 @@ type krPage struct {
 }
 
 type keyReader struct {
-	fh    filesystem.File
+	fh    filesystem.Handle
 	root  uint32
 	cache []krPage
 
@@ -23,7 +23,7 @@ type keyReader struct {
 	}
 }
 
-func (k *keyReader) Init(fh filesystem.File) {
+func (k *keyReader) Init(fh filesystem.Handle) {
 	*k = keyReader{
 		fh: fh,
 	}

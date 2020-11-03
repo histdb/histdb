@@ -16,7 +16,7 @@ type Writer struct {
 	vw    valueWriter
 }
 
-func (w *Writer) Init(keys, values filesystem.File) {
+func (w *Writer) Init(keys, values filesystem.Handle) {
 	w.err = nil
 	w.key = lsm.Key{}
 	w.first = true

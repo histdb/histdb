@@ -11,11 +11,11 @@ import (
 )
 
 type Reader struct {
-	keys   filesystem.File
-	values filesystem.File
+	keys   filesystem.Handle
+	values filesystem.Handle
 }
 
-func (r *Reader) Init(keys, values filesystem.File) {
+func (r *Reader) Init(keys, values filesystem.Handle) {
 	*r = Reader{
 		keys:   keys,
 		values: values,
@@ -30,7 +30,7 @@ func (r *Reader) Iterator() (it Iterator) {
 type Iterator struct {
 	err    error
 	kr     keyReader
-	values filesystem.File
+	values filesystem.Handle
 	offset uint32
 	skey   lsm.Key
 	size   int
@@ -43,7 +43,7 @@ type Iterator struct {
 	}
 }
 
-func (it *Iterator) Init(keys, values filesystem.File) {
+func (it *Iterator) Init(keys, values filesystem.Handle) {
 	*it = Iterator{
 		values: values,
 	}

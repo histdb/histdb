@@ -14,7 +14,7 @@ import (
 func TestKeyReader(t *testing.T) {
 	const count = 1e5
 
-	fh, cleanup := testhelp.Tempfile(t, new(filesystem.T))
+	fh, cleanup := testhelp.Tempfile(t, filesystem.Temp)
 	defer cleanup()
 
 	var kw keyWriter
@@ -60,7 +60,7 @@ func BenchmarkKeyReader(b *testing.B) {
 	run := func(b *testing.B, n int) {
 		var rng pcg.T
 
-		fh, cleanup := testhelp.Tempfile(b, new(filesystem.T))
+		fh, cleanup := testhelp.Tempfile(b, filesystem.Temp)
 		defer cleanup()
 
 		var kw keyWriter

@@ -18,14 +18,14 @@ const (
 )
 
 type valueWriter struct {
-	fh   filesystem.File
+	fh   filesystem.Handle
 	n    uint64
 	off  int64
 	sn   uint
 	span [vwSpanSize]byte
 }
 
-func (v *valueWriter) Init(fh filesystem.File) {
+func (v *valueWriter) Init(fh filesystem.Handle) {
 	v.fh = fh
 }
 
