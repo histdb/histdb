@@ -9,12 +9,16 @@ import (
 
 type Key [KeySize]byte
 
+type Hash [HashSize]byte
+
 const (
 	TagHashSize    = 8
 	MetricHashSize = 8
 	HashSize       = TagHashSize + MetricHashSize
-	TimestampSize  = 4
-	KeySize        = HashSize + TimestampSize
+
+	TimestampSize = 4
+
+	KeySize = HashSize + TimestampSize
 
 	tagHashStart = 0
 	tagHashEnd   = tagHashStart + TagHashSize

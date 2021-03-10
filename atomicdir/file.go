@@ -8,30 +8,45 @@ import (
 const (
 	pathSep      = filepath.Separator
 	hexDigits    = "0123456789ABCDEF"
-	valueGEN0000 = 'G'<<56 | 'E'<<48 | 'N'<<40 | '-'<<32 | '0'<<24 | '0'<<16 | '0'<<8 | '0'
+	valueTXN0000 = 'T'<<56 | 'X'<<48 | 'N'<<40 | '-'<<32 | '0'<<24 | '0'<<16 | '0'<<8 | '0'
 	valueL00     = 'L'<<24 | '0'<<16 | '0'<<8 | '-'
 )
 
 type File struct {
-	Transaction uint16 // 0 => tmp
+	Transaction uint16 // 0  => TEMPDATA
 	Level       int8   // -1 => WAL
 	Generation  uint32
 }
 
-func (f File) Name() string {
-	var buf [21]byte
-	f.writeName(&buf)
+func TransactionName(txn uint16) string {
+	var buf [8]byte
+	WriteTransactionName(&buf, txn)
 	return string(buf[:])
 }
 
-func (f File) writeName(buf *[21]byte) {
+func WriteTransactionName(buf *[8]byte, txn uint16) {
+	if txn > 0 {
+		binary.BigEndian.PutUint64(buf[0:8], valueTXN0000)
+		writeUint(buf[0:8], uint32(txn))
+	} else {
+		*buf = [8]byte{'T', 'E', 'M', 'P', 'D', 'A', 'T', 'A'}
+	}
+}
+
+func (f File) Name() string {
+	var buf [21]byte
+	f.WriteName(&buf)
+	return string(buf[:])
+}
+
+func (f File) WriteName(buf *[21]byte) {
 	*buf = [21]byte{
-		't', 'e', 'm', 'p', 'd', 'a', 't', 'a', pathSep,
+		'T', 'E', 'M', 'P', 'D', 'A', 'T', 'A', pathSep,
 		'W', 'A', 'L', '-', '0', '0', '0', '0', '0', '0', '0', '0',
 	}
 
 	if f.Transaction > 0 {
-		binary.BigEndian.PutUint64(buf[0:8], valueGEN0000)
+		binary.BigEndian.PutUint64(buf[0:8], valueTXN0000)
 		writeUint(buf[0:8], uint32(f.Transaction))
 	}
 
@@ -52,8 +67,8 @@ func parseFile(name string) (f File, ok bool) {
 	}
 
 	switch {
-	case name[0:8] == "tempdata":
-	case name[0:4] == "GEN-":
+	case name[0:8] == "TEMPDATA":
+	case name[0:4] == "TXN-":
 		txn, ok = readUint(name[4:8], ok)
 	default:
 		goto bad
@@ -77,31 +92,40 @@ bad:
 	return File{}, false
 }
 
+// REVISIT: trivial for loops can be inlined soon
+
 func writeUint(x []byte, v uint32) {
-	i := 7
+	i := uint(7)
+
 next:
-	if i >= 0 && v > 0 {
+	if i < uint(len(x)) && v > 0 {
 		x[i] = hexDigits[v%16]
-		v, i = v/16, i-1
+		v /= 16
+		i--
 		goto next
 	}
 }
 
 func readUint(x string, iok bool) (v uint32, ok bool) {
 	i := 0
+
 next:
 	if i < len(x) {
-		c := x[i]
-		v *= 16
-		if '0' <= c && c <= '9' {
-			v += uint32(c - '0')
-		} else if 'A' <= c && c <= 'F' {
-			v += uint32(c + 10 - 'A')
-		} else {
-			return v, false
+		v <<= 4
+		switch c := uint32(x[i]); {
+		case '0' <= c && c <= '9':
+			v += c - '0'
+		case 'A' <= c && c <= 'F':
+			v += c + 10 - 'A'
+		default:
+			iok = false
+			goto end
 		}
+
 		i++
 		goto next
 	}
-	return v, iok && true
+
+end:
+	return v, iok
 }
