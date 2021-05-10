@@ -184,15 +184,19 @@ func (h *Histogram) Quantile(q float64) (v float32) {
 			}
 
 			for k := uint32(0); k < l2Size; k++ {
-				acc += layer2_loadCounter(l2, k)
-				if acc >= target {
-					return lowerValue(i, j, k)
+				count := layer2_loadCounter(l2, k)
+				if acc+count >= target {
+					if target-acc < (acc+count)-target {
+						return lowerValue(i, j, k)
+					}
+					return upperValue(i, j, k)
 				}
+				acc += count
 			}
 		}
 	}
 
-	return math.MaxFloat32
+	return h.Max()
 }
 
 // CDF returns an estimate of the fraction of values that are smaller than
@@ -223,9 +227,10 @@ func (h *Histogram) CDF(v float32) float64 {
 			if target < obsTarget {
 				sum += bacc
 			} else if target == obsTarget {
-				for k := uint32(0); k <= obsCounters; k++ {
+				for k := uint32(0); k < obsCounters; k++ {
 					sum += layer2_loadCounter(l2, k)
 				}
+				sum += layer2_loadCounter(l2, obsCounters) / 2
 			}
 		}
 	}

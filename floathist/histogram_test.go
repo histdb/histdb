@@ -36,10 +36,10 @@ func TestHistogram(t *testing.T) {
 		}
 
 		assert.Equal(t, h.Quantile(0), 0.)
-		assert.Equal(t, h.Quantile(.25), 248.)
-		assert.Equal(t, h.Quantile(.5), 496.)
-		assert.Equal(t, h.Quantile(1), 992.)
-		assert.Equal(t, h.Quantile(2), math.MaxFloat32)
+		assert.Equal(t, h.Quantile(.25), 250.)
+		assert.Equal(t, h.Quantile(.5), 500.)
+		assert.Equal(t, h.Quantile(1), 1000.)
+		assert.Equal(t, h.Quantile(2), 1000.)
 	})
 
 	t.Run("CDF", func(t *testing.T) {
@@ -48,10 +48,11 @@ func TestHistogram(t *testing.T) {
 			h.Observe(i)
 		}
 
-		assert.Equal(t, h.CDF(0), 0.001)
-		assert.Equal(t, h.CDF(250), 0.252)
-		assert.Equal(t, h.CDF(500), 0.504)
-		assert.Equal(t, h.CDF(1000), 1.0)
+		assert.Equal(t, h.CDF(0), 0.)
+		assert.Equal(t, h.CDF(250), 0.25)
+		assert.Equal(t, h.CDF(500), 0.5)
+		assert.Equal(t, h.CDF(1000), 0.996)
+		assert.Equal(t, h.CDF(1008), 1.0)
 	})
 
 	t.Run("Summary", func(t *testing.T) {
