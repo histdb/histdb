@@ -1,0 +1,17 @@
+<svg width="400" height="400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+    <defs>
+        <radialGradient id="burst" cx="100%" cy="0%" r="100%">
+            <stop offset="0%" stop-color="white" stop-opacity="25%" />
+            <stop offset="100%" stop-color="white" stop-opacity="0%" />
+        </radialGradient>
+    </defs>
+    <rect x="0" y="0" width="100" height="100" fill="none" />
+    <rect x="5" y="5" width="90" height="90" fill="#262833" rx="10" />
+    <rect x="5" y="5" width="90" height="90" fill="url(#burst)" rx="10" />
+    <svg width="75" height="75" viewBox="0 0 100 100" x="12.5">
+        <g>
+            <path fill="#39E991" d="m23 80.999c0-8.284 7.716-15.999 16-15.999v15.999h-16zm19-18.108c0.128-8.19 7.074-14.766 15.268-14.766h0.732v32.874h-16v-18.108zm19-27.954c0.035-8.26 6.928-14.937 15.188-14.938h0.812v61h-16v-46.062z" />
+        </g>
+    </svg>
+    <text fill="#ffffff" text-anchor="start" font-family="Arial" font-size="24" y="85" x="13">HistDB</text>
+</svg>
