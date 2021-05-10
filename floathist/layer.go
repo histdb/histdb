@@ -4,8 +4,6 @@ import (
 	"runtime"
 	"sync/atomic"
 	"unsafe"
-
-	"github.com/zeebo/lsm/floathist/internal/bitmap"
 )
 
 type (
@@ -17,6 +15,10 @@ const (
 	l0Bits = 4
 	l1Bits = 4
 	l2Bits = 6
+
+	l0Bitmask = 1<<l0Bits - 1
+	l1Bitmask = 1<<l1Bits - 1
+	l2Bitmask = 1<<l2Bits - 1
 
 	l0Size = 1 << l0Bits
 	l1Size = 1 << l1Bits
@@ -37,7 +39,7 @@ const (
 //
 
 type layer0 struct {
-	bm  bitmap.B64
+	bm  l0Bitmap
 	l1s [l0Size]*layer1
 }
 
@@ -46,7 +48,7 @@ type layer0 struct {
 //
 
 type layer1 struct {
-	bm  bitmap.B64
+	bm  l1Bitmap
 	l2s [l1Size]layer2
 }
 
@@ -70,7 +72,7 @@ func (l *layer2Small) asLayer2() layer2 { return (layer2)(ptr(uptr(ptr(l))&^0b10
 
 func newLayer2() layer2 { return new(layer2Small).asLayer2() }
 
-const upconvertAt = 1 << 30
+const upconvertAt = 1 << 32 / 4
 
 func layer2_load(addr *layer2) layer2           { return atomic.LoadPointer(addr) }
 func layer2_store(addr *layer2, l layer2)       { atomic.StorePointer(addr, l) }

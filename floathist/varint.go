@@ -82,10 +82,14 @@ func safeVarintConsume(buf buffer.T) (uint64, buffer.T, bool) {
 	return out, buf.Advance(uintptr(nbytes)), true
 }
 
-//
 // we use direct uint64 writes because the inliner hates binary.LittleEndian :(
+// so let's at least make sure that they work the same way at startup so we
+// don't silently corrupt data.
 //
-
+// additionally, because we're using direct writes, they may be unaligned and
+// so let's make sure those work as well.
+//
+// this is all very sad.
 func init() {
 	var b1, b2 [9]byte
 	binary.LittleEndian.PutUint64(b1[1:9], 0x0102030405060708)

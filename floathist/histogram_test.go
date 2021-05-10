@@ -29,6 +29,7 @@ func TestQuantile(t *testing.T) {
 		assert.Equal(t, h.Quantile(.25), 248.)
 		assert.Equal(t, h.Quantile(.5), 496.)
 		assert.Equal(t, h.Quantile(1), 992.)
+		assert.Equal(t, h.Quantile(2), math.MaxFloat32)
 	})
 
 	t.Run("CDF", func(t *testing.T) {

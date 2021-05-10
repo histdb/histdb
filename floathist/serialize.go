@@ -4,7 +4,6 @@ import (
 	"encoding/binary"
 
 	"github.com/zeebo/errs/v2"
-	"github.com/zeebo/lsm/floathist/internal/bitmap"
 	"github.com/zeebo/lsm/floathist/internal/buffer"
 )
 
@@ -42,7 +41,7 @@ func (h *Histogram) Serialize(mem []byte) []byte {
 			}
 
 			l2 := layer2_load(&l1.l2s[i])
-			var bm bitmap.B64
+			var bm l2Bitmap
 
 			buf = buf.Grow()
 			pos := buf.Pos()
@@ -83,9 +82,9 @@ func (h *Histogram) Load(data []byte) (err error) {
 	le := binary.LittleEndian
 	buf := buffer.OfLen(data)
 
-	var bm0 bitmap.B64
-	var bm1 bitmap.B64
-	var bm2 bitmap.B64
+	var bm0 l0Bitmap
+	var bm1 l1Bitmap
+	var bm2 l2Bitmap
 
 	if buf.Remaining() < 8 {
 		err = errs.Errorf("buffer too short")

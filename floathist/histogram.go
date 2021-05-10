@@ -64,9 +64,7 @@ func (h *Histogram) Total() (total int64) {
 			}
 			l2 := layer2_load(&l1.l2s[i])
 
-			for i := uint32(0); i < l2Size; i++ {
-				total += int64(layer2_loadCounter(l2, i))
-			}
+			total += int64(sumLayer2(l2))
 		}
 	}
 
@@ -92,6 +90,12 @@ func (h *Histogram) Quantile(q float64) float32 {
 			}
 			l2 := layer2_load(&l1.l2s[j])
 
+			bacc := acc + sumLayer2(l2)
+			if bacc < target {
+				acc = bacc
+				continue
+			}
+
 			for k := uint32(0); k < l2Size; k++ {
 				acc += layer2_loadCounter(l2, k)
 				if acc >= target {
@@ -103,12 +107,15 @@ func (h *Histogram) Quantile(q float64) float32 {
 		}
 	}
 
-	return math.Float32frombits((1<<15 - 1) << 17)
+	return math.MaxFloat32
 }
 
 func (h *Histogram) CDF(v float32) float64 {
 	obs := math.Float32bits(v)
 	obs ^= uint32(int32(obs)>>31) | (1 << 31)
+
+	obsTarget := obs & ((1<<(l0Bits+l1Bits) - 1) << (32 - l0Bits - l1Bits))
+	obsCounters := (obs >> l2Shift) % l2Size
 
 	var sum, total uint64
 
@@ -128,15 +135,16 @@ func (h *Histogram) CDF(v float32) float64 {
 			}
 			l2 := layer2_load(&l1.l2s[j])
 
-			target := i<<l0Shift | j<<l1Shift
+			bacc := sumLayer2(l2)
+			total += bacc
 
-			for k := uint32(0); k < l2Size; k++ {
-				count := layer2_loadCounter(l2, k)
-				if obs >= target {
-					sum += count
-					target += 1 << l2Shift
+			target := i<<l0Shift | j<<l1Shift
+			if target < obsTarget {
+				sum += bacc
+			} else if target == obsTarget {
+				for k := uint32(0); k <= obsCounters; k++ {
+					sum += layer2_loadCounter(l2, k)
 				}
-				total += count
 			}
 		}
 	}
