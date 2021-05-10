@@ -51,9 +51,9 @@ func TestQuantile(t *testing.T) {
 			rsum += i
 		}
 
-		assert.Equal(t, h.Sum(), 499978.6640625) // 499500
+		// assert.Equal(t, h.Sum(), 499978.6640625) // 499500
 
-		// assert.Equal(t, h.Sum(), 500021.328125) // 499500
+		assert.Equal(t, h.Sum(), 500021.328125) // 499500
 	})
 
 	t.Run("Average", func(t *testing.T) {
@@ -66,11 +66,11 @@ func TestQuantile(t *testing.T) {
 
 		sum, avg := h.Average()
 
-		assert.Equal(t, sum, 499978.6640625) // 499500
-		assert.Equal(t, avg, 499.9786640625) // 499.5
+		// assert.Equal(t, sum, 499978.6640625) // 499500
+		// assert.Equal(t, avg, 499.9786640625) // 499.5
 
-		// assert.Equal(t, sum, 500021.328125) // 499500
-		// assert.Equal(t, avg, 500.021328125) // 499.5
+		assert.Equal(t, sum, 500021.328125) // 499500
+		assert.Equal(t, avg, 500.021328125) // 499.5
 	})
 
 	t.Run("Variance", func(t *testing.T) {
@@ -83,18 +83,20 @@ func TestQuantile(t *testing.T) {
 
 		sum, avg, vari := h.Variance()
 
-		assert.Equal(t, sum, 499978.6640625)   // 499500
-		assert.Equal(t, avg, 499.9786640625)   // 499.5
-		assert.Equal(t, vari, 83433.942757616) // 83416.667
+		// assert.Equal(t, sum, 499978.6640625)   // 499500
+		// assert.Equal(t, avg, 499.9786640625)   // 499.5
+		// assert.Equal(t, vari, 83433.942757616) // 83416.667
 
-		// assert.Equal(t, sum, 500021.328125)      // 499500
-		// assert.Equal(t, avg, 500.021328125)      // 499.5
-		// assert.Equal(t, vari, 83447.18984652992) // 83416.667
+		assert.Equal(t, sum, 500021.328125)      // 499500
+		assert.Equal(t, avg, 500.021328125)      // 499.5
+		assert.Equal(t, vari, 83447.18984652992) // 83416.667
 	})
 }
 
 func BenchmarkHistogram(b *testing.B) {
 	b.Run("Observe", func(b *testing.B) {
+		b.ReportAllocs()
+
 		his := new(Histogram)
 
 		for i := 0; i < b.N; i++ {
@@ -103,6 +105,8 @@ func BenchmarkHistogram(b *testing.B) {
 	})
 
 	b.Run("Observe_Parallel", func(b *testing.B) {
+		b.ReportAllocs()
+
 		his := new(Histogram)
 		n := int64(0)
 		b.RunParallel(func(pb *testing.PB) {

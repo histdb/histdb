@@ -2,7 +2,6 @@ package floathist
 
 import (
 	"encoding/binary"
-	"sync/atomic"
 
 	"github.com/zeebo/errs/v2"
 	"github.com/zeebo/lsm/floathist/internal/bitmap"
@@ -17,7 +16,7 @@ func (h *Histogram) Serialize(mem []byte) []byte {
 	}
 	buf := buffer.Of(mem)
 
-	bm := h.bm.Clone()
+	bm := h.l0.bm.Clone()
 
 	buf = buf.Grow()
 	le.PutUint64(buf.Front8()[:], bm.UnsafeUint())
@@ -28,7 +27,7 @@ func (h *Histogram) Serialize(mem []byte) []byte {
 		if !ok {
 			break
 		}
-		l1 := loadLayer1(&h.l1s[i])
+		l1 := layer1Load(&h.l0.l1s[i])
 
 		bm := l1.bm.Clone()
 
@@ -42,15 +41,15 @@ func (h *Histogram) Serialize(mem []byte) []byte {
 				break
 			}
 
-			l2 := loadLayer2(&l1.l2s[i])
+			l2 := layer2_load(&l1.l2s[i])
 			var bm bitmap.B64
 
 			buf = buf.Grow()
 			pos := buf.Pos()
 			buf = buf.Advance(l2Size / 8)
 
-			for i := uint32(0); i < uint32(len(l2)); i++ {
-				val := atomic.LoadUint64(&l2[i])
+			for i := uint32(0); i < l2Size; i++ {
+				val := layer2_loadCounter(l2, i)
 				if val == 0 {
 					continue
 				}
@@ -63,6 +62,8 @@ func (h *Histogram) Serialize(mem []byte) []byte {
 			}
 
 			switch l2Size {
+			case 8:
+				*buf.Index(pos) = uint8(bm.UnsafeUint())
 			case 16:
 				le.PutUint16(buf.Index2(pos)[:], uint16(bm.UnsafeUint()))
 			case 32:
@@ -70,13 +71,12 @@ func (h *Histogram) Serialize(mem []byte) []byte {
 			case 64:
 				le.PutUint64(buf.Index8(pos)[:], uint64(bm.UnsafeUint()))
 			default:
-				// TODO: this sucks
 				panic("unhandled level2 size")
 			}
 		}
 	}
 
-	return buf.Prefix()
+	return buf.Grow().Advance(9).Prefix()
 }
 
 func (h *Histogram) Load(data []byte) (err error) {
@@ -87,14 +87,14 @@ func (h *Histogram) Load(data []byte) (err error) {
 	var bm1 bitmap.B64
 	var bm2 bitmap.B64
 
-	if buf.Remaining() < 8 { // TODO: this sucks
+	if buf.Remaining() < 8 {
 		err = errs.Errorf("buffer too short")
 		goto done
 	}
 
-	h.bm.UnsafeSetUint(le.Uint64(buf.Front8()[:]) & l0Mask)
+	h.l0.bm.UnsafeSetUint(le.Uint64(buf.Front8()[:]) & l0Mask)
 	buf = buf.Advance(l0Size / 8)
-	bm0 = h.bm.UnsafeClone()
+	bm0 = h.l0.bm.UnsafeClone()
 
 	for {
 		i, ok := bm0.Next()
@@ -103,9 +103,9 @@ func (h *Histogram) Load(data []byte) (err error) {
 		}
 
 		l1 := new(layer1)
-		h.l1s[i] = l1
+		h.l0.l1s[i%l0Size] = l1
 
-		if buf.Remaining() < 8 { // TODO: this sucks
+		if buf.Remaining() < 8 {
 			err = errs.Errorf("buffer too short")
 			goto done
 		}
@@ -120,10 +120,9 @@ func (h *Histogram) Load(data []byte) (err error) {
 				break
 			}
 
-			l2 := new(layer2)
-			l1.l2s[i] = l2
+			l2 := newLayer2()
 
-			if buf.Remaining() < 8 { // TODO: this sucks
+			if buf.Remaining() < 8 {
 				err = errs.Errorf("buffer too short")
 				goto done
 			}
@@ -137,23 +136,28 @@ func (h *Histogram) Load(data []byte) (err error) {
 					break
 				}
 
-				if rem := buf.Remaining(); rem >= 9 {
-					var nbytes uintptr
-					nbytes, l2[i] = fastVarintConsume(buf.Front9())
-					if nbytes > rem {
-						err = errs.Errorf("invalid varint data")
-						goto done
-					}
-					buf = buf.Advance(nbytes)
+				rem := buf.Remaining()
+				if rem < 9 {
+					err = errs.Errorf("buffer too short")
+					goto done
+				}
 
-				} else {
-					l2[i], buf, ok = safeVarintConsume(buf)
-					if !ok {
-						err = errs.Errorf("invalid varint data")
-						goto done
-					}
+				nbytes, val := fastVarintConsume(buf.Front9())
+				if nbytes > rem {
+					err = errs.Errorf("invalid varint data")
+					goto done
+				}
+				buf = buf.Advance(nbytes)
+
+				if !layer2_unsafeSetCounter(l2, i, val) &&
+					!layer2_upconvert(l2, &l2, false) &&
+					!layer2_unsafeSetCounter(l2, i, val) {
+					err = errs.Errorf("value too large to set")
+					goto done
 				}
 			}
+
+			l1.l2s[i%l1Size] = l2
 		}
 	}
 
