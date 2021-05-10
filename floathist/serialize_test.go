@@ -21,20 +21,22 @@ func TestSerialize(t *testing.T) {
 	})
 
 	t.Run("Load", func(t *testing.T) {
-		h := new(Histogram)
+		h1 := new(Histogram)
 		for i := int64(0); i < 10000; i++ {
 			r := float32(pcg.Uint32n(1000) + 500)
-			h.Observe(r)
+			h1.Observe(r)
 		}
 
 		h2 := new(Histogram)
-		assert.NoError(t, h2.Load(h.Serialize(nil)))
+		assert.NoError(t, h2.Load(h1.Serialize(nil)))
 
-		assert.Equal(t, h.Total(), h2.Total())
-		assert.Equal(t, h.Sum(), h2.Sum())
+		tot1, sum1, avg1, vari1 := h1.Summary()
+		tot2, sum2, avg2, vari2 := h2.Summary()
 
-		t.Log(h.Average())
-		t.Log(h2.Average())
+		assert.Equal(t, tot1, tot2)
+		assert.Equal(t, sum1, sum2)
+		assert.Equal(t, avg1, avg2)
+		assert.Equal(t, vari1, vari2)
 	})
 }
 

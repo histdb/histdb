@@ -52,8 +52,8 @@ type layer1 struct {
 	l2s [l1Size]layer2
 }
 
-func layer1Load(addr **layer1) *layer1 { return (*layer1)(atomic.LoadPointer((*ptr)(ptr(addr)))) }
-func layer1CAS(addr **layer1, b *layer1) bool {
+func layer1_load(addr **layer1) *layer1 { return (*layer1)(atomic.LoadPointer((*ptr)(ptr(addr)))) }
+func layer1_cas(addr **layer1, b *layer1) bool {
 	return atomic.CompareAndSwapPointer((*ptr)(ptr(addr)), nil, ptr(b))
 }
 
@@ -85,12 +85,12 @@ func layer2_asLarge(l layer2) *layer2Large  { return (*layer2Large)(ptr(uptr(l) 
 func layer2_asSmall(l layer2) *layer2Small  { return (*layer2Small)(ptr(uptr(l) &^ 0b11)) }
 func layer2_asUpconverting(l layer2) layer2 { return ptr(uptr(l)&^0b01 + 0b01) }
 
-func layer2_addCounter(l layer2, i, n uint32) bool {
+func layer2_incCounter(l layer2, i uint32) bool {
 	if layer2_isLarge(l) {
-		atomic.AddUint64(&layer2_asLarge(l)[i%l2Size], uint64(n))
+		atomic.AddUint64(&layer2_asLarge(l)[i%l2Size], 1)
 		return false
 	} else {
-		return atomic.AddUint32(&layer2_asSmall(l)[i%l2Size], n) > upconvertAt
+		return atomic.AddUint32(&layer2_asSmall(l)[i%l2Size], 1) > upconvertAt
 	}
 }
 
@@ -112,6 +112,18 @@ func layer2_unsafeSetCounter(l layer2, i uint32, n uint64) bool {
 		layer2_asSmall(l)[i%l2Size] = uint32(n)
 		return true
 	}
+}
+
+func layer2_addCounter(l layer2, i uint32, n uint64) bool {
+	if layer2_isLarge(l) {
+		atomic.AddUint64(&layer2_asLarge(l)[i%l2Size], n)
+		return false
+	}
+	l2s := layer2_asSmall(l)
+	if uint64(atomic.LoadUint32(&l2s[i%l2Size]))+n > upconvertAt {
+		return false
+	}
+	return atomic.AddUint32(&l2s[i%l2Size], uint32(n)) > upconvertAt
 }
 
 func layer2_upconvert(l layer2, addr *layer2, finalize bool) bool {

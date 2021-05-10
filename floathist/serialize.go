@@ -18,28 +18,21 @@ func (h *Histogram) Serialize(mem []byte) []byte {
 	bm := h.l0.bm.Clone()
 
 	buf = buf.Grow()
-	le.PutUint64(buf.Front8()[:], bm.UnsafeUint())
+	le.PutUint64(buf.Front8()[:], bm.uint64())
 	buf = buf.Advance(l0Size / 8)
 
-	for {
-		i, ok := bm.Next()
-		if !ok {
-			break
-		}
-		l1 := layer1Load(&h.l0.l1s[i])
+	for ; !bm.Empty(); bm.Next() {
+		i := bm.Lowest()
+		l1 := layer1_load(&h.l0.l1s[i])
 
 		bm := l1.bm.Clone()
 
 		buf = buf.Grow()
-		le.PutUint64(buf.Front8()[:], bm.UnsafeUint())
+		le.PutUint64(buf.Front8()[:], bm.Uint64())
 		buf = buf.Advance(l1Size / 8)
 
-		for {
-			i, ok := bm.Next()
-			if !ok {
-				break
-			}
-
+		for ; !bm.Empty(); bm.Next() {
+			i := bm.Lowest()
 			l2 := layer2_load(&l1.l2s[i])
 			var bm l2Bitmap
 
@@ -62,13 +55,13 @@ func (h *Histogram) Serialize(mem []byte) []byte {
 
 			switch l2Size {
 			case 8:
-				*buf.Index(pos) = uint8(bm.UnsafeUint())
+				*buf.Index(pos) = uint8(bm.Uint64())
 			case 16:
-				le.PutUint16(buf.Index2(pos)[:], uint16(bm.UnsafeUint()))
+				le.PutUint16(buf.Index2(pos)[:], uint16(bm.Uint64()))
 			case 32:
-				le.PutUint32(buf.Index4(pos)[:], uint32(bm.UnsafeUint()))
+				le.PutUint32(buf.Index4(pos)[:], uint32(bm.Uint64()))
 			case 64:
-				le.PutUint64(buf.Index8(pos)[:], uint64(bm.UnsafeUint()))
+				le.PutUint64(buf.Index8(pos)[:], uint64(bm.Uint64()))
 			default:
 				panic("unhandled level2 size")
 			}
@@ -82,43 +75,29 @@ func (h *Histogram) Load(data []byte) (err error) {
 	le := binary.LittleEndian
 	buf := buffer.OfLen(data)
 
-	var bm0 l0Bitmap
-	var bm1 l1Bitmap
-	var bm2 l2Bitmap
-
 	if buf.Remaining() < 8 {
 		err = errs.Errorf("buffer too short")
 		goto done
 	}
 
-	h.l0.bm.UnsafeSetUint(le.Uint64(buf.Front8()[:]) & l0Mask)
+	h.l0.bm.UnsafeSetUint(le.Uint64(buf.Front8()[:]))
 	buf = buf.Advance(l0Size / 8)
-	bm0 = h.l0.bm.UnsafeClone()
 
-	for {
-		i, ok := bm0.Next()
-		if !ok {
-			break
-		}
-
+	for bm := h.l0.bm.Clone(); !bm.Empty(); bm.Next() {
+		i := bm.Lowest()
 		l1 := new(layer1)
-		h.l0.l1s[i%l0Size] = l1
+		h.l0.l1s[i] = l1
 
 		if buf.Remaining() < 8 {
 			err = errs.Errorf("buffer too short")
 			goto done
 		}
 
-		l1.bm.UnsafeSetUint(le.Uint64(buf.Front8()[:]) & l1Mask)
+		l1.bm.UnsafeSetUint(le.Uint64(buf.Front8()[:]))
 		buf = buf.Advance(l1Size / 8)
-		bm1 = l1.bm.UnsafeClone()
 
-		for {
-			i, ok := bm1.Next()
-			if !ok {
-				break
-			}
-
+		for bm := l1.bm.Clone(); !bm.Empty(); bm.Next() {
+			i := bm.Lowest()
 			l2 := newLayer2()
 
 			if buf.Remaining() < 8 {
@@ -126,14 +105,11 @@ func (h *Histogram) Load(data []byte) (err error) {
 				goto done
 			}
 
-			bm2.UnsafeSetUint(le.Uint64(buf.Front8()[:]) & l2Mask)
+			bm := l2Bitmap{le.Uint64(buf.Front8()[:])}
 			buf = buf.Advance(l2Size / 8)
 
-			for {
-				i, ok := bm2.Next()
-				if !ok {
-					break
-				}
+			for ; !bm.Empty(); bm.Next() {
+				i := bm.Lowest()
 
 				rem := buf.Remaining()
 				if rem < 9 {
@@ -156,7 +132,7 @@ func (h *Histogram) Load(data []byte) (err error) {
 				}
 			}
 
-			l1.l2s[i%l1Size] = l2
+			l1.l2s[i] = l2
 		}
 	}
 

@@ -9,7 +9,17 @@ import (
 	"github.com/zeebo/pcg"
 )
 
-func TestQuantile(t *testing.T) {
+func TestHistogram(t *testing.T) {
+	t.Run("MinMax", func(t *testing.T) {
+		h := new(Histogram)
+		for i := float32(0); i < 1000; i++ {
+			h.Observe(i)
+		}
+
+		assert.Equal(t, h.Min(), 0.)
+		assert.Equal(t, h.Max(), 1000.)
+	})
+
 	t.Run("Total", func(t *testing.T) {
 		h := new(Histogram)
 		for i := float32(0); i < 1000; i++ {
@@ -44,50 +54,16 @@ func TestQuantile(t *testing.T) {
 		assert.Equal(t, h.CDF(1000), 1.0)
 	})
 
-	t.Run("Sum", func(t *testing.T) {
+	t.Run("Summary", func(t *testing.T) {
 		h := new(Histogram)
-		rsum := float32(0)
 		for i := float32(0); i < 1000; i++ {
 			h.Observe(i)
-			rsum += i
 		}
 
-		// assert.Equal(t, h.Sum(), 499978.6640625) // 499500
+		total, sum, avg, vari := h.Summary()
+		_, _, _, _ = total, sum, avg, vari
 
-		assert.Equal(t, h.Sum(), 500021.328125) // 499500
-	})
-
-	t.Run("Average", func(t *testing.T) {
-		h := new(Histogram)
-		rsum := float32(0)
-		for i := float32(0); i < 1000; i++ {
-			h.Observe(i)
-			rsum += i
-		}
-
-		sum, avg := h.Average()
-
-		// assert.Equal(t, sum, 499978.6640625) // 499500
-		// assert.Equal(t, avg, 499.9786640625) // 499.5
-
-		assert.Equal(t, sum, 500021.328125) // 499500
-		assert.Equal(t, avg, 500.021328125) // 499.5
-	})
-
-	t.Run("Variance", func(t *testing.T) {
-		h := new(Histogram)
-		rsum := float32(0)
-		for i := float32(0); i < 1000; i++ {
-			h.Observe(i)
-			rsum += i
-		}
-
-		sum, avg, vari := h.Variance()
-
-		// assert.Equal(t, sum, 499978.6640625)   // 499500
-		// assert.Equal(t, avg, 499.9786640625)   // 499.5
-		// assert.Equal(t, vari, 83433.942757616) // 83416.667
-
+		assert.Equal(t, total, 1000.)
 		assert.Equal(t, sum, 500021.328125)      // 499500
 		assert.Equal(t, avg, 500.021328125)      // 499.5
 		assert.Equal(t, vari, 83447.18984652992) // 83416.667
@@ -116,6 +92,32 @@ func BenchmarkHistogram(b *testing.B) {
 				his.Observe(i)
 			}
 		})
+	})
+
+	b.Run("Min", func(b *testing.B) {
+		his := new(Histogram)
+		for i := 0; i < 1000000; i++ {
+			his.Observe(math.Float32frombits(pcg.Uint32() &^ ((1<<10 - 1) << 22)))
+		}
+		b.ReportAllocs()
+		b.ResetTimer()
+
+		for i := 0; i < b.N; i++ {
+			his.Min()
+		}
+	})
+
+	b.Run("Max", func(b *testing.B) {
+		his := new(Histogram)
+		for i := 0; i < 1000000; i++ {
+			his.Observe(math.Float32frombits(pcg.Uint32() &^ ((1<<10 - 1) << 22)))
+		}
+		b.ReportAllocs()
+		b.ResetTimer()
+
+		for i := 0; i < b.N; i++ {
+			his.Max()
+		}
 	})
 
 	b.Run("Total", func(b *testing.B) {
@@ -201,7 +203,7 @@ func BenchmarkHistogram(b *testing.B) {
 		}
 	})
 
-	b.Run("Sum", func(b *testing.B) {
+	b.Run("Summary", func(b *testing.B) {
 		his := new(Histogram)
 		for i := 0; i < 1000; i++ {
 			his.Observe(pcg.Float32())
@@ -211,35 +213,7 @@ func BenchmarkHistogram(b *testing.B) {
 		b.ResetTimer()
 
 		for i := 0; i < b.N; i++ {
-			_ = his.Sum()
-		}
-	})
-
-	b.Run("Average", func(b *testing.B) {
-		his := new(Histogram)
-		for i := 0; i < 1000; i++ {
-			his.Observe(pcg.Float32())
-		}
-		assert.Equal(b, his.Total(), 1000)
-		b.ReportAllocs()
-		b.ResetTimer()
-
-		for i := 0; i < b.N; i++ {
-			_, _ = his.Average()
-		}
-	})
-
-	b.Run("Variance", func(b *testing.B) {
-		his := new(Histogram)
-		for i := 0; i < 1000; i++ {
-			his.Observe(pcg.Float32())
-		}
-		assert.Equal(b, his.Total(), 1000)
-		b.ReportAllocs()
-		b.ResetTimer()
-
-		for i := 0; i < b.N; i++ {
-			_, _, _ = his.Variance()
+			_, _, _, _ = his.Summary()
 		}
 	})
 }
