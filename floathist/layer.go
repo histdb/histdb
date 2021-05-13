@@ -67,32 +67,39 @@ type (
 	layer2Large [l2Size]uint64
 )
 
-func (l *layer2Large) asLayer2() layer2 { return (layer2)(ptr(uptr(ptr(l))&^0b10 + 0b10)) }
 func (l *layer2Small) asLayer2() layer2 { return (layer2)(ptr(uptr(ptr(l))&^0b10 + 0b00)) }
+func (l *layer2Large) asLayer2() layer2 { return (layer2)(ptr(uptr(ptr(l))&^0b10 + 0b11)) }
 
-func newLayer2() layer2 { return new(layer2Small).asLayer2() }
+func newLayer2() layer2        { return new(layer2Small).asLayer2() }
+func newLayer2_small() layer2  { return new(layer2Small).asLayer2() }
+func newLayer2_marked() layer2 { return layer2_asMarked(new(layer2Small).asLayer2()) }
+func newLayer2_large() layer2  { return new(layer2Large).asLayer2() }
 
-const upconvertAt = 1 << 32 / 4
+const (
+	growAt = 1 << 32 / 4   // set when about to overflow a 32 bit value
+	markAt = 1 << 32 / 128 // set when 64 additions may overflow a 32 bit value
+
+	tagLayer2Small   = 0b00
+	tagLayer2Marked  = 0b01
+	tagLayer2Growing = 0b10
+	tagLayer2Large   = 0b11
+)
 
 func layer2_load(addr *layer2) layer2           { return atomic.LoadPointer(addr) }
 func layer2_store(addr *layer2, l layer2)       { atomic.StorePointer(addr, l) }
 func layer2_cas(addr *layer2, o, n layer2) bool { return atomic.CompareAndSwapPointer(addr, o, n) }
 
-func layer2_isSmall(l layer2) bool { return uintptr(l)&0b11 == 0b00 }
-func layer2_isLarge(l layer2) bool { return uintptr(l)&0b11 == 0b10 }
+func layer2_tag(l layer2) uptr { return uptr(l) & 0b11 }
 
-func layer2_asLarge(l layer2) *layer2Large  { return (*layer2Large)(ptr(uptr(l) &^ 0b11)) }
-func layer2_asSmall(l layer2) *layer2Small  { return (*layer2Small)(ptr(uptr(l) &^ 0b11)) }
-func layer2_asUpconverting(l layer2) layer2 { return ptr(uptr(l)&^0b01 + 0b01) }
+func layer2_asSmall(l layer2) *layer2Small { return (*layer2Small)(ptr(uptr(l) &^ 0b11)) }
+func layer2_asMarked(l layer2) layer2      { return ptr(uptr(l)&^0b11 + 0b01) }
+func layer2_asGrowing(l layer2) layer2     { return ptr(uptr(l)&^0b11 + 0b10) }
+func layer2_asLarge(l layer2) *layer2Large { return (*layer2Large)(ptr(uptr(l) &^ 0b11)) }
+func layer2_truncate(l layer2) layer2      { return ptr(uptr(l) &^ 0b11) }
 
-func layer2_incCounter(l layer2, i uint32) bool {
-	if layer2_isLarge(l) {
-		atomic.AddUint64(&layer2_asLarge(l)[i%l2Size], 1)
-		return false
-	} else {
-		return atomic.AddUint32(&layer2_asSmall(l)[i%l2Size], 1) > upconvertAt
-	}
-}
+func layer2_isLarge(l layer2) bool { return uptr(l)&0b11 == 0b11 }
+func layer2_canMark(l layer2) bool { return uptr(l)&0b11 == 0b00 }
+func layer2_canGrow(l layer2) bool { return uptr(l)&0b10 == 0b00 }
 
 func layer2_loadCounter(l layer2, i uint32) uint64 {
 	if layer2_isLarge(l) {
@@ -102,38 +109,42 @@ func layer2_loadCounter(l layer2, i uint32) uint64 {
 	}
 }
 
-func layer2_unsafeSetCounter(l layer2, i uint32, n uint64) bool {
+func layer2_unsafeSetCounter(l layer2, addr *layer2, i uint32, n uint64) bool {
+	i %= l2Size
+
+	if n > growAt && layer2_canGrow(l) {
+		if !layer2_grow(l, addr, false) {
+			return false
+		}
+		l = *addr
+	} else if n > markAt && layer2_canMark(l) {
+		if !layer2_mark(l, addr) {
+			return false
+		}
+		l = *addr
+	}
+
 	if layer2_isLarge(l) {
-		layer2_asLarge(l)[i%l2Size] = n
-		return true
-	} else if n > upconvertAt {
-		return false
+		layer2_asLarge(l)[i] = n
 	} else {
-		layer2_asSmall(l)[i%l2Size] = uint32(n)
-		return true
+		layer2_asSmall(l)[i] = uint32(n)
 	}
+
+	return true
 }
 
-func layer2_addCounter(l layer2, i uint32, n uint64) bool {
-	if layer2_isLarge(l) {
-		atomic.AddUint64(&layer2_asLarge(l)[i%l2Size], n)
-		return false
-	}
-	l2s := layer2_asSmall(l)
-	if uint64(atomic.LoadUint32(&l2s[i%l2Size]))+n > upconvertAt {
-		return false
-	}
-	return atomic.AddUint32(&l2s[i%l2Size], uint32(n)) > upconvertAt
+func layer2_mark(l layer2, addr *layer2) bool {
+	return layer2_cas(addr, l, layer2_asMarked(l))
 }
 
-func layer2_upconvert(l layer2, addr *layer2, finalize bool) bool {
-	// if no point in upconverting if we're small.
-	if !layer2_isSmall(l) {
+func layer2_grow(l layer2, addr *layer2, finalize bool) bool {
+	// only try to do so if we're small and not already growing
+	if !layer2_canGrow(l) {
 		return false
 	}
 
-	// tag the bit and claim ownership of doing the upconvert
-	if !layer2_cas(addr, l, layer2_asUpconverting(l)) {
+	// tag the bit and claim ownership of doing the growth
+	if !layer2_cas(addr, l, layer2_asGrowing(l)) {
 		return false
 	}
 

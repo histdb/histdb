@@ -2,6 +2,7 @@ package floathist
 
 import (
 	"math"
+	"sync/atomic"
 
 	"github.com/zeebo/errs/v2"
 )
@@ -43,23 +44,22 @@ func (h *Histogram) Merge(g *Histogram) error {
 
 			if l2h == nil {
 				l2h = newLayer2()
-				l1h.l2s[l2idx] = l2h
 				l1h.bm.SetIdx(l2idx)
 			}
 
 			for k := uint32(0); k < l2Size; k++ {
-				count := layer2_loadCounter(l2g, k)
-				if count == 0 {
+				hn := layer2_loadCounter(l2h, k)
+				gn := layer2_loadCounter(l2g, k)
+				if gn == 0 {
 					continue
 				}
 
-				if !layer2_addCounter(l2h, k, count) &&
-					!layer2_upconvert(l2h, &l2h, false) &&
-					!layer2_addCounter(l2h, k, count) {
-
-					return errs.Errorf("bucket overflow when merging histograms")
+				if !layer2_unsafeSetCounter(l2h, &l2h, k, hn+gn) {
+					return errs.Errorf("unexpected bucket overflow when merging")
 				}
 			}
+
+			l1h.l2s[l2idx] = l2h
 		}
 	}
 
@@ -103,8 +103,22 @@ func (h *Histogram) Observe(v float32) {
 		}
 	}
 
-	if layer2_incCounter(l2, idx) {
-		layer2_upconvert(l2, l2_addr, true)
+	switch layer2_tag(l2) {
+	case tagLayer2Small:
+		if atomic.AddUint32(&layer2_asSmall(l2)[idx], 1) > markAt {
+			layer2_mark(l2, l2_addr)
+		}
+
+	case tagLayer2Marked:
+		if atomic.AddUint32(&layer2_asSmall(l2)[idx], 1) > growAt {
+			layer2_grow(l2, l2_addr, true)
+		}
+
+	case tagLayer2Growing:
+		atomic.AddUint32(&layer2_asSmall(l2)[idx], 1)
+
+	case tagLayer2Large:
+		atomic.AddUint64(&layer2_asLarge(l2)[idx], 1)
 	}
 }
 
@@ -112,10 +126,12 @@ func (h *Histogram) Observe(v float32) {
 //
 // It is safe to be called concurrently.
 func (h *Histogram) Min() float32 {
-	i := h.l0.bm.Clone().Lowest()
+	bm0 := h.l0.bm.Clone()
+	i := bm0.Lowest()
 	l1 := layer1_load(&h.l0.l1s[i])
 
-	j := l1.bm.Clone().Lowest()
+	bm1 := l1.bm.Clone()
+	j := bm1.Lowest()
 	l2 := layer2_load(&l1.l2s[j])
 
 	for k := uint32(0); k < l2Size; k++ {
@@ -130,10 +146,12 @@ func (h *Histogram) Min() float32 {
 //
 // It is safe to be called concurrently.
 func (h *Histogram) Max() float32 {
-	i := h.l0.bm.Clone().Highest()
+	bm0 := h.l0.bm.Clone()
+	i := bm0.Highest()
 	l1 := layer1_load(&h.l0.l1s[i])
 
-	j := l1.bm.Clone().Highest()
+	bm1 := l1.bm.Clone()
+	j := bm1.Highest()
 	l2 := layer2_load(&l1.l2s[j])
 
 	for k := int32(l2Size) - 1; k >= 0; k-- {

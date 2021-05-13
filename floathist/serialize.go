@@ -36,21 +36,16 @@ func (h *Histogram) Serialize(mem []byte) []byte {
 			l2 := layer2_load(&l1.l2s[i])
 			var bm l2Bitmap
 
-			buf = buf.Grow()
 			pos := buf.Pos()
-			buf = buf.Advance(l2Size / 8)
+			buf = buf.GrowN(9*l2Size + l2Size/8).Advance(l2Size / 8)
 
 			for i := uint32(0); i < l2Size; i++ {
 				val := layer2_loadCounter(l2, i)
-				if val == 0 {
-					continue
+				if val > 0 {
+					bm.UnsafeSetIdx(i)
+					nbytes := varintAppend(buf.Front9(), val)
+					buf = buf.Advance(nbytes)
 				}
-
-				bm.UnsafeSetIdx(i)
-
-				buf = buf.Grow()
-				nbytes := varintAppend(buf.Front9(), val)
-				buf = buf.Advance(nbytes)
 			}
 
 			switch l2Size {
@@ -124,9 +119,7 @@ func (h *Histogram) Load(data []byte) (err error) {
 				}
 				buf = buf.Advance(nbytes)
 
-				if !layer2_unsafeSetCounter(l2, i, val) &&
-					!layer2_upconvert(l2, &l2, false) &&
-					!layer2_unsafeSetCounter(l2, i, val) {
+				if !layer2_unsafeSetCounter(l2, &l2, i, val) {
 					err = errs.Errorf("value too large to set")
 					goto done
 				}

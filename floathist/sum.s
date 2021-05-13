@@ -1,5 +1,30 @@
 #include "textflag.h"
 
+// func sumLayer2SmallAVX2_32(data *layer2Small) uint64
+TEXT ·sumLayer2SmallAVX2_32(SB), NOSPLIT, $0-16
+	MOVQ         data+0(FP), AX
+
+	VMOVDQU      (AX), Y0
+	VPADDQ       32(AX), Y0, Y0
+	VPADDQ       64(AX), Y0, Y0
+	VPADDQ       96(AX), Y0, Y0
+	VPADDQ       128(AX), Y0, Y0
+	VPADDQ       160(AX), Y0, Y0
+	VPADDQ       192(AX), Y0, Y0
+	VPADDQ       224(AX), Y0, Y0
+
+	VEXTRACTI128 $0x01, Y0, X1
+	VPADDQ       X1, X0, X0
+	VPSHUFD      $0x4e, X0, X1
+	VPADDQ       X1, X0, X0
+	VPSHUFD      $0xe5, X0, X1
+	VPADDQ       X1, X0, X0
+	VMOVD        X0, BX
+
+	MOVQ         BX, ret+8(FP)
+	VZEROUPPER
+	RET
+
 // func sumLayer2SmallAVX2(data *layer2Small) uint64
 TEXT ·sumLayer2SmallAVX2(SB), NOSPLIT, $0-16
 	MOVQ         data+0(FP), AX
@@ -37,9 +62,9 @@ TEXT ·sumLayer2SmallAVX2(SB), NOSPLIT, $0-16
 	VPADDQ       Y0, Y1, Y0
 
 	VEXTRACTI128 $0x01, Y0, X1
-	VPADDQ       Y0, Y1, Y0
+	VPADDQ       X1, X0, X0
 	VPSHUFD      $0x4e, X0, X1
-	VPADDQ       X0, X1, X0
+	VPADDQ       X1, X0, X0
 	VMOVQ        X0, BX
 
 	MOVQ         BX, ret+8(FP)
@@ -50,37 +75,30 @@ TEXT ·sumLayer2SmallAVX2(SB), NOSPLIT, $0-16
 TEXT ·sumLayer2LargeAVX2(SB), NOSPLIT, $0-16
 	MOVQ         data+0(FP), AX
 
-	VMOVDQU      192(AX), Y0
-	VMOVDQU      128(AX), Y1
-	VMOVDQU      224(AX), Y2
-	VMOVDQU      (AX), Y3
-	VMOVDQU      32(AX), Y4
-	VMOVDQU      64(AX), Y5
-	VMOVDQU      96(AX), Y6
-	VMOVDQU      160(AX), Y7
-
-	VPADDQ       416(AX), Y7, Y7
-	VPADDQ       288(AX), Y4, Y4
-	VPADDQ       480(AX), Y2, Y2
-	VPADDQ       352(AX), Y6, Y6
-	VPADDQ       Y7, Y4, Y4
-	VPADDQ       Y6, Y2, Y2
-	VPADDQ       384(AX), Y1, Y1
-	VPADDQ       Y4, Y2, Y2
-	VPADDQ       256(AX), Y3, Y3
-	VPADDQ       Y3, Y1, Y1
+	VMOVDQU      (AX), Y0
+	VPADDQ       32(AX), Y0, Y0
+	VPADDQ       64(AX), Y0, Y0
+	VPADDQ       96(AX), Y0, Y0
+	VPADDQ       128(AX), Y0, Y0
+	VPADDQ       160(AX), Y0, Y0
+	VPADDQ       192(AX), Y0, Y0
+	VPADDQ       224(AX), Y0, Y0
+	VPADDQ       256(AX), Y0, Y0
+	VPADDQ       288(AX), Y0, Y0
+	VPADDQ       320(AX), Y0, Y0
+	VPADDQ       352(AX), Y0, Y0
+	VPADDQ       384(AX), Y0, Y0
+	VPADDQ       416(AX), Y0, Y0
 	VPADDQ       448(AX), Y0, Y0
-	VPADDQ       320(AX), Y5, Y3
-	VPADDQ       Y3, Y0, Y0
-	VPADDQ       Y1, Y0, Y0
-	VPADDQ       Y2, Y0, Y0
+	VPADDQ       480(AX), Y0, Y0
 
 	VEXTRACTI128 $0x01, Y0, X1
 	VPADDQ       X1, X0, X0
 	VPSHUFD      $0x4e, X0, X1
-	VPADDQ       X0, X0, X1
+	VPADDQ       X1, X0, X0
 	VMOVQ        X0, BX
 
 	MOVQ         BX, ret+8(FP)
 	VZEROUPPER
 	RET
+

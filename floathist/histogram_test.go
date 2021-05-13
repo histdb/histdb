@@ -62,12 +62,30 @@ func TestHistogram(t *testing.T) {
 		}
 
 		total, sum, avg, vari := h.Summary()
-		_, _, _, _ = total, sum, avg, vari
 
 		assert.Equal(t, total, 1000.)
 		assert.Equal(t, sum, 500021.328125)      // 499500
 		assert.Equal(t, avg, 500.021328125)      // 499.5
 		assert.Equal(t, vari, 83447.18984652992) // 83416.667
+	})
+
+	t.Run("Merge", func(t *testing.T) {
+		h := new(Histogram)
+		for i := float32(0); i < 1000; i++ {
+			h.Observe(i)
+		}
+
+		const doublings = 54
+
+		for i := 0; i < doublings; i++ {
+			assert.NoError(t, h.Merge(h))
+		}
+
+		total, _, avg, _ := h.Summary()
+
+		assert.Equal(t, h.Total(), uint64(1000*(1<<doublings)))
+		assert.Equal(t, total, 1000.*(1<<doublings))
+		assert.Equal(t, avg, 500.021328125) // 499.5
 	})
 }
 
