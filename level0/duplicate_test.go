@@ -4,8 +4,9 @@ import (
 	"testing"
 
 	"github.com/zeebo/assert"
-	"github.com/zeebo/lsm/filesystem"
-	"github.com/zeebo/lsm/testhelp"
+
+	"github.com/histdb/histdb/filesystem"
+	"github.com/histdb/histdb/testhelp"
 )
 
 func TestDuplicate(t *testing.T) {

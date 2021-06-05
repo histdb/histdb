@@ -5,10 +5,11 @@ import (
 	"testing"
 
 	"github.com/zeebo/assert"
-	"github.com/zeebo/lsm"
-	"github.com/zeebo/lsm/filesystem"
-	"github.com/zeebo/lsm/testhelp"
 	"github.com/zeebo/pcg"
+
+	"github.com/histdb/histdb"
+	"github.com/histdb/histdb/filesystem"
+	"github.com/histdb/histdb/testhelp"
 )
 
 func TestKeyReader(t *testing.T) {
@@ -32,7 +33,7 @@ func TestKeyReader(t *testing.T) {
 	var kr keyReader
 	kr.Init(fh)
 
-	check := func(i int, key lsm.Key) func(uint32, uint32, bool, error) {
+	check := func(i int, key histdb.Key) func(uint32, uint32, bool, error) {
 		return func(offset, length uint32, ok bool, err error) {
 			t.Helper()
 			assert.NoError(t, err)
@@ -43,14 +44,14 @@ func TestKeyReader(t *testing.T) {
 	}
 
 	for i := 0; i < count; i++ {
-		var key lsm.Key
+		var key histdb.Key
 		binary.BigEndian.PutUint32(key[16:20], uint32(i*2+1))
 		check(i, key)(kr.Search(key))
 		binary.BigEndian.PutUint32(key[16:20], uint32(i*2+2))
 		check(i, key)(kr.Search(key))
 	}
 
-	var key lsm.Key
+	var key histdb.Key
 	_, _, ok, err := kr.Search(key)
 	assert.NoError(t, err)
 	assert.That(t, !ok)
@@ -75,7 +76,7 @@ func BenchmarkKeyReader(b *testing.B) {
 		}
 		assert.NoError(b, kw.Finish())
 
-		var key lsm.Key
+		var key histdb.Key
 		var kr keyReader
 		kr.Init(fh)
 

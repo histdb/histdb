@@ -4,8 +4,9 @@ import (
 	"encoding/binary"
 
 	"github.com/zeebo/errs/v2"
-	"github.com/zeebo/lsm"
-	"github.com/zeebo/lsm/filesystem"
+
+	"github.com/histdb/histdb"
+	"github.com/histdb/histdb/filesystem"
 )
 
 type krPage struct {
@@ -62,7 +63,7 @@ func (k *keyReader) cachePage(depth uint, id uint32) (*kwPage, error) {
 	return p.page, err
 }
 
-func (k *keyReader) Search(key lsm.Key) (entoff, entlen uint32, ok bool, err error) {
+func (k *keyReader) Search(key histdb.Key) (entoff, entlen uint32, ok bool, err error) {
 	keyp := binary.BigEndian.Uint64(key[0:8])
 	id := k.root
 
@@ -89,7 +90,7 @@ func (k *keyReader) Search(key lsm.Key) (entoff, entlen uint32, ok bool, err err
 				i = h
 			} else if keyhp > keyp {
 				j = h
-			} else if !lsm.KeyCmp.LessPtr(&key, ent.Key()) {
+			} else if !histdb.KeyCmp.LessPtr(&key, ent.Key()) {
 				i = h
 			} else {
 				j = h

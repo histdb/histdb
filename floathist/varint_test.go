@@ -6,8 +6,9 @@ import (
 	"testing"
 
 	"github.com/zeebo/assert"
-	"github.com/zeebo/lsm/floathist/internal/buffer"
 	"github.com/zeebo/pcg"
+
+	"github.com/histdb/histdb/floathist/internal/buffer"
 )
 
 func TestVarint(t *testing.T) {

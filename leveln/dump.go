@@ -8,7 +8,8 @@ import (
 	"log"
 
 	"github.com/zeebo/errs/v2"
-	"github.com/zeebo/lsm/filesystem"
+
+	"github.com/histdb/histdb/filesystem"
 )
 
 // dump constructs a dot graph of the node layout in an index

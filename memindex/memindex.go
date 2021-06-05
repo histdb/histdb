@@ -6,8 +6,9 @@ import (
 	"sync"
 
 	"github.com/RoaringBitmap/roaring"
-	"github.com/zeebo/lsm/memindex/petname"
 	"github.com/zeebo/xxh3"
+
+	"github.com/histdb/histdb/memindex/petname"
 )
 
 // TODO: we can have an LRU cache of common bitmaps based on tag hashes. for example

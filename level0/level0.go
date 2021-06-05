@@ -5,9 +5,10 @@ import (
 	"io"
 
 	"github.com/zeebo/errs/v2"
-	"github.com/zeebo/lsm"
-	"github.com/zeebo/lsm/filesystem"
-	"github.com/zeebo/lsm/utils"
+
+	"github.com/histdb/histdb"
+	"github.com/histdb/histdb/filesystem"
+	"github.com/histdb/histdb/utils"
 )
 
 const (
@@ -23,7 +24,7 @@ type T struct {
 	fh   filesystem.Handle
 	len  uint32
 	keys keyHeap
-	pos  map[lsm.Key]idxBuf
+	pos  map[histdb.Key]idxBuf
 	err  error
 	done bool
 }
@@ -44,7 +45,7 @@ func (t *T) Init(fh filesystem.Handle) error {
 	}
 
 	if t.pos == nil {
-		t.pos = make(map[lsm.Key]idxBuf)
+		t.pos = make(map[histdb.Key]idxBuf)
 	} else {
 		// compiles into a runtime map-clear call
 		for key := range t.pos {
@@ -59,7 +60,7 @@ func (t *T) File() filesystem.Handle {
 	return t.fh
 }
 
-func (t *T) Append(key lsm.Key, name, value []byte) (bool, error) {
+func (t *T) Append(key histdb.Key, name, value []byte) (bool, error) {
 	ok, err := t.append(key, name, value)
 	if err != nil {
 		return false, err
@@ -72,7 +73,7 @@ func (t *T) Append(key lsm.Key, name, value []byte) (bool, error) {
 	}
 }
 
-func (t *T) append(key lsm.Key, name, value []byte) (bool, error) {
+func (t *T) append(key histdb.Key, name, value []byte) (bool, error) {
 	if t.err != nil {
 		return false, t.err
 	} else if t.len&^31 != t.len {
@@ -140,7 +141,7 @@ func (t *T) finish() error {
 	}
 
 	buf := make([]byte, 0, len(t.keys)*4)
-	var key lsm.Key
+	var key histdb.Key
 	for len(t.keys) > 0 {
 		t.keys, key = t.keys.Pop()
 		ibuf := t.pos[key]

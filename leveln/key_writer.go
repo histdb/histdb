@@ -6,8 +6,9 @@ import (
 	"unsafe"
 
 	"github.com/zeebo/errs/v2"
-	"github.com/zeebo/lsm"
-	"github.com/zeebo/lsm/filesystem"
+
+	"github.com/histdb/histdb"
+	"github.com/histdb/histdb/filesystem"
 )
 
 // constants for the page
@@ -26,7 +27,7 @@ const (
 	//
 	// The memory usage is because we keep a page per depth in both the reader and writer.
 	kwPageSize   = 4096 * 4
-	kwEntrySize  = lsm.KeySize + 4 + 4 + 4
+	kwEntrySize  = histdb.KeySize + 4 + 4 + 4
 	kwHeaderSize = 32 // 11 used
 	kwEntries    = (kwPageSize - kwHeaderSize) / kwEntrySize
 )
@@ -35,7 +36,7 @@ const (
 type kwEntry [kwEntrySize]byte
 
 // Key returns a pointer to the key portion of the entry.
-func (k *kwEntry) Key() *lsm.Key { return (*lsm.Key)(unsafe.Pointer(k)) }
+func (k *kwEntry) Key() *histdb.Key { return (*histdb.Key)(unsafe.Pointer(k)) }
 
 // Offset returns the offset encoded into the entry
 func (k *kwEntry) Offset() uint32 { return binary.BigEndian.Uint32(k[20:24]) }

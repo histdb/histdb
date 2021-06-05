@@ -1,11 +1,12 @@
 package testhelp
 
 import (
-	"github.com/zeebo/lsm"
 	"github.com/zeebo/pcg"
+
+	"github.com/histdb/histdb"
 )
 
-func Key() (key lsm.Key) {
+func Key() (key histdb.Key) {
 	for i := range key {
 		key[i] = byte(pcg.Uint32n(256))
 	}

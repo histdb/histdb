@@ -7,7 +7,8 @@ import (
 	"time"
 
 	"github.com/zeebo/assert"
-	"github.com/zeebo/lsm/filesystem"
+
+	"github.com/histdb/histdb/filesystem"
 )
 
 func TestLevel0(t *testing.T) {

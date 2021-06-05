@@ -6,13 +6,14 @@ import (
 	"testing"
 
 	"github.com/zeebo/assert"
-	"github.com/zeebo/lsm"
-	"github.com/zeebo/lsm/filesystem"
-	"github.com/zeebo/lsm/testhelp"
+
+	"github.com/histdb/histdb"
+	"github.com/histdb/histdb/filesystem"
+	"github.com/histdb/histdb/testhelp"
 )
 
 type Entry struct {
-	Key   lsm.Key
+	Key   histdb.Key
 	Name  []byte
 	Value []byte
 }
@@ -51,7 +52,7 @@ func Level0(tb testing.TB, fs *filesystem.T, nlen, vlen int) (*T, []Entry, func(
 	}
 
 	sort.Slice(entries, func(i, j int) bool {
-		return lsm.KeyCmp.Less(entries[i].Key, entries[j].Key)
+		return histdb.KeyCmp.Less(entries[i].Key, entries[j].Key)
 	})
 
 	ok = true

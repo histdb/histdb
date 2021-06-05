@@ -3,8 +3,8 @@ package level0
 import (
 	"encoding/binary"
 
-	"github.com/zeebo/lsm"
-	"github.com/zeebo/lsm/filesystem"
+	"github.com/histdb/histdb"
+	"github.com/histdb/histdb/filesystem"
 )
 
 type Iterator struct {
@@ -79,7 +79,7 @@ func (it *Iterator) readNameAndValue(offset int64) {
 	}
 }
 
-func (it *Iterator) Key() (k lsm.Key) {
+func (it *Iterator) Key() (k histdb.Key) {
 	copy(k[:], it.hbuf[12:12+len(k)])
 	return k
 }
@@ -96,7 +96,7 @@ func (it *Iterator) Err() error {
 	return it.err
 }
 
-func (it *Iterator) Seek(key lsm.Key) bool {
+func (it *Iterator) Seek(key histdb.Key) bool {
 	if it.err != nil {
 		return false
 	} else if it.idx == nil {
@@ -135,7 +135,7 @@ func (it *Iterator) Seek(key lsm.Key) bool {
 			return false
 		}
 
-		if lsm.KeyCmp.Less(it.Key(), key) {
+		if histdb.KeyCmp.Less(it.Key(), key) {
 			i = h + 1
 		} else {
 			j = h

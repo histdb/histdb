@@ -5,14 +5,15 @@ import (
 	"testing"
 
 	"github.com/zeebo/assert"
-	"github.com/zeebo/lsm"
-	"github.com/zeebo/lsm/testhelp"
+
+	"github.com/histdb/histdb"
+	"github.com/histdb/histdb/testhelp"
 )
 
 func TestKeyHeap(t *testing.T) {
 	t.Run("Order", func(t *testing.T) {
 		var kh keyHeap
-		var keys []lsm.Key
+		var keys []histdb.Key
 
 		for i := 0; i < 100000; i++ {
 			key := testhelp.Key()
@@ -22,10 +23,10 @@ func TestKeyHeap(t *testing.T) {
 		}
 
 		sort.Slice(keys, func(i, j int) bool {
-			return lsm.KeyCmp.Less(keys[i], keys[j])
+			return histdb.KeyCmp.Less(keys[i], keys[j])
 		})
 
-		var key lsm.Key
+		var key histdb.Key
 		for len(kh) > 0 {
 			kh, key = kh.Pop()
 			assert.Equal(t, key.String(), keys[0].String())

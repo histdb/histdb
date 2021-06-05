@@ -5,9 +5,10 @@ import (
 	"testing"
 
 	"github.com/zeebo/assert"
-	"github.com/zeebo/lsm"
-	"github.com/zeebo/lsm/filesystem"
-	"github.com/zeebo/lsm/testhelp"
+
+	"github.com/histdb/histdb"
+	"github.com/histdb/histdb/filesystem"
+	"github.com/histdb/histdb/testhelp"
 )
 
 func TestLevelNWriterReader(t *testing.T) {
@@ -21,7 +22,7 @@ func TestLevelNWriterReader(t *testing.T) {
 	lnw.Init(keys, values)
 
 	for i := 0; i < 1000; i++ {
-		var key lsm.Key
+		var key histdb.Key
 		binary.BigEndian.PutUint64(key[0:8], uint64(i)/8)
 		binary.BigEndian.PutUint32(key[16:20], uint32(i))
 		assert.NoError(t, lnw.Append(key, nil, []byte{byte(i >> 8), byte(i)}))
@@ -33,7 +34,7 @@ func TestLevelNWriterReader(t *testing.T) {
 
 	it, i := lnr.Iterator(), 0
 	for ; it.Next(); i++ {
-		var key lsm.Key
+		var key histdb.Key
 		binary.BigEndian.PutUint64(key[0:8], uint64(i)/8)
 		binary.BigEndian.PutUint32(key[16:20], uint32(i))
 

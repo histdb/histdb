@@ -5,9 +5,10 @@ import (
 	"time"
 
 	"github.com/zeebo/assert"
-	"github.com/zeebo/lsm"
-	"github.com/zeebo/lsm/testhelp"
 	"github.com/zeebo/pcg"
+
+	"github.com/histdb/histdb"
+	"github.com/histdb/histdb/testhelp"
 )
 
 func TestMergedIterator(t *testing.T) {
@@ -106,7 +107,7 @@ func BenchmarkMergedIterator(b *testing.B) {
 
 //////////////
 
-func newFixedKey(x string) (k lsm.Key) {
+func newFixedKey(x string) (k histdb.Key) {
 	copy(k[:], x)
 	return k
 }
@@ -127,7 +128,7 @@ func newFakeMergableIter(x string) *fakeMergableIter {
 }
 
 func (f fakeMergableIter) Err() error        { return nil }
-func (f fakeMergableIter) Key() lsm.Key      { return newFixedKey(f[0]) }
+func (f fakeMergableIter) Key() histdb.Key   { return newFixedKey(f[0]) }
 func (f fakeMergableIter) Timestamp() uint32 { return 0 }
 func (f fakeMergableIter) Value() []byte     { return nil }
 

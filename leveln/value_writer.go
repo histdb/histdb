@@ -5,8 +5,9 @@ import (
 	"unsafe"
 
 	"github.com/zeebo/errs/v2"
-	"github.com/zeebo/lsm"
-	"github.com/zeebo/lsm/filesystem"
+
+	"github.com/histdb/histdb"
+	"github.com/histdb/histdb/filesystem"
 )
 
 const (
@@ -38,7 +39,7 @@ func (v *valueWriter) CanAppend(value []byte) []byte {
 	return nil
 }
 
-func (v *valueWriter) Append(buf []byte, key lsm.Key, value []byte) {
+func (v *valueWriter) Append(buf []byte, key histdb.Key, value []byte) {
 	if len(buf) >= vwEntryHeaderSize {
 		len := vwEntryHeaderSize + uint(len(value))
 		binary.BigEndian.PutUint16(buf[0:2], uint16(len))
@@ -49,9 +50,9 @@ func (v *valueWriter) Append(buf []byte, key lsm.Key, value []byte) {
 	}
 }
 
-func (v *valueWriter) BeginSpan(key lsm.Key) {
-	v.sn = lsm.HashSize
-	copy(v.span[0:lsm.HashSize], key[:lsm.HashSize])
+func (v *valueWriter) BeginSpan(key histdb.Key) {
+	v.sn = histdb.HashSize
+	copy(v.span[0:histdb.HashSize], key[:histdb.HashSize])
 }
 
 func (v *valueWriter) FinishSpan() (offset, length uint32, err error) {

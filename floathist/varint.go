@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"math/bits"
 
-	"github.com/zeebo/lsm/floathist/internal/buffer"
+	"github.com/histdb/histdb/floathist/internal/buffer"
 )
 
 //

@@ -1,4 +1,4 @@
-module github.com/zeebo/lsm
+module github.com/histdb/histdb
 
 go 1.14
 

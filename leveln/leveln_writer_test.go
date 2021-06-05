@@ -5,10 +5,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/zeebo/lsm"
-	"github.com/zeebo/lsm/filesystem"
-	"github.com/zeebo/lsm/testhelp"
 	"github.com/zeebo/pcg"
+
+	"github.com/histdb/histdb"
+	"github.com/histdb/histdb/filesystem"
+	"github.com/histdb/histdb/testhelp"
 )
 
 func BenchmarkLevelNAppend(b *testing.B) {
@@ -29,7 +30,7 @@ func BenchmarkLevelNAppend(b *testing.B) {
 				values, cleanup := testhelp.Tempfile(b, filesystem.Temp)
 				defer cleanup()
 
-				var key lsm.Key
+				var key histdb.Key
 				var ln Writer
 				ln.Init(keys, values)
 

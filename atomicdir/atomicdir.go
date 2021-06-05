@@ -7,7 +7,8 @@ import (
 	"sort"
 
 	"github.com/zeebo/errs/v2"
-	"github.com/zeebo/lsm/filesystem"
+
+	"github.com/histdb/histdb/filesystem"
 )
 
 type Dir struct {

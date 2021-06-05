@@ -6,8 +6,9 @@ import (
 	"io"
 
 	"github.com/zeebo/errs/v2"
-	"github.com/zeebo/lsm"
-	"github.com/zeebo/lsm/filesystem"
+
+	"github.com/histdb/histdb"
+	"github.com/histdb/histdb/filesystem"
 )
 
 type Reader struct {
@@ -32,7 +33,7 @@ type Iterator struct {
 	kr     keyReader
 	values filesystem.Handle
 	offset uint32
-	skey   lsm.Key
+	skey   histdb.Key
 	size   int
 	sbuf   []byte
 	span   []byte
@@ -88,7 +89,7 @@ func (it *Iterator) readNextSpan() {
 	// read a span into the buffer
 	it.stats.valueReads++
 	n, err := it.values.ReadAt(it.sbuf, int64(it.offset)*vwSpanAlign)
-	if n >= lsm.HashSize {
+	if n >= histdb.HashSize {
 		it.size = n
 		it.span = it.sbuf[:n:n]
 	} else if err != nil {
@@ -99,11 +100,11 @@ func (it *Iterator) readNextSpan() {
 		return
 	}
 
-	copy(it.skey.HashPtr()[:], it.span[:lsm.HashSize])
-	it.span = it.span[lsm.HashSize:]
+	copy(it.skey.HashPtr()[:], it.span[:histdb.HashSize])
+	it.span = it.span[histdb.HashSize:]
 }
 
-func (it *Iterator) Key() lsm.Key {
+func (it *Iterator) Key() histdb.Key {
 	return it.skey
 }
 
@@ -118,7 +119,7 @@ func (it *Iterator) Err() error {
 	return nil
 }
 
-func (it *Iterator) Seek(key lsm.Key) bool {
+func (it *Iterator) Seek(key histdb.Key) bool {
 	if errors.Is(it.err, io.EOF) {
 		it.err = nil
 	} else if it.err != nil {
@@ -137,7 +138,7 @@ func (it *Iterator) Seek(key lsm.Key) bool {
 	it.readNextSpan()
 
 	// no fancy comparisons because the prefix likely matches.
-	for it.Next() && lsm.KeyCmp.Less(it.Key(), key) {
+	for it.Next() && histdb.KeyCmp.Less(it.Key(), key) {
 	}
 
 	return it.err == nil

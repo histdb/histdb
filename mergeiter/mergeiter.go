@@ -3,12 +3,12 @@ package mergeiter
 import (
 	"math/bits"
 
-	"github.com/zeebo/lsm"
+	"github.com/histdb/histdb"
 )
 
 type Iterator interface {
 	Next() bool
-	Key() lsm.Key
+	Key() histdb.Key
 	Value() []byte
 	Err() error
 }
@@ -46,7 +46,7 @@ func (m *T) Init(iters []Iterator) {
 			goto noSwap
 		} else if uint(r) >= uint(len(iters)) || iters[r] == nil {
 			// swap
-		} else if cmp := lsm.KeyCmp.Compare(iters[l].Key(), iters[r].Key()); cmp < 0 || (cmp == 0 && l < r) {
+		} else if cmp := histdb.KeyCmp.Compare(iters[l].Key(), iters[r].Key()); cmp < 0 || (cmp == 0 && l < r) {
 			// swap
 		} else {
 			goto noSwap
@@ -68,7 +68,7 @@ func (m *T) Init(iters []Iterator) {
 
 func (m *T) Err() error { return m.err }
 
-func (m *T) Key() (k lsm.Key) {
+func (m *T) Key() (k histdb.Key) {
 	if uint(m.win) < uint(len(m.iters)) {
 		k = m.iters[m.win].Key()
 	}
@@ -98,7 +98,7 @@ func (m *T) Next() bool {
 		return true
 	}
 
-	var wkey lsm.Key
+	var wkey histdb.Key
 
 	if iter := iters[win]; !iter.Next() {
 		if m.err = iter.Err(); m.err != nil {
@@ -111,14 +111,14 @@ func (m *T) Next() bool {
 
 	offset := (len(trn) + 1) / 2
 	for idx := win / 2; uint(idx) < uint(len(trn)); idx = offset + idx/2 {
-		var ckey lsm.Key
+		var ckey histdb.Key
 		chal := trn[idx]
 
 		if uint(chal) >= uint(len(iters)) || iters[chal] == nil {
 			goto noSwap
 		} else if ckey = iters[chal].Key(); uint(win) >= uint(len(iters)) || iters[win] == nil {
 			// swap
-		} else if cmp := lsm.KeyCmp.Compare(ckey, wkey); cmp == -1 || (cmp == 0 && chal < win) {
+		} else if cmp := histdb.KeyCmp.Compare(ckey, wkey); cmp == -1 || (cmp == 0 && chal < win) {
 			// swap
 		} else {
 			goto noSwap

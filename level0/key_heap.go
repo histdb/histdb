@@ -1,18 +1,18 @@
 package level0
 
 import (
-	"github.com/zeebo/lsm"
+	"github.com/histdb/histdb"
 )
 
-type keyHeap []lsm.Key
+type keyHeap []histdb.Key
 
-func (kh keyHeap) Push(key lsm.Key) keyHeap {
+func (kh keyHeap) Push(key histdb.Key) keyHeap {
 	kh = append(kh, key)
 	kh.heapUp()
 	return kh
 }
 
-func (kh keyHeap) Pop() (_ keyHeap, key lsm.Key) {
+func (kh keyHeap) Pop() (_ keyHeap, key histdb.Key) {
 	last := len(kh) - 1
 
 	if len(kh) > 0 {
@@ -30,7 +30,7 @@ func (kh keyHeap) heapUp() {
 next:
 	if j := (i - 1) / 2; i != j && i < uint(len(kh)) && j < uint(len(kh)) {
 		ip, jp := &kh[i], &kh[j]
-		if lsm.KeyCmp.LessPtr(ip, jp) {
+		if histdb.KeyCmp.LessPtr(ip, jp) {
 			*ip, *jp, i = *jp, *ip, j
 			goto next
 		}
@@ -44,11 +44,11 @@ next:
 	if j := 2*i + 1; i < uint(len(kh)) && j < uint(len(kh)) {
 		ip, jp := &kh[i], &kh[j]
 
-		if jn := j + 1; jn < uint(len(kh)) && lsm.KeyCmp.LessPtr(&kh[jn], jp) {
+		if jn := j + 1; jn < uint(len(kh)) && histdb.KeyCmp.LessPtr(&kh[jn], jp) {
 			jp, j = &kh[jn], jn
 		}
 
-		if lsm.KeyCmp.LessPtr(jp, ip) {
+		if histdb.KeyCmp.LessPtr(jp, ip) {
 			*ip, *jp, i = *jp, *ip, j
 			goto next
 		}

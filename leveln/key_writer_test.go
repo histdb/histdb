@@ -7,8 +7,9 @@ import (
 	"time"
 
 	"github.com/zeebo/assert"
-	"github.com/zeebo/lsm/filesystem"
-	"github.com/zeebo/lsm/testhelp"
+
+	"github.com/histdb/histdb/filesystem"
+	"github.com/histdb/histdb/testhelp"
 )
 
 func TestKeyWriterPage(t *testing.T) {

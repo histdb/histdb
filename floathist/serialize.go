@@ -4,7 +4,8 @@ import (
 	"encoding/binary"
 
 	"github.com/zeebo/errs/v2"
-	"github.com/zeebo/lsm/floathist/internal/buffer"
+
+	"github.com/histdb/histdb/floathist/internal/buffer"
 )
 
 func (h *Histogram) Serialize(mem []byte) []byte {

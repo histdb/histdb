@@ -9,7 +9,8 @@ import (
 
 	"github.com/zeebo/assert"
 	"github.com/zeebo/errs/v2"
-	"github.com/zeebo/lsm/filesystem"
+
+	"github.com/histdb/histdb/filesystem"
 )
 
 func Tempfile(tb testing.TB, fs *filesystem.T) (filesystem.Handle, func()) {

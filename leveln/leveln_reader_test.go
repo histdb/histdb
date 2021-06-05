@@ -5,10 +5,11 @@ import (
 	"testing"
 
 	"github.com/zeebo/assert"
-	"github.com/zeebo/lsm"
-	"github.com/zeebo/lsm/filesystem"
-	"github.com/zeebo/lsm/testhelp"
 	"github.com/zeebo/pcg"
+
+	"github.com/histdb/histdb"
+	"github.com/histdb/histdb/filesystem"
+	"github.com/histdb/histdb/testhelp"
 )
 
 func TestLevelNSeek(t *testing.T) {
@@ -24,7 +25,7 @@ func TestLevelNSeek(t *testing.T) {
 	lnw.Init(keys, values)
 
 	for i := 0; i < count; i++ {
-		var key lsm.Key
+		var key histdb.Key
 		binary.BigEndian.PutUint64(key[0:8], uint64(i)/8)
 		binary.BigEndian.PutUint32(key[16:20], uint32(i))
 		assert.NoError(t, lnw.Append(key, nil, []byte{byte(i >> 8), byte(i)}))
@@ -36,7 +37,7 @@ func TestLevelNSeek(t *testing.T) {
 
 	it := lnr.Iterator()
 	for i := 0; i < count; i++ {
-		var key lsm.Key
+		var key histdb.Key
 		binary.BigEndian.PutUint64(key[0:8], uint64(i)/8)
 		binary.BigEndian.PutUint32(key[16:20], uint32(i))
 
@@ -67,10 +68,10 @@ func TestLevelNSeekBoundaries(t *testing.T) {
 	var lnw Writer
 	lnw.Init(keys, values)
 
-	assert.NoError(t, lnw.Append(lsm.Key{0: 0x10, 16: 0x30}, nil, nil))
-	assert.NoError(t, lnw.Append(lsm.Key{0: 0x10, 16: 0x40}, nil, nil))
-	assert.NoError(t, lnw.Append(lsm.Key{0: 0x20, 16: 0x30}, nil, nil))
-	assert.NoError(t, lnw.Append(lsm.Key{0: 0x20, 16: 0x40}, nil, nil))
+	assert.NoError(t, lnw.Append(histdb.Key{0: 0x10, 16: 0x30}, nil, nil))
+	assert.NoError(t, lnw.Append(histdb.Key{0: 0x10, 16: 0x40}, nil, nil))
+	assert.NoError(t, lnw.Append(histdb.Key{0: 0x20, 16: 0x30}, nil, nil))
+	assert.NoError(t, lnw.Append(histdb.Key{0: 0x20, 16: 0x40}, nil, nil))
 	assert.NoError(t, lnw.Finish())
 
 	var lnr Reader
@@ -79,25 +80,25 @@ func TestLevelNSeekBoundaries(t *testing.T) {
 	it := lnr.Iterator()
 	assert.NoError(t, it.Err())
 
-	assert.That(t, it.Seek(lsm.Key{0: 0x00, 16: 0x00}))
-	assert.Equal(t, lsm.Key{0: 0x10, 16: 0x30}.String(), it.Key().String())
+	assert.That(t, it.Seek(histdb.Key{0: 0x00, 16: 0x00}))
+	assert.Equal(t, histdb.Key{0: 0x10, 16: 0x30}.String(), it.Key().String())
 
-	assert.That(t, it.Seek(lsm.Key{0: 0x10, 16: 0x00}))
-	assert.Equal(t, lsm.Key{0: 0x10, 16: 0x30}.String(), it.Key().String())
+	assert.That(t, it.Seek(histdb.Key{0: 0x10, 16: 0x00}))
+	assert.Equal(t, histdb.Key{0: 0x10, 16: 0x30}.String(), it.Key().String())
 
-	assert.That(t, it.Seek(lsm.Key{0: 0x10, 16: 0x35}))
-	assert.Equal(t, lsm.Key{0: 0x10, 16: 0x40}.String(), it.Key().String())
+	assert.That(t, it.Seek(histdb.Key{0: 0x10, 16: 0x35}))
+	assert.Equal(t, histdb.Key{0: 0x10, 16: 0x40}.String(), it.Key().String())
 
-	assert.That(t, it.Seek(lsm.Key{0: 0x10, 16: 0x45}))
-	assert.Equal(t, lsm.Key{0: 0x20, 16: 0x30}.String(), it.Key().String())
+	assert.That(t, it.Seek(histdb.Key{0: 0x10, 16: 0x45}))
+	assert.Equal(t, histdb.Key{0: 0x20, 16: 0x30}.String(), it.Key().String())
 
-	assert.That(t, it.Seek(lsm.Key{0: 0x20, 16: 0x00}))
-	assert.Equal(t, lsm.Key{0: 0x20, 16: 0x30}.String(), it.Key().String())
+	assert.That(t, it.Seek(histdb.Key{0: 0x20, 16: 0x00}))
+	assert.Equal(t, histdb.Key{0: 0x20, 16: 0x30}.String(), it.Key().String())
 
-	assert.That(t, it.Seek(lsm.Key{0: 0x20, 16: 0x35}))
-	assert.Equal(t, lsm.Key{0: 0x20, 16: 0x40}.String(), it.Key().String())
+	assert.That(t, it.Seek(histdb.Key{0: 0x20, 16: 0x35}))
+	assert.Equal(t, histdb.Key{0: 0x20, 16: 0x40}.String(), it.Key().String())
 
-	assert.That(t, !it.Seek(lsm.Key{0: 0x20, 16: 0x45}))
+	assert.That(t, !it.Seek(histdb.Key{0: 0x20, 16: 0x45}))
 }
 
 func BenchmarkLevelNReader(b *testing.B) {
@@ -114,14 +115,14 @@ func BenchmarkLevelNReader(b *testing.B) {
 		lnw.Init(keys, values)
 
 		for i := 0; i < n; i++ {
-			var key lsm.Key
+			var key histdb.Key
 			binary.BigEndian.PutUint64(key[0:8], uint64(i)/512)
 			binary.BigEndian.PutUint32(key[16:20], uint32(i))
 			assert.NoError(b, lnw.Append(key, nil, nil))
 		}
 		assert.NoError(b, lnw.Finish())
 
-		var key lsm.Key
+		var key histdb.Key
 		var lnr Reader
 		lnr.Init(keys, values)
 		itr := lnr.Iterator()

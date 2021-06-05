@@ -4,13 +4,14 @@ import (
 	"encoding/binary"
 
 	"github.com/zeebo/errs/v2"
-	"github.com/zeebo/lsm"
-	"github.com/zeebo/lsm/filesystem"
+
+	"github.com/histdb/histdb"
+	"github.com/histdb/histdb/filesystem"
 )
 
 type Writer struct {
 	err   error
-	key   lsm.Key
+	key   histdb.Key
 	first bool
 	kw    keyWriter
 	vw    valueWriter
@@ -18,7 +19,7 @@ type Writer struct {
 
 func (w *Writer) Init(keys, values filesystem.Handle) {
 	w.err = nil
-	w.key = lsm.Key{}
+	w.key = histdb.Key{}
 	w.first = true
 	w.kw.Init(keys)
 	w.vw.Init(values)
@@ -29,7 +30,7 @@ func (w *Writer) storeErr(err error) error {
 	return w.err
 }
 
-func (w *Writer) Append(key lsm.Key, name, value []byte) error {
+func (w *Writer) Append(key histdb.Key, name, value []byte) error {
 	if w.err != nil {
 		return w.err
 	}
