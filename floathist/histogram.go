@@ -23,6 +23,22 @@ type Histogram struct {
 	l0 layer0
 }
 
+// Reset clears the histogram without freeing the memory it is using. It is
+// not safe to call with concurrent reads or writes to h.
+func (h *Histogram) Reset() {
+	for bm := h.l0.bm.Clone(); !bm.Empty(); bm.Next() {
+		i := bm.Lowest()
+		l1 := layer1_load(&h.l0.l1s[i])
+
+		for bm := l1.bm.Clone(); !bm.Empty(); bm.Next() {
+			j := bm.Lowest()
+			l2 := layer2_load(&l1.l2s[j])
+
+			layer2_reset(l2)
+		}
+	}
+}
+
 // Merge adds all of the values from g into h. It is not safe to call with
 // concurrent mutations to g or h.
 func (h *Histogram) Merge(g *Histogram) error {

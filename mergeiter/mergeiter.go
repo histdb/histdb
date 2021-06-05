@@ -23,7 +23,7 @@ type T struct {
 
 func (m *T) Init(iters []Iterator) {
 	leaves := 1 << uint(bits.Len(uint(len(iters)-1)))
-	trn := make([]int, leaves-1)
+	trn := append(m.trn[:0], make([]int, leaves-1)...)
 	wins := make([]int, 2*leaves-1)
 
 	for i := range wins {

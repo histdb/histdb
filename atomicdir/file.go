@@ -92,17 +92,9 @@ bad:
 	return File{}, false
 }
 
-// REVISIT: trivial for loops can be inlined soon
-
 func writeUint(x []byte, v uint32) {
-	i := uint(7)
-
-next:
-	if i < uint(len(x)) && v > 0 {
+	for i := uint(7); i < uint(len(x)) && v > 0; i, v = i-1, v/16 {
 		x[i] = hexDigits[v%16]
-		v /= 16
-		i--
-		goto next
 	}
 }
 

@@ -20,7 +20,6 @@ const (
 type valueWriter struct {
 	fh   filesystem.Handle
 	n    uint64
-	off  int64
 	sn   uint
 	span [vwSpanSize]byte
 }
@@ -70,9 +69,7 @@ func (v *valueWriter) FinishSpan() (offset, length uint32, err error) {
 	v.span[v.sn] = 0
 	v.span[v.sn+1] = 0
 
-	// REVISIT: don't need to use WriteAt once Write doesn't leak params
-	wn, err := v.fh.WriteAt(v.span[:sn], v.off)
-	v.off += int64(wn)
+	_, err = v.fh.Write(v.span[:sn])
 
 	return offset, uint32(sn / vwSpanAlign), errs.Wrap(err)
 }

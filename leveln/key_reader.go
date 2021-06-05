@@ -62,7 +62,7 @@ func (k *keyReader) cachePage(depth uint, id uint32) (*kwPage, error) {
 	return p.page, err
 }
 
-func (k *keyReader) Search(key lsm.Key) (_, _ uint32, _ bool, err error) {
+func (k *keyReader) Search(key lsm.Key) (entoff, entlen uint32, ok bool, err error) {
 	keyp := binary.BigEndian.Uint64(key[0:8])
 	id := k.root
 

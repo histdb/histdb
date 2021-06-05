@@ -19,6 +19,8 @@ func BenchmarkLevelNAppend(b *testing.B) {
 	run := func(b *testing.B, n int) {
 		now := time.Now()
 
+		b.ReportAllocs()
+
 		for i := 0; i < b.N; i++ {
 			func() {
 				keys, cleanup := testhelp.Tempfile(b, filesystem.Temp)

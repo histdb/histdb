@@ -10,6 +10,19 @@ import (
 )
 
 func TestHistogram(t *testing.T) {
+	t.Run("Reset", func(t *testing.T) {
+		h := new(Histogram)
+		for i := float32(0); i < 1000; i++ {
+			h.Observe(i)
+		}
+
+		assert.Equal(t, h.Total(), 1000)
+		h.Reset()
+		assert.Equal(t, h.Total(), 0)
+		h.Observe(1)
+		assert.Equal(t, h.Total(), 1)
+	})
+
 	t.Run("MinMax", func(t *testing.T) {
 		h := new(Histogram)
 		for i := float32(0); i < 1000; i++ {

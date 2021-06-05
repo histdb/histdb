@@ -53,7 +53,6 @@ func (w *Writer) Append(key lsm.Key, name, value []byte) error {
 		copy(ent[0:20], w.key[0:20])
 		binary.BigEndian.PutUint32(ent[20:24], offset)
 		binary.BigEndian.PutUint32(ent[24:28], length)
-		// binary.BigEndian.PutUint32(ent[28:32], nameOffset)
 
 		if err := w.kw.Append(ent); err != nil {
 			return w.storeErr(err)
@@ -88,7 +87,6 @@ func (w *Writer) Finish() error {
 		copy(ent[0:20], w.key[0:20])
 		binary.BigEndian.PutUint32(ent[20:24], offset)
 		binary.BigEndian.PutUint32(ent[24:28], length)
-		// binary.BigEndian.PutUint32(ent[28:32], nameOffset)
 
 		if err := w.kw.Append(ent); err != nil {
 			return w.storeErr(err)

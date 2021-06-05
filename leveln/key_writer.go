@@ -26,8 +26,8 @@ const (
 	//
 	// The memory usage is because we keep a page per depth in both the reader and writer.
 	kwPageSize   = 4096 * 4
-	kwEntrySize  = 32
-	kwHeaderSize = 32
+	kwEntrySize  = lsm.KeySize + 4 + 4 + 4
+	kwHeaderSize = 32 // 11 used
 	kwEntries    = (kwPageSize - kwHeaderSize) / kwEntrySize
 )
 
@@ -42,9 +42,6 @@ func (k *kwEntry) Offset() uint32 { return binary.BigEndian.Uint32(k[20:24]) }
 
 // Length returns the length encoded into the entry
 func (k *kwEntry) Length() uint32 { return binary.BigEndian.Uint32(k[24:28]) }
-
-// NameOffset returns the name offset encoded into the entry
-func (k *kwEntry) NameOffset() uint32 { return binary.BigEndian.Uint32(k[28:32]) }
 
 // kwPageHeader is the header starting every page.
 type kwPageHeader [kwHeaderSize]byte
@@ -90,7 +87,6 @@ func (k *kwPage) Buf() *[kwPageSize]byte { return (*[kwPageSize]byte)(unsafe.Poi
 type keyWriter struct {
 	fh    filesystem.Handle
 	pages []*kwPage
-	off   int64
 	id    uint32
 
 	count uint16       // duplicated from hdr so append can be outlined
@@ -219,9 +215,6 @@ func (k *keyWriter) Finish() error {
 }
 
 func (k *keyWriter) writePage(page *kwPage) error {
-	// REVISIT: don't need to use WriteAt once Write doesn't leak params
-	_, err := k.fh.WriteAt(page.Buf()[:], k.off)
-	k.off += kwPageSize
-
+	_, err := k.fh.Write(page.Buf()[:])
 	return err
 }

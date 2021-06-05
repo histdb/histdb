@@ -67,6 +67,14 @@ type (
 	layer2Large [l2Size]uint64
 )
 
+func layer2_reset(l layer2) {
+	if layer2_isLarge(l) {
+		*layer2_asLarge(l) = layer2Large{}
+	} else {
+		*layer2_asSmall(l) = layer2Small{}
+	}
+}
+
 func (l *layer2Small) asLayer2() layer2 { return (layer2)(ptr(uptr(ptr(l))&^0b10 + 0b00)) }
 func (l *layer2Large) asLayer2() layer2 { return (layer2)(ptr(uptr(ptr(l))&^0b10 + 0b11)) }
 

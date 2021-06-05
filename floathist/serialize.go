@@ -75,57 +75,70 @@ func (h *Histogram) Load(data []byte) (err error) {
 		goto done
 	}
 
-	h.l0.bm.UnsafeSetUint(le.Uint64(buf.Front8()[:]))
-	buf = buf.Advance(l0Size / 8)
+	{
+		bm := newL0Bitmap(le.Uint64(buf.Front8()[:]))
+		buf = buf.Advance(l0Size / 8)
 
-	for bm := h.l0.bm.Clone(); !bm.Empty(); bm.Next() {
-		i := bm.Lowest()
-		l1 := new(layer1)
-		h.l0.l1s[i] = l1
+		for ; !bm.Empty(); bm.Next() {
+			l1i := bm.Lowest()
+			l1 := h.l0.l1s[l1i]
 
-		if buf.Remaining() < 8 {
-			err = errs.Errorf("buffer too short")
-			goto done
-		}
-
-		l1.bm.UnsafeSetUint(le.Uint64(buf.Front8()[:]))
-		buf = buf.Advance(l1Size / 8)
-
-		for bm := l1.bm.Clone(); !bm.Empty(); bm.Next() {
-			i := bm.Lowest()
-			l2 := newLayer2()
+			if l1 == nil {
+				l1 = new(layer1)
+				h.l0.l1s[l1i] = l1
+				h.l0.bm.SetIdx(l1i)
+			}
 
 			if buf.Remaining() < 8 {
 				err = errs.Errorf("buffer too short")
 				goto done
 			}
 
-			bm := l2Bitmap{le.Uint64(buf.Front8()[:])}
-			buf = buf.Advance(l2Size / 8)
+			bm := newL1Bitmap(le.Uint64(buf.Front8()[:]))
+			buf = buf.Advance(l1Size / 8)
 
 			for ; !bm.Empty(); bm.Next() {
-				i := bm.Lowest()
+				l2i := bm.Lowest()
+				l2 := l1.l2s[l2i]
 
-				rem := buf.Remaining()
-				if rem < 9 {
+				if l2 == nil {
+					l2 = newLayer2()
+					l1.bm.SetIdx(l2i)
+				}
+
+				if buf.Remaining() < 8 {
 					err = errs.Errorf("buffer too short")
 					goto done
 				}
 
-				nbytes, val := fastVarintConsume(buf.Front9())
-				if nbytes > rem {
-					err = errs.Errorf("invalid varint data")
-					goto done
-				}
-				buf = buf.Advance(nbytes)
+				bm := newL2Bitmap(le.Uint64(buf.Front8()[:]))
+				buf = buf.Advance(l2Size / 8)
 
-				if !layer2_unsafeSetCounter(l2, &l2, i, val) {
-					err = errs.Errorf("value too large to set")
-					goto done
+				for ; !bm.Empty(); bm.Next() {
+					k := bm.Lowest()
+
+					rem := buf.Remaining()
+					if rem < 9 {
+						err = errs.Errorf("buffer too short")
+						goto done
+					}
+
+					nbytes, val := fastVarintConsume(buf.Front9())
+					if nbytes > rem {
+						err = errs.Errorf("invalid varint data")
+						goto done
+					}
+					buf = buf.Advance(nbytes)
+
+					val += layer2_loadCounter(l2, k)
+					if !layer2_unsafeSetCounter(l2, &l2, k, val) {
+						err = errs.Errorf("value too large to set")
+						goto done
+					}
 				}
+
+				l1.l2s[l2i] = l2
 			}
-
-			l1.l2s[i] = l2
 		}
 	}
 
