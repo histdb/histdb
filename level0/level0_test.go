@@ -8,12 +8,15 @@ import (
 
 	"github.com/zeebo/assert"
 
-	"github.com/histdb/histdb/filesystem"
+	"github.com/histdb/histdb/testhelp"
 )
 
 func TestLevel0(t *testing.T) {
 	t.Run("Append", func(t *testing.T) {
-		l0, _, cleanup := Level0(t, filesystem.Temp, 8, 8)
+		fs, cleanup := testhelp.FS(t)
+		defer cleanup()
+
+		l0, _, cleanup := Level0(t, fs, 8, 8)
 		defer cleanup()
 
 		_, err := l0.fh.Seek(0, io.SeekStart)
@@ -30,7 +33,10 @@ func TestLevel0(t *testing.T) {
 
 func BenchmarkLevel0(b *testing.B) {
 	run := func(b *testing.B, nlen, vlen int) {
-		l0, entries, cleanup := Level0(b, filesystem.Temp, nlen, vlen)
+		fs, cleanup := testhelp.FS(b)
+		defer cleanup()
+
+		l0, entries, cleanup := Level0(b, fs, nlen, vlen)
 		defer cleanup()
 
 		now := time.Now()

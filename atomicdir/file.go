@@ -5,119 +5,122 @@ import (
 	"path/filepath"
 )
 
-const (
-	pathSep      = filepath.Separator
-	hexDigits    = "0123456789ABCDEF"
-	valueTXN0000 = 'T'<<56 | 'X'<<48 | 'N'<<40 | '-'<<32 | '0'<<24 | '0'<<16 | '0'<<8 | '0'
-	valueL00     = 'L'<<24 | '0'<<16 | '0'<<8 | '-'
-)
-
 type File struct {
-	Transaction uint16 // 0  => TEMPDATA
-	Level       int8   // -1 => WAL
-	Generation  uint32
+	Level      uint8
+	Kind       uint8
+	Generation uint32
 }
 
-func TransactionName(txn uint16) string {
-	var buf [8]byte
-	WriteTransactionName(&buf, txn)
+func (f File) String() string {
+	var buf [16]byte
+	writeFile(&buf, f)
 	return string(buf[:])
 }
 
-func WriteTransactionName(buf *[8]byte, txn uint16) {
-	if txn > 0 {
-		binary.BigEndian.PutUint64(buf[0:8], valueTXN0000)
-		writeUint(buf[0:8], uint32(txn))
-	} else {
-		*buf = [8]byte{'T', 'E', 'M', 'P', 'D', 'A', 'T', 'A'}
+func writeFile(buf *[16]byte, f File) {
+	*buf = [...]byte{
+		'L', '0', '0', '-',
+		'K', '0', '0', '-',
+		'0', '0', '0', '0', '0', '0', '0', '0',
 	}
-}
-
-func (f File) Name() string {
-	var buf [21]byte
-	f.WriteName(&buf)
-	return string(buf[:])
-}
-
-func (f File) WriteName(buf *[21]byte) {
-	*buf = [21]byte{
-		'T', 'E', 'M', 'P', 'D', 'A', 'T', 'A', pathSep,
-		'W', 'A', 'L', '-', '0', '0', '0', '0', '0', '0', '0', '0',
-	}
-
-	if f.Transaction > 0 {
-		binary.BigEndian.PutUint64(buf[0:8], valueTXN0000)
-		writeUint(buf[0:8], uint32(f.Transaction))
-	}
-
-	if f.Level >= 0 {
-		binary.BigEndian.PutUint32(buf[9:13], valueL00)
-		writeUint(buf[4:12], uint32(f.Level))
-	}
-
-	writeUint(buf[13:21], f.Generation)
+	binary.BigEndian.PutUint16(buf[1:3], hexUint8(f.Level))
+	binary.BigEndian.PutUint16(buf[5:7], hexUint8(f.Kind))
+	binary.BigEndian.PutUint64(buf[8:16], hexUint32(f.Generation))
 }
 
 func parseFile(name string) (f File, ok bool) {
-	var txn, lvl uint32
-	ok = true
-
-	if len(name) != 21 || name[8] != pathSep || name[12] != '-' {
-		goto bad
+	if len(name) == 16 {
+		ok = name[0] == 'L' && name[3:5] == "-K" && name[7] == '-'
+		f.Level = unhexUint8(readUint16(name[1:3]))
+		f.Kind = unhexUint8(readUint16(name[5:7]))
+		f.Generation = unhexUint32(readUint64(name[8:16]))
 	}
-
-	switch {
-	case name[0:8] == "TEMPDATA":
-	case name[0:4] == "TXN-":
-		txn, ok = readUint(name[4:8], ok)
-	default:
-		goto bad
-	}
-
-	switch {
-	case name[9:13] == "WAL-":
-		lvl = ^uint32(0)
-	case name[9] == 'L':
-		lvl, ok = readUint(name[10:12], ok)
-	default:
-		goto bad
-	}
-
-	f.Generation, ok = readUint(name[13:21], ok)
-	f.Transaction = uint16(txn)
-	f.Level = int8(lvl)
-	return f, ok
-
-bad:
-	return File{}, false
+	return
 }
 
-func writeUint(x []byte, v uint32) {
-	for i := uint(7); i < uint(len(x)) && v > 0; i, v = i-1, v/16 {
-		x[i] = hexDigits[v%16]
+func writeTransaction(buf *[5]byte, txn uint16) string {
+	*buf = [...]byte{
+		'T', '0', '0', '0', '0',
 	}
+	binary.BigEndian.PutUint32(buf[1:5], hexUint16(txn))
+	return string(buf[:])
 }
 
-func readUint(x string, iok bool) (v uint32, ok bool) {
-	i := 0
-
-next:
-	if i < len(x) {
-		v <<= 4
-		switch c := uint32(x[i]); {
-		case '0' <= c && c <= '9':
-			v += c - '0'
-		case 'A' <= c && c <= 'F':
-			v += c + 10 - 'A'
-		default:
-			iok = false
-			goto end
-		}
-
-		i++
-		goto next
+func parseTransaction(name string) (txn uint16, ok bool) {
+	if len(name) == 5 {
+		ok = name[0] == 'T'
+		txn = unhexUint16(readUint32(name[1:5]))
 	}
+	return
+}
 
-end:
-	return v, iok
+func writeTransactionFile(buf *[22]byte, txn uint16, f File) {
+	*buf = [...]byte{
+		'T', '0', '0', '0', '0', filepath.Separator,
+		'L', '0', '0', '-',
+		'K', '0', '0', '-',
+		'0', '0', '0', '0', '0', '0', '0', '0',
+	}
+	binary.BigEndian.PutUint32(buf[1:5], hexUint16(txn))
+	binary.BigEndian.PutUint16(buf[7:9], hexUint8(f.Level))
+	binary.BigEndian.PutUint16(buf[11:13], hexUint8(f.Kind))
+	binary.BigEndian.PutUint64(buf[14:22], hexUint32(f.Generation))
+}
+
+//
+// hex + unhex
+//
+
+func hexUint32(x uint32) (v uint64) {
+	v = uint64(uint16(x)) | uint64(x)<<16
+	v = (v & 0x000000FF000000FF) | ((v & 0x0000FF000000FF00) << 8)
+	v = (v & 0x000F000F000F000F) | ((v & 0x00F000F000F000F0) << 4)
+	return v + 0x3030303030303030 + 7*((v+0x0606060606060606)>>4&0x0101010101010101)
+}
+
+func unhexUint32(x uint64) (v uint32) {
+	x = 9*(x&0x4040404040404040>>6) + (x & 0x0f0f0f0f0f0f0f0f)
+	x = (x | x>>4) & 0x00FF00FF00FF00FF
+	x = (x | x>>8) & 0x0000FFFF0000FFFF
+	return uint32(x | x>>16)
+}
+
+func hexUint16(x uint16) (v uint32) {
+	v = uint32(uint8(x)) | uint32(x)<<8
+	v = (v & 0x000F000F) | ((v & 0x00F000F0) << 4)
+	return v + 0x30303030 + 7*((v+0x06060606)>>4&0x01010101)
+}
+
+func unhexUint16(x uint32) (v uint16) {
+	x = 9*(x&0x40404040>>6) + (x & 0x0f0f0f0f)
+	x = (x | x>>4) & 0x00FF00FF
+	return uint16(x | x>>8)
+}
+
+func hexUint8(x uint8) (v uint16) {
+	v = uint16(x)
+	v = (v & 0x000F) | ((v & 0x00F0) << 4)
+	return v + 0x3030 + 7*((v+0x0606)>>4&0x0101)
+}
+
+func unhexUint8(x uint16) (v uint8) {
+	x = 9*(x&0x4040>>6) + (x & 0x0f0f)
+	return uint8(x | x>>4)
+}
+
+//
+// binary.BigEndian for strings
+//
+
+func readUint64(b string) uint64 {
+	return uint64(b[7]) | uint64(b[6])<<8 | uint64(b[5])<<16 | uint64(b[4])<<24 |
+		uint64(b[3])<<32 | uint64(b[2])<<40 | uint64(b[1])<<48 | uint64(b[0])<<56
+}
+
+func readUint32(b string) uint32 {
+	return uint32(b[3]) | uint32(b[2])<<8 | uint32(b[1])<<16 | uint32(b[0])<<24
+}
+
+func readUint16(b string) uint16 {
+	return uint16(b[1]) | uint16(b[0])<<8
 }

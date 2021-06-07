@@ -8,14 +8,16 @@ import (
 	"github.com/zeebo/pcg"
 
 	"github.com/histdb/histdb"
-	"github.com/histdb/histdb/filesystem"
 	"github.com/histdb/histdb/testhelp"
 )
 
 func TestKeyReader(t *testing.T) {
 	const count = 1e5
 
-	fh, cleanup := testhelp.Tempfile(t, filesystem.Temp)
+	fs, cleanup := testhelp.FS(t)
+	defer cleanup()
+
+	fh, cleanup := testhelp.Tempfile(t, fs)
 	defer cleanup()
 
 	var kw keyWriter
@@ -59,10 +61,13 @@ func TestKeyReader(t *testing.T) {
 
 func BenchmarkKeyReader(b *testing.B) {
 	run := func(b *testing.B, n int) {
-		var rng pcg.T
-
-		fh, cleanup := testhelp.Tempfile(b, filesystem.Temp)
+		fs, cleanup := testhelp.FS(b)
 		defer cleanup()
+
+		fh, cleanup := testhelp.Tempfile(b, fs)
+		defer cleanup()
+
+		var rng pcg.T
 
 		var kw keyWriter
 		kw.Init(fh)

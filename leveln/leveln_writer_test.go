@@ -8,11 +8,13 @@ import (
 	"github.com/zeebo/pcg"
 
 	"github.com/histdb/histdb"
-	"github.com/histdb/histdb/filesystem"
 	"github.com/histdb/histdb/testhelp"
 )
 
 func BenchmarkLevelNAppend(b *testing.B) {
+	fs, cleanup := testhelp.FS(b)
+	defer cleanup()
+
 	var rng pcg.T
 
 	value := make([]byte, 512)
@@ -24,10 +26,10 @@ func BenchmarkLevelNAppend(b *testing.B) {
 
 		for i := 0; i < b.N; i++ {
 			func() {
-				keys, cleanup := testhelp.Tempfile(b, filesystem.Temp)
+				keys, cleanup := testhelp.Tempfile(b, fs)
 				defer cleanup()
 
-				values, cleanup := testhelp.Tempfile(b, filesystem.Temp)
+				values, cleanup := testhelp.Tempfile(b, fs)
 				defer cleanup()
 
 				var key histdb.Key

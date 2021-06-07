@@ -13,12 +13,19 @@ import (
 	"github.com/histdb/histdb/filesystem"
 )
 
+func FS(tb testing.TB) (*filesystem.T, func()) {
+	base, err := ioutil.TempDir("", "")
+	assert.NoError(tb, err)
+	fs := &filesystem.T{Base: base}
+	return fs, func() { assert.NoError(tb, fs.RemoveAll(".")) }
+}
+
 func Tempfile(tb testing.TB, fs *filesystem.T) (filesystem.Handle, func()) {
 	name := fmt.Sprint(time.Now().UnixNano())
 	fh, err := fs.Create(name)
 	assert.NoError(tb, err)
 	return fh, func() {
-		assert.NoError(tb, errs.Combine(fh.Close(), fs.Remove(name)))
+		assert.NoError(tb, errs.Combine(fh.Close()))
 	}
 }
 

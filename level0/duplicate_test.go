@@ -5,12 +5,14 @@ import (
 
 	"github.com/zeebo/assert"
 
-	"github.com/histdb/histdb/filesystem"
 	"github.com/histdb/histdb/testhelp"
 )
 
 func TestDuplicate(t *testing.T) {
-	fh, cleanup := testhelp.Tempfile(t, filesystem.Temp)
+	fs, cleanup := testhelp.FS(t)
+	defer cleanup()
+
+	fh, cleanup := testhelp.Tempfile(t, fs)
 	defer cleanup()
 
 	var l0 T

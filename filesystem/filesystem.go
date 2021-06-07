@@ -12,8 +12,6 @@ type T struct {
 	Base string
 }
 
-var Temp = &T{Base: "/tmp"}
-
 func (t *T) child(path string) string {
 	return filepath.Join(t.Base, path)
 }

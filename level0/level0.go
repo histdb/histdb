@@ -17,6 +17,8 @@ const (
 	l0DataSize        = 2 << 20
 	l0IndexSize       = 256 << 10
 	l0BufferSize      = 64 << 10
+
+	L0Size = l0DataSize + l0IndexSize
 )
 
 type T struct {
@@ -33,7 +35,7 @@ func (t *T) Init(fh filesystem.Handle) error {
 	// TODO: should try to resume
 	// TODO: should check done
 
-	if err := fh.Fallocate(l0DataSize + l0IndexSize); err != nil {
+	if err := fh.Fallocate(L0Size); err != nil {
 		return errs.Wrap(err)
 	}
 

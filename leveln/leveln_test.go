@@ -7,15 +7,17 @@ import (
 	"github.com/zeebo/assert"
 
 	"github.com/histdb/histdb"
-	"github.com/histdb/histdb/filesystem"
 	"github.com/histdb/histdb/testhelp"
 )
 
 func TestLevelNWriterReader(t *testing.T) {
-	keys, cleanup := testhelp.Tempfile(t, filesystem.Temp)
+	fs, cleanup := testhelp.FS(t)
 	defer cleanup()
 
-	values, cleanup := testhelp.Tempfile(t, filesystem.Temp)
+	keys, cleanup := testhelp.Tempfile(t, fs)
+	defer cleanup()
+
+	values, cleanup := testhelp.Tempfile(t, fs)
 	defer cleanup()
 
 	var lnw Writer

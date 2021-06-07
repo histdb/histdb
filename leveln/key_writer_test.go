@@ -8,12 +8,14 @@ import (
 
 	"github.com/zeebo/assert"
 
-	"github.com/histdb/histdb/filesystem"
 	"github.com/histdb/histdb/testhelp"
 )
 
 func TestKeyWriterPage(t *testing.T) {
-	fh, cleanup := testhelp.Tempfile(t, filesystem.Temp)
+	fs, cleanup := testhelp.FS(t)
+	defer cleanup()
+
+	fh, cleanup := testhelp.Tempfile(t, fs)
 	defer cleanup()
 
 	var kw keyWriter
@@ -57,7 +59,10 @@ func TestKeyWriterPage(t *testing.T) {
 }
 
 func BenchmarkKeyWriterAppend(b *testing.B) {
-	fh, cleanup := testhelp.Tempfile(b, filesystem.Temp)
+	fs, cleanup := testhelp.FS(b)
+	defer cleanup()
+
+	fh, cleanup := testhelp.Tempfile(b, fs)
 	defer cleanup()
 
 	run := func(b *testing.B, n int) {

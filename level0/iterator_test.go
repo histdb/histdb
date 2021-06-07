@@ -7,13 +7,15 @@ import (
 	"github.com/zeebo/assert"
 	"github.com/zeebo/pcg"
 
-	"github.com/histdb/histdb/filesystem"
 	"github.com/histdb/histdb/testhelp"
 )
 
 func TestIterator(t *testing.T) {
 	t.Run("Next", func(t *testing.T) {
-		l0, entries, cleanup := Level0(t, filesystem.Temp, 4, 4)
+		fs, cleanup := testhelp.FS(t)
+		defer cleanup()
+
+		l0, entries, cleanup := Level0(t, fs, 4, 4)
 		defer cleanup()
 
 		it, err := l0.Iterator()
@@ -30,7 +32,10 @@ func TestIterator(t *testing.T) {
 	})
 
 	t.Run("Seek", func(t *testing.T) {
-		l0, entries, cleanup := Level0(t, filesystem.Temp, 0, 0)
+		fs, cleanup := testhelp.FS(t)
+		defer cleanup()
+
+		l0, entries, cleanup := Level0(t, fs, 0, 0)
 		defer cleanup()
 
 		it, err := l0.Iterator()
@@ -72,7 +77,10 @@ func TestIterator(t *testing.T) {
 	}
 
 	t.Run("Long", func(t *testing.T) {
-		l0, _, cleanup := Level0(t, filesystem.Temp, 0, 0)
+		fs, cleanup := testhelp.FS(t)
+		defer cleanup()
+
+		l0, _, cleanup := Level0(t, fs, 0, 0)
 		defer cleanup()
 
 		it, err := l0.Iterator()
@@ -81,7 +89,10 @@ func TestIterator(t *testing.T) {
 	})
 
 	t.Run("Short", func(t *testing.T) {
-		l0, _, cleanup := Level0(t, filesystem.Temp, 256, 256)
+		fs, cleanup := testhelp.FS(t)
+		defer cleanup()
+
+		l0, _, cleanup := Level0(t, fs, 256, 256)
 		defer cleanup()
 
 		it, err := l0.Iterator()
@@ -92,7 +103,10 @@ func TestIterator(t *testing.T) {
 
 func BenchmarkIterator(b *testing.B) {
 	b.Run("Next", func(b *testing.B) {
-		l0, entries, cleanup := Level0(b, filesystem.Temp, 0, 0)
+		fs, cleanup := testhelp.FS(b)
+		defer cleanup()
+
+		l0, entries, cleanup := Level0(b, fs, 0, 0)
 		defer cleanup()
 		var it Iterator
 
@@ -114,7 +128,10 @@ func BenchmarkIterator(b *testing.B) {
 	})
 
 	b.Run("Seek", func(b *testing.B) {
-		l0, _, cleanup := Level0(b, filesystem.Temp, 0, 0)
+		fs, cleanup := testhelp.FS(b)
+		defer cleanup()
+
+		l0, _, cleanup := Level0(b, fs, 0, 0)
 		defer cleanup()
 
 		var it Iterator
