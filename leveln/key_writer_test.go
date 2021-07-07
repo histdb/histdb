@@ -22,19 +22,19 @@ func TestKeyWriterPage(t *testing.T) {
 	kw.Init(fh)
 
 	// build a page
-	for i := range &kw.hdr {
-		kw.hdr[i] = byte(i + 1)
+	for i := range &kw.page.hdr {
+		kw.page.hdr[i] = byte(i + 1)
 	}
-	for i := range kw.ents {
+	for i := range kw.page.ents {
 		var val [kwEntrySize]byte
 		for j := range val {
 			val[j] = byte(i)
 		}
-		kw.ents[i] = val
+		kw.page.ents[i] = val
 	}
 
 	// write it out
-	assert.NoError(t, kw.writePage(kw.page()))
+	assert.NoError(t, kw.writePage(&kw.page))
 
 	// read it back
 	_, err := fh.Seek(0, io.SeekStart)
@@ -77,10 +77,12 @@ func BenchmarkKeyWriterAppend(b *testing.B) {
 			kw := new(keyWriter)
 			kw.Init(fh)
 
-			var key kwEntry
-
 			for j := 0; j < n; j++ {
-				_ = kw.Append(key)
+				if kw.CanAppendFast() {
+					kw.AppendFast(kwEntry{})
+				} else {
+					_ = kw.AppendSlow(kwEntry{})
+				}
 			}
 			_ = kw.Finish()
 		}

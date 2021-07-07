@@ -1,9 +1,6 @@
 package leveln
 
 import (
-	"encoding/binary"
-	"unsafe"
-
 	"github.com/zeebo/errs/v2"
 
 	"github.com/histdb/histdb"
@@ -39,12 +36,15 @@ func (v *valueWriter) CanAppend(value []byte) []byte {
 	return nil
 }
 
-func (v *valueWriter) Append(buf []byte, key histdb.Key, value []byte) {
+func (v *valueWriter) Append(buf []byte, ts uint32, value []byte) {
 	if len(buf) >= vwEntryHeaderSize {
 		len := vwEntryHeaderSize + uint(len(value))
-		binary.BigEndian.PutUint16(buf[0:2], uint16(len))
-		// reduces code amount by a lot and allows Append to be inlined
-		*(*[4]byte)(unsafe.Pointer(&buf[2])) = *(*[4]byte)(unsafe.Pointer(&key[16]))
+		buf[0] = uint8(len >> 8)
+		buf[1] = uint8(len)
+		buf[2] = uint8(ts >> 24)
+		buf[3] = uint8(ts >> 16)
+		buf[4] = uint8(ts >> 8)
+		buf[5] = uint8(ts)
 		copy(buf[vwEntryHeaderSize:], value)
 		v.sn += len
 	}

@@ -27,7 +27,7 @@ func TestLevelNWriterReader(t *testing.T) {
 		var key histdb.Key
 		binary.BigEndian.PutUint64(key[0:8], uint64(i)/8)
 		binary.BigEndian.PutUint32(key[16:20], uint32(i))
-		assert.NoError(t, lnw.Append(key, nil, []byte{byte(i >> 8), byte(i)}))
+		assert.NoError(t, lnw.Append(key, []byte{byte(i >> 8), byte(i)}))
 	}
 	assert.NoError(t, lnw.Finish())
 

@@ -24,11 +24,11 @@ func TestKeyReader(t *testing.T) {
 	kw.Init(fh)
 
 	for i := 0; i < count; i++ {
+		var key histdb.Key
+		binary.BigEndian.PutUint32(key[16:20], uint32(i*2+1))
 		var ent kwEntry
-		binary.BigEndian.PutUint32(ent[16:20], uint32(i*2+1))
-		binary.BigEndian.PutUint32(ent[20:24], uint32(i))
-		binary.BigEndian.PutUint32(ent[24:28], uint32(i))
-		assert.NoError(t, kw.Append(ent))
+		ent.Set(key, uint32(i), uint32(i))
+		kw.Append(ent)
 	}
 	assert.NoError(t, kw.Finish())
 
@@ -74,10 +74,8 @@ func BenchmarkKeyReader(b *testing.B) {
 
 		for i := 0; i < n; i++ {
 			var ent kwEntry
-			binary.BigEndian.PutUint32(ent[0:4], uint32(i))
-			binary.BigEndian.PutUint32(ent[20:24], uint32(i))
-			binary.BigEndian.PutUint32(ent[24:28], uint32(i))
-			assert.NoError(b, kw.Append(ent))
+			ent.Set(testhelp.KeyN(uint32(i)), uint32(i), uint32(i))
+			kw.Append(ent)
 		}
 		assert.NoError(b, kw.Finish())
 

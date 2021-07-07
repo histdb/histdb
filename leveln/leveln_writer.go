@@ -1,8 +1,6 @@
 package leveln
 
 import (
-	"encoding/binary"
-
 	"github.com/zeebo/errs/v2"
 
 	"github.com/histdb/histdb"
@@ -30,7 +28,7 @@ func (w *Writer) storeErr(err error) error {
 	return w.err
 }
 
-func (w *Writer) Append(key histdb.Key, name, value []byte) error {
+func (w *Writer) Append(key histdb.Key, value []byte) error {
 	if w.err != nil {
 		return w.err
 	}
@@ -39,7 +37,7 @@ func (w *Writer) Append(key histdb.Key, name, value []byte) error {
 	if !w.first {
 		if key.Hash() == w.key.Hash() {
 			if buf := w.vw.CanAppend(value); buf != nil {
-				w.vw.Append(buf, key, value)
+				w.vw.Append(buf, key.Timestamp(), value)
 				return nil
 			}
 		}
@@ -51,11 +49,11 @@ func (w *Writer) Append(key histdb.Key, name, value []byte) error {
 		}
 
 		var ent kwEntry
-		copy(ent[0:20], w.key[0:20])
-		binary.BigEndian.PutUint32(ent[20:24], offset)
-		binary.BigEndian.PutUint32(ent[24:28], length)
+		ent.Set(w.key, offset, length)
 
-		if err := w.kw.Append(ent); err != nil {
+		if w.kw.CanAppendFast() {
+			w.kw.AppendFast(ent)
+		} else if err := w.kw.AppendSlow(ent); err != nil {
 			return w.storeErr(err)
 		}
 	} else {
@@ -68,7 +66,7 @@ func (w *Writer) Append(key histdb.Key, name, value []byte) error {
 	w.key = key
 
 	if buf := w.vw.CanAppend(value); buf != nil {
-		w.vw.Append(buf, key, value)
+		w.vw.Append(buf, key.Timestamp(), value)
 		return nil
 	}
 	return w.storeErr(errs.Errorf("value too large"))
@@ -78,6 +76,7 @@ func (w *Writer) Finish() error {
 	if w.err != nil {
 		return w.err
 	}
+
 	if !w.first {
 		offset, length, err := w.vw.FinishSpan()
 		if err != nil {
@@ -85,11 +84,11 @@ func (w *Writer) Finish() error {
 		}
 
 		var ent kwEntry
-		copy(ent[0:20], w.key[0:20])
-		binary.BigEndian.PutUint32(ent[20:24], offset)
-		binary.BigEndian.PutUint32(ent[24:28], length)
+		ent.Set(w.key, offset, length)
 
-		if err := w.kw.Append(ent); err != nil {
+		if w.kw.CanAppendFast() {
+			w.kw.AppendFast(ent)
+		} else if err := w.kw.AppendSlow(ent); err != nil {
 			return w.storeErr(err)
 		}
 	}

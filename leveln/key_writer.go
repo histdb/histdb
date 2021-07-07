@@ -27,9 +27,12 @@ const (
 	//
 	// The memory usage is because we keep a page per depth in both the reader and writer.
 	kwPageSize   = 4096 * 4
-	kwEntrySize  = histdb.KeySize + 4 + 4 + 4
+	kwEntrySize  = histdb.KeySize + 4 + 4
 	kwHeaderSize = 32 // 11 used
 	kwEntries    = (kwPageSize - kwHeaderSize) / kwEntrySize
+
+	_ uintptr = (kwHeaderSize + kwEntries*kwEntrySize) - kwPageSize
+	_ uintptr = kwPageSize - (kwHeaderSize + kwEntries*kwEntrySize)
 )
 
 // kwEntry is the byte representation of an entry in the index.
@@ -38,11 +41,24 @@ type kwEntry [kwEntrySize]byte
 // Key returns a pointer to the key portion of the entry.
 func (k *kwEntry) Key() *histdb.Key { return (*histdb.Key)(unsafe.Pointer(k)) }
 
-// Offset returns the offset encoded into the entry
+// Offset returns the offset encoded into the entry.
 func (k *kwEntry) Offset() uint32 { return binary.BigEndian.Uint32(k[20:24]) }
 
-// Length returns the length encoded into the entry
+// Length returns the length encoded into the entry.
 func (k *kwEntry) Length() uint32 { return binary.BigEndian.Uint32(k[24:28]) }
+
+// Set sets all of the fields of the entry.
+func (k *kwEntry) Set(key histdb.Key, offset, length uint32) {
+	copy(k[0:20], key[0:20])
+	k[20] = byte(offset >> 24)
+	k[21] = byte(offset >> 16)
+	k[22] = byte(offset >> 8)
+	k[23] = byte(offset)
+	k[24] = byte(length >> 24)
+	k[25] = byte(length >> 16)
+	k[26] = byte(length >> 8)
+	k[27] = byte(length)
+}
 
 // kwPageHeader is the header starting every page.
 type kwPageHeader [kwHeaderSize]byte
@@ -78,6 +94,9 @@ const (
 
 	_ uintptr = unsafe.Offsetof(kwPage{}.ents) - kwHeaderSize
 	_ uintptr = kwHeaderSize - unsafe.Offsetof(kwPage{}.ents)
+
+	_ uintptr = unsafe.Sizeof(kwPage{}) - kwPageSize
+	_ uintptr = kwPageSize - unsafe.Sizeof(kwPage{})
 )
 
 // Buf returns an unsafe pointer to the memory backing the page.
@@ -89,20 +108,9 @@ type keyWriter struct {
 	fh    filesystem.Handle
 	pages []*kwPage
 	id    uint32
-
-	count uint16       // duplicated from hdr so append can be outlined
-	_     [2]byte      // padding so the hdr field is aligned appropriately
-	hdr   kwPageHeader // inlined kwPage so append can be outlined
-	ents  [kwEntries]kwEntry
+	count uint16
+	page  kwPage
 }
-
-// Ensure the inlined kwPage is at the offsets we expect (a page from the end)
-const (
-	kwEndSize = unsafe.Sizeof(keyWriter{}) - unsafe.Offsetof(keyWriter{}.hdr)
-
-	_ uintptr = kwEndSize - kwPageSize
-	_ uintptr = kwPageSize - kwEndSize
-)
 
 // Init resets the keyWriter to write to the provided file handle.
 func (k *keyWriter) Init(fh filesystem.Handle) {
@@ -110,28 +118,31 @@ func (k *keyWriter) Init(fh filesystem.Handle) {
 	k.pages = nil
 	k.id = 0
 	k.count = 0
-	k.hdr = kwPageHeader{}
-	k.hdr.SetPrev(^uint32(0))
+	k.page.hdr = kwPageHeader{}
+	k.page.hdr.SetPrev(^uint32(0))
 }
 
-func (k *keyWriter) page() *kwPage {
-	return (*kwPage)(unsafe.Pointer(&k.hdr))
-}
-
-// Append adds the encoded entry to the writer. No calls to Append or Finish
-// should be made after either returns an error.
 func (k *keyWriter) Append(ent kwEntry) error {
-	if k.count < kwEntries-1 {
-		k.ents[k.count] = ent
-		k.count++
+	if k.CanAppendFast() {
+		k.AppendFast(ent)
 		return nil
+	} else {
+		return k.AppendSlow(ent)
 	}
-	return k.appendSlow(ent)
 }
 
-func (k *keyWriter) appendSlow(ent kwEntry) error {
+func (k *keyWriter) CanAppendFast() bool {
+	return k.count < kwEntries-1
+}
+
+func (k *keyWriter) AppendFast(ent kwEntry) {
+	k.page.ents[k.count] = ent
+	k.count++
+}
+
+func (k *keyWriter) AppendSlow(ent kwEntry) error {
 	// add the value as the last entry in the leaf
-	k.ents[kwEntries-1] = ent
+	k.page.ents[kwEntries-1] = ent
 	k.count++
 
 	// we have to flush the leaf first, and then start flushing
@@ -148,13 +159,13 @@ func (k *keyWriter) appendSlow(ent kwEntry) error {
 	}
 
 	// now we can flush the newly filled leaf node and reset it
-	k.hdr.SetNext(next)
-	k.hdr.SetCount(k.count)
-	k.hdr.SetLeaf(true)
-	if err := k.writePage(k.page()); err != nil {
+	k.page.hdr.SetNext(next)
+	k.page.hdr.SetCount(k.count)
+	k.page.hdr.SetLeaf(true)
+	if err := k.writePage(&k.page); err != nil {
 		return errs.Wrap(err)
 	}
-	k.hdr.SetPrev(k.id) // set prev pointer for next leaf
+	k.page.hdr.SetPrev(k.id) // set prev pointer for next leaf
 	k.id++
 	k.count = 0
 
@@ -195,10 +206,10 @@ func (k *keyWriter) appendSlow(ent kwEntry) error {
 // after either returns an error.
 func (k *keyWriter) Finish() error {
 	// write the leaf
-	k.hdr.SetNext(math.MaxUint32)
-	k.hdr.SetCount(k.count)
-	k.hdr.SetLeaf(true)
-	if err := k.writePage(k.page()); err != nil {
+	k.page.hdr.SetNext(math.MaxUint32)
+	k.page.hdr.SetCount(k.count)
+	k.page.hdr.SetLeaf(true)
+	if err := k.writePage(&k.page); err != nil {
 		return errs.Wrap(err)
 	}
 	k.id++

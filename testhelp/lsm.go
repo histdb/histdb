@@ -1,6 +1,8 @@
 package testhelp
 
 import (
+	"encoding/binary"
+
 	"github.com/zeebo/pcg"
 
 	"github.com/histdb/histdb"
@@ -11,6 +13,11 @@ func Key() (key histdb.Key) {
 		key[i] = byte(pcg.Uint32n(256))
 	}
 	key[len(key)-1] = 0x80
+	return key
+}
+
+func KeyN(n uint32) (key histdb.Key) {
+	binary.BigEndian.PutUint32(key[0:4], n)
 	return key
 }
 

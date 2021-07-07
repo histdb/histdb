@@ -8,14 +8,13 @@ import (
 	"github.com/zeebo/pcg"
 
 	"github.com/histdb/histdb"
+	"github.com/histdb/histdb/filesystem"
 	"github.com/histdb/histdb/testhelp"
 )
 
 func BenchmarkLevelNAppend(b *testing.B) {
 	fs, cleanup := testhelp.FS(b)
 	defer cleanup()
-
-	var rng pcg.T
 
 	value := make([]byte, 512)
 
@@ -25,7 +24,9 @@ func BenchmarkLevelNAppend(b *testing.B) {
 		b.ReportAllocs()
 
 		for i := 0; i < b.N; i++ {
-			func() {
+			func(fs *filesystem.T, n, i int) {
+				var rng pcg.T
+
 				keys, cleanup := testhelp.Tempfile(b, fs)
 				defer cleanup()
 
@@ -39,7 +40,7 @@ func BenchmarkLevelNAppend(b *testing.B) {
 				for j := 0; j < n; j++ {
 					binary.BigEndian.PutUint64(key[0:8], uint64(j)/32)
 					binary.BigEndian.PutUint32(key[16:20], uint32(j))
-					_ = ln.Append(key, nil, value[0:256+rng.Uint32()%256])
+					_ = ln.Append(key, value[0:256+rng.Uint32()%256])
 				}
 				_ = ln.Finish()
 
@@ -48,7 +49,7 @@ func BenchmarkLevelNAppend(b *testing.B) {
 					vsize, _ := values.Size()
 					b.SetBytes(ksize + vsize)
 				}
-			}()
+			}(fs, n, i)
 		}
 
 		b.ReportMetric(float64(time.Since(now))/float64(n)/float64(b.N), "ns/key")
