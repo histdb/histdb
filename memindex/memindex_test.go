@@ -14,17 +14,18 @@ import (
 )
 
 func TestPopTags(t *testing.T) {
-	check := func(tags string, tkey, tag, rest string) {
-		gtkey, gtag, grest := popTag(tags)
+	check := func(tags string, tkey, tag string, iskey bool, rest string) {
+		gtkey, gtag, giskey, grest := popTag(tags)
 		assert.Equal(t, tkey, gtkey)
 		assert.Equal(t, tag, gtag)
+		assert.Equal(t, iskey, giskey)
 		assert.Equal(t, rest, grest)
 	}
 
-	check("foo=bar,foo=bar", "foo", "foo=bar", "foo=bar")
-	check("foo=bar", "foo", "foo=bar", "")
-	check("foo=", "foo", "foo", "")
-	check("foo", "foo", "foo", "")
+	check("foo=bar,foo=bar", "foo", "foo=bar", false, "foo=bar")
+	check("foo=bar", "foo", "foo=bar", false, "")
+	check("foo=", "foo", "foo", false, "")
+	check("foo", "foo", "foo", true, "")
 
 	// TODO: check escape sequences
 }
@@ -65,11 +66,21 @@ func TestMemindex(t *testing.T) {
 		idx := New()
 
 		assert.That(t, idx.Add("k0=v0,k1=v1,k2=v2"))
+		assert.That(t, idx.Add("k0=v1,k1=v1,k2=v2"))
 
 		idx.Metrics("k0=v0", nil, collectBytes())
 		assert.DeepEqual(t, strings, []string{"k0=v0,k1=v1,k2=v2"})
 
 		idx.Metrics("k0=v0,k1=v0", nil, collectBytes())
+		assert.DeepEqual(t, strings, []string{})
+
+		idx.Metrics("k0", nil, collectBytes())
+		assert.DeepEqual(t, strings, []string{
+			"k0=v0,k1=v1,k2=v2",
+			"k0=v1,k1=v1,k2=v2",
+		})
+
+		idx.Metrics("k0=", nil, collectBytes())
 		assert.DeepEqual(t, strings, []string{})
 	})
 
@@ -78,10 +89,17 @@ func TestMemindex(t *testing.T) {
 
 		assert.That(t, idx.Add("k0=v0,k1=v1,k2=v2"))
 		assert.That(t, idx.Add("k0=v0,foo"))
-		assert.That(t, idx.Add("k1=v1,foo"))
+		assert.That(t, idx.Add("k1=v1,foo,baz"))
+		assert.That(t, idx.Add("k0=v1,bar"))
 
 		idx.TagKeys("k0=v0", collectStrings())
 		assert.DeepEqual(t, strings, []string{"k1", "k2", "foo"})
+
+		idx.TagKeys("k0", collectStrings())
+		assert.DeepEqual(t, strings, []string{"k1", "k2", "foo", "bar"})
+
+		idx.TagKeys("k0=", collectStrings())
+		assert.DeepEqual(t, strings, []string{})
 
 		idx.TagKeys("k0=v0,k1=v0", collectStrings())
 		assert.DeepEqual(t, strings, []string{})
@@ -98,9 +116,13 @@ func TestMemindex(t *testing.T) {
 		assert.That(t, idx.Add("k0=v0,k2=v4"))
 		assert.That(t, idx.Add("k1=va,k2=v4"))
 		assert.That(t, idx.Add("k1=vb,k2=v4"))
+		assert.That(t, idx.Add("k0=v1,k2=v5"))
 
 		idx.TagValues("k0=v0", "k2", collectStrings())
 		assert.DeepEqual(t, strings, []string{"v2", "v3", "v4"})
+
+		idx.TagValues("k0", "k2", collectStrings())
+		assert.DeepEqual(t, strings, []string{"v2", "v3", "v4", "v5"})
 
 		idx.TagValues("k0=v0,k1=va", "k2", collectStrings())
 		assert.DeepEqual(t, strings, []string{"v2"})
@@ -236,14 +258,16 @@ func dumpSizeStats(t testing.TB, idx *T) {
 	dumpSlice("tag_to_metrics", idx.tag_to_metrics)
 	dumpSlice("tag_to_tkeys", idx.tag_to_tkeys)
 	dumpSlice("tag_to_tags", idx.tag_to_tags)
-	dumpSlice("tkey_to_tags", idx.tkey_to_tags)
 	dumpSlice("tkey_to_metrics", idx.tkey_to_metrics)
+	dumpSlice("tkey_to_tkeys", idx.tkey_to_tkeys)
+	dumpSlice("tkey_to_tags", idx.tkey_to_tags)
+	dumpSlice("tkey_to_tvals", idx.tkey_to_tvals)
 
 	t.Log("idx:", "size:", idx.Size(), "count:", idx.Count(""), "bpm:", float64(idx.Size())/float64(idx.Count("")))
 }
 
 func TestWhatever(t *testing.T) {
-	t.SkipNow()
+	// t.SkipNow()
 
 	idx := New()
 	loadLarge(idx)

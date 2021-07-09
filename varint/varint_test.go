@@ -1,4 +1,4 @@
-package floathist
+package varint
 
 import (
 	"fmt"
@@ -8,7 +8,7 @@ import (
 	"github.com/zeebo/assert"
 	"github.com/zeebo/pcg"
 
-	"github.com/histdb/histdb/floathist/internal/buffer"
+	"github.com/histdb/histdb/buffer"
 )
 
 func TestVarint(t *testing.T) {
@@ -16,9 +16,9 @@ func TestVarint(t *testing.T) {
 		for i := uint(0); i <= 64; i++ {
 			buf := buffer.Of(make([]byte, 9))
 
-			nbytes := varintAppend(buf.Front9(), 1<<i-1)
+			nbytes := Append(buf.Front9(), 1<<i-1)
 			buf = buf.Advance(nbytes)
-			dec, _, ok := safeVarintConsume(buf.Reset())
+			dec, _, ok := SafeConsume(buf.Reset())
 
 			t.Logf("%-2d %064b %08b\n", i, dec, buf.Prefix())
 
@@ -31,9 +31,9 @@ func TestVarint(t *testing.T) {
 		for i := uint(0); i <= 64; i++ {
 			buf := buffer.Of(make([]byte, 9))
 
-			nbytes := varintAppend(buf.Front9(), 1<<i-1)
+			nbytes := Append(buf.Front9(), 1<<i-1)
 			buf = buf.Advance(nbytes)
-			_, dec := fastVarintConsume(buf.Reset().Front9())
+			_, dec := FastConsume(buf.Reset().Front9())
 
 			t.Logf("%-2d %064b %08b\n", i, dec, buf.Prefix())
 
@@ -45,13 +45,13 @@ func TestVarint(t *testing.T) {
 		for i := uint(0); i <= 64; i++ {
 			buf := buffer.Of(make([]byte, 9))
 
-			nbytes := varintAppend(buf.Front9(), 1<<i-1)
+			nbytes := Append(buf.Front9(), 1<<i-1)
 			for i := nbytes; i < 9; i++ {
 				*buf.Index(uintptr(i)) = uint8(pcg.Uint32())
 			}
 
 			buf = buf.Advance(nbytes)
-			_, dec := fastVarintConsume(buf.Reset().Front9())
+			_, dec := FastConsume(buf.Reset().Front9())
 
 			t.Logf("%-2d %064b %08b\n", i, dec, buf.Prefix())
 
@@ -70,9 +70,9 @@ func TestVarint(t *testing.T) {
 				exp := pcg.Uint64() & mask
 				buf := buffer.Of(make([]byte, 9))
 
-				nbytes := varintAppend(buf.Front9(), exp)
+				nbytes := Append(buf.Front9(), exp)
 				buf = buf.Advance(nbytes)
-				dec, _, ok := safeVarintConsume(buf.Reset())
+				dec, _, ok := SafeConsume(buf.Reset())
 
 				t.Logf("%-2d %064b %08b\n", i, dec, buf.Prefix())
 
@@ -93,9 +93,9 @@ func TestVarint(t *testing.T) {
 				exp := pcg.Uint64() & mask
 				buf := buffer.Of(make([]byte, 9))
 
-				nbytes := varintAppend(buf.Front9(), exp)
+				nbytes := Append(buf.Front9(), exp)
 				buf = buf.Advance(nbytes)
-				_, dec := fastVarintConsume(buf.Reset().Front9())
+				_, dec := FastConsume(buf.Reset().Front9())
 
 				t.Logf("%-2d %064b %08b\n", i, dec, buf.Prefix())
 
@@ -113,7 +113,7 @@ func BenchmarkVarint(b *testing.B) {
 	randBuf := buffer.Of(make([]byte, 16))
 	for _, val := range randVals {
 		randBuf = randBuf.Grow()
-		nbytes := varintAppend(randBuf.Front9(), val)
+		nbytes := Append(randBuf.Front9(), val)
 		randBuf = randBuf.Advance(nbytes)
 	}
 	randBuf = randBuf.Reset()
@@ -126,7 +126,7 @@ func BenchmarkVarint(b *testing.B) {
 
 				for i := 0; i < b.N; i++ {
 					buf = buf.Grow()
-					varintAppend(buf.Front9(), n)
+					Append(buf.Front9(), n)
 				}
 			})
 		}
@@ -136,7 +136,7 @@ func BenchmarkVarint(b *testing.B) {
 
 			for i := 0; i < b.N; i++ {
 				buf = buf.Grow()
-				varintAppend(buf.Front9(), randVals[i%(1024*1024)])
+				Append(buf.Front9(), randVals[i%(1024*1024)])
 			}
 		})
 	})
@@ -146,11 +146,11 @@ func BenchmarkVarint(b *testing.B) {
 			b.Run(fmt.Sprint(i), func(b *testing.B) {
 				n := uint64(1<<i - 1)
 				buf := buffer.Of(make([]byte, 9))
-				nbytes := varintAppend(buf.Front9(), n)
+				nbytes := Append(buf.Front9(), n)
 				buf = buf.Advance(nbytes)
 
 				for i := 0; i < b.N; i++ {
-					safeVarintConsume(buf)
+					SafeConsume(buf)
 				}
 			})
 		}
@@ -161,7 +161,7 @@ func BenchmarkVarint(b *testing.B) {
 				if buf.Remaining() == 0 {
 					buf = buf.Reset()
 				}
-				_, buf, _ = safeVarintConsume(buf)
+				_, buf, _ = SafeConsume(buf)
 			}
 		})
 	})
@@ -171,12 +171,12 @@ func BenchmarkVarint(b *testing.B) {
 			b.Run(fmt.Sprint(i), func(b *testing.B) {
 				n := uint64(1<<i - 1)
 				buf := buffer.Of(make([]byte, 9))
-				nbytes := varintAppend(buf.Front9(), n)
+				nbytes := Append(buf.Front9(), n)
 				buf = buf.Advance(nbytes)
 
 				var dec uint64
 				for i := 0; i < b.N; i++ {
-					_, dec = fastVarintConsume(buf.Front9())
+					_, dec = FastConsume(buf.Front9())
 				}
 				runtime.KeepAlive(dec)
 			})
@@ -191,7 +191,7 @@ func BenchmarkVarint(b *testing.B) {
 				if buf.Remaining() < 9 {
 					buf = buf.Reset()
 				}
-				nbytes, dec = fastVarintConsume(buf.Front9())
+				nbytes, dec = FastConsume(buf.Front9())
 				buf = buf.Advance(nbytes)
 			}
 

@@ -1,19 +1,19 @@
-package utils
+package level0
 
-func AppendUint16(x []byte, v uint16) []byte {
+func appendUint16(x []byte, v uint16) []byte {
 	return append(x,
 		byte(v>>0x08), byte(v>>0x00),
 	)
 }
 
-func AppendUint32(x []byte, v uint32) []byte {
+func appendUint32(x []byte, v uint32) []byte {
 	return append(x,
 		byte(v>>0x18), byte(v>>0x10),
 		byte(v>>0x08), byte(v>>0x00),
 	)
 }
 
-func AppendUint64(x []byte, v uint64) []byte {
+func appendUint64(x []byte, v uint64) []byte {
 	return append(x,
 		byte(v>>0x38), byte(v>>0x30),
 		byte(v>>0x28), byte(v>>0x20),

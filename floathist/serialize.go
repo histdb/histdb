@@ -5,7 +5,8 @@ import (
 
 	"github.com/zeebo/errs/v2"
 
-	"github.com/histdb/histdb/floathist/internal/buffer"
+	"github.com/histdb/histdb/buffer"
+	"github.com/histdb/histdb/varint"
 )
 
 func (h *Histogram) Serialize(mem []byte) []byte {
@@ -44,7 +45,7 @@ func (h *Histogram) Serialize(mem []byte) []byte {
 				val := layer2_loadCounter(l2, i)
 				if val > 0 {
 					bm.UnsafeSetIdx(i)
-					nbytes := varintAppend(buf.Front9(), val)
+					nbytes := varint.Append(buf.Front9(), val)
 					buf = buf.Advance(nbytes)
 				}
 			}
@@ -124,7 +125,7 @@ func (h *Histogram) Load(data []byte) (err error) {
 						goto done
 					}
 
-					nbytes, val := fastVarintConsume(buf.Front9())
+					nbytes, val := varint.FastConsume(buf.Front9())
 					if nbytes > rem {
 						err = errs.Errorf("invalid varint data")
 						goto done

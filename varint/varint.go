@@ -1,18 +1,24 @@
-package floathist
+package varint
 
 import (
 	"encoding/binary"
 	"fmt"
 	"math/bits"
+	"unsafe"
 
-	"github.com/histdb/histdb/floathist/internal/buffer"
+	"github.com/histdb/histdb/buffer"
+)
+
+type (
+	ptr  = unsafe.Pointer
+	uptr = uintptr
 )
 
 //
 // varint support
 //
 
-func varintAppend(dst *[9]byte, val uint64) (nbytes uintptr) {
+func Append(dst *[9]byte, val uint64) (nbytes uintptr) {
 	nbytes = 575*uintptr(bits.Len64(val))/4096 + 1
 
 	if nbytes < 9 {
@@ -26,7 +32,7 @@ func varintAppend(dst *[9]byte, val uint64) (nbytes uintptr) {
 	return
 }
 
-func fastVarintConsume(src *[9]byte) (nbytes uintptr, dec uint64) {
+func FastConsume(src *[9]byte) (nbytes uintptr, dec uint64) {
 	nbytes = uintptr(bits.TrailingZeros8(^src[0])) + 1
 
 	if nbytes < 9 {
@@ -39,7 +45,7 @@ func fastVarintConsume(src *[9]byte) (nbytes uintptr, dec uint64) {
 	return
 }
 
-func safeVarintConsume(buf buffer.T) (uint64, buffer.T, bool) {
+func SafeConsume(buf buffer.T) (uint64, buffer.T, bool) {
 	le := binary.LittleEndian
 
 	rem := buf.Remaining()

@@ -8,7 +8,6 @@ import (
 
 	"github.com/histdb/histdb"
 	"github.com/histdb/histdb/filesystem"
-	"github.com/histdb/histdb/utils"
 )
 
 const (
@@ -95,9 +94,9 @@ func (t *T) append(key histdb.Key, name, value []byte) (bool, error) {
 		return false, nil
 	}
 
-	t.buf = utils.AppendUint32(t.buf, length)
-	t.buf = utils.AppendUint32(t.buf, uint32(len(name)))
-	t.buf = utils.AppendUint32(t.buf, uint32(len(value)))
+	t.buf = appendUint32(t.buf, length)
+	t.buf = appendUint32(t.buf, uint32(len(name)))
+	t.buf = appendUint32(t.buf, uint32(len(value)))
 	t.buf = append(t.buf, key[:]...)
 	t.buf = append(t.buf, name...)
 	t.buf = append(t.buf, value...)
@@ -149,11 +148,11 @@ func (t *T) finish() error {
 		ibuf := t.pos[key]
 		kp := binary.BigEndian.Uint16(key[0:2])
 
-		buf = utils.AppendUint16(buf, kp)
-		buf = utils.AppendUint16(buf, ibuf.x)
+		buf = appendUint16(buf, kp)
+		buf = appendUint16(buf, ibuf.x)
 		for _, idx := range ibuf.b {
-			buf = utils.AppendUint16(buf, kp)
-			buf = utils.AppendUint16(buf, idx)
+			buf = appendUint16(buf, kp)
+			buf = appendUint16(buf, idx)
 		}
 	}
 

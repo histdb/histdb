@@ -4,14 +4,14 @@ import (
 	"unsafe"
 )
 
-//
-// custom slice support :sonic:
-//
-
 type (
 	ptr  = unsafe.Pointer
 	uptr = uintptr
 )
+
+//
+// custom slice support :sonic:
+//
 
 type T struct {
 	base ptr
@@ -91,7 +91,7 @@ func (buf T) Remaining() uptr {
 
 func (buf T) Grow() T {
 	if rem := buf.Remaining(); rem < 9 {
-		buf.cap *= 2
+		buf.cap = buf.cap*2 + 9
 		n := make([]byte, buf.cap)
 		copy(n, buf.Prefix())
 		buf.base = *(*ptr)(ptr(&n))
@@ -101,7 +101,7 @@ func (buf T) Grow() T {
 
 func (buf T) GrowN(n uintptr) T {
 	if rem := buf.Remaining(); rem < n {
-		buf.cap *= 2
+		buf.cap = buf.cap*2 + n
 		n := make([]byte, buf.cap)
 		copy(n, buf.Prefix())
 		buf.base = *(*ptr)(ptr(&n))
