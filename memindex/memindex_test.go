@@ -57,32 +57,32 @@ func TestMemindex(t *testing.T) {
 		strings = strings[:0]
 		return func(x string) bool { strings = append(strings, x); return true }
 	}
-	collectBytes := func() func([]byte) bool {
-		strings = strings[:0]
-		return func(x []byte) bool { strings = append(strings, string(x)); return true }
-	}
+	// collectBytes := func() func([]byte) bool {
+	// 	strings = strings[:0]
+	// 	return func(x []byte) bool { strings = append(strings, string(x)); return true }
+	// }
 
-	t.Run("Metrics", func(t *testing.T) {
-		idx := New()
+	// t.Run("Metrics", func(t *testing.T) {
+	// 	idx := New()
 
-		assert.That(t, idx.Add("k0=v0,k1=v1,k2=v2"))
-		assert.That(t, idx.Add("k0=v1,k1=v1,k2=v2"))
+	// 	assert.That(t, idx.Add("k0=v0,k1=v1,k2=v2"))
+	// 	assert.That(t, idx.Add("k0=v1,k1=v1,k2=v2"))
 
-		idx.Metrics("k0=v0", nil, collectBytes())
-		assert.DeepEqual(t, strings, []string{"k0=v0,k1=v1,k2=v2"})
+	// 	idx.Metrics("k0=v0", nil, collectBytes())
+	// 	assert.DeepEqual(t, strings, []string{"k0=v0,k1=v1,k2=v2"})
 
-		idx.Metrics("k0=v0,k1=v0", nil, collectBytes())
-		assert.DeepEqual(t, strings, []string{})
+	// 	idx.Metrics("k0=v0,k1=v0", nil, collectBytes())
+	// 	assert.DeepEqual(t, strings, []string{})
 
-		idx.Metrics("k0", nil, collectBytes())
-		assert.DeepEqual(t, strings, []string{
-			"k0=v0,k1=v1,k2=v2",
-			"k0=v1,k1=v1,k2=v2",
-		})
+	// 	idx.Metrics("k0", nil, collectBytes())
+	// 	assert.DeepEqual(t, strings, []string{
+	// 		"k0=v0,k1=v1,k2=v2",
+	// 		"k0=v1,k1=v1,k2=v2",
+	// 	})
 
-		idx.Metrics("k0=", nil, collectBytes())
-		assert.DeepEqual(t, strings, []string{})
-	})
+	// 	idx.Metrics("k0=", nil, collectBytes())
+	// 	assert.DeepEqual(t, strings, []string{})
+	// })
 
 	t.Run("TagKeys", func(t *testing.T) {
 		idx := New()
@@ -168,17 +168,17 @@ func BenchmarkMemindex(b *testing.B) {
 		b.ReportMetric(float64(count)/float64(b.N), "m/query")
 	})
 
-	b.Run("Metrics", func(b *testing.B) {
-		buf := make([]byte, 0, 64)
-		b.ReportAllocs()
-		count := 0
-		start := time.Now()
-		for i := 0; i < b.N; i++ {
-			idx.Metrics(query, buf, func([]byte) bool { count++; return true })
-		}
-		b.ReportMetric(float64(count)/time.Since(start).Seconds()/1e6, "Mm/sec")
-		b.ReportMetric(float64(count)/float64(b.N), "m/query")
-	})
+	// b.Run("Metrics", func(b *testing.B) {
+	// 	buf := make([]byte, 0, 64)
+	// 	b.ReportAllocs()
+	// 	count := 0
+	// 	start := time.Now()
+	// 	for i := 0; i < b.N; i++ {
+	// 		idx.Metrics(query, buf, func([]byte) bool { count++; return true })
+	// 	}
+	// 	b.ReportMetric(float64(count)/time.Since(start).Seconds()/1e6, "Mm/sec")
+	// 	b.ReportMetric(float64(count)/float64(b.N), "m/query")
+	// })
 
 	b.Run("TagKeys", func(b *testing.B) {
 		b.ReportAllocs()
@@ -247,12 +247,12 @@ func dumpSizeStats(t testing.TB, idx *T) {
 		t.Log(name+":", "len:", len(x), "size:", ss(x), "card:", cs(x))
 	}
 
-	t.Log("metric_names:", "size:", idx.metric_names.Size())
-	t.Log("tag_names:", "size:", idx.tag_names.Size())
-	t.Log("tkey_names:", "size:", idx.tkey_names.Size())
+	// t.Log("metric_names:", "size:", idx.metric_names.Size(), "len:", idx.metric_names.Len())
+	t.Log("tag_names:", "size:", idx.tag_names.Size(), "len:", idx.tag_names.Len())
+	t.Log("tkey_names:", "size:", idx.tkey_names.Size(), "len:", idx.tkey_names.Len())
 
-	t.Log("metrics:", "size:", idx.metrics.GetSizeInBytes(), "card:", idx.metrics.GetCardinality())
-	t.Log("tags:", "size:", idx.tags.GetSizeInBytes(), "card:", idx.tags.GetCardinality())
+	// t.Log("metrics:", "size:", idx.metrics.GetSizeInBytes(), "card:", idx.metrics.GetCardinality())
+	// t.Log("tags:", "size:", idx.tags.GetSizeInBytes(), "card:", idx.tags.GetCardinality())
 	t.Log("keys:", "size:", idx.tkeys.GetSizeInBytes(), "card:", idx.tkeys.GetCardinality())
 
 	dumpSlice("tag_to_metrics", idx.tag_to_metrics)

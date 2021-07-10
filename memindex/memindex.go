@@ -2,7 +2,6 @@ package memindex
 
 import (
 	"fmt"
-	"strings"
 	"sync"
 
 	"github.com/RoaringBitmap/roaring"
@@ -17,14 +16,14 @@ import (
 
 type T struct {
 	fixed bool
+	card  int
 
-	metric_names *petname.Uint32s
+	metric_names *petname.Set
 	tag_names    *petname.Strings
 	tkey_names   *petname.Strings
 
-	metrics *roaring.Bitmap
-	tags    *roaring.Bitmap
-	tkeys   *roaring.Bitmap
+	// metrics *roaring.Bitmap
+	tkeys *roaring.Bitmap
 
 	tag_to_metrics  []*roaring.Bitmap
 	tag_to_tkeys    []*roaring.Bitmap
@@ -39,13 +38,12 @@ type T struct {
 
 func New() *T {
 	return &T{
-		metric_names: petname.NewUint32s(),
+		metric_names: petname.NewSet(),
 		tag_names:    petname.NewStrings(),
 		tkey_names:   petname.NewStrings(),
 
-		metrics: roaring.New(),
-		tags:    roaring.New(),
-		tkeys:   roaring.New(),
+		// metrics: roaring.New(),
+		tkeys: roaring.New(),
 
 		query_pool: sync.Pool{New: func() interface{} { return roaring.New() }},
 	}
@@ -76,8 +74,6 @@ func (t *T) Size() uint64 {
 		t.metric_names.Size() +
 		t.tag_names.Size() +
 		t.tkey_names.Size() +
-		t.metrics.GetSizeInBytes() +
-		t.tags.GetSizeInBytes() +
 		t.tkeys.GetSizeInBytes() +
 		sliceSize(t.tag_to_metrics) +
 		sliceSize(t.tag_to_tkeys) +
@@ -100,8 +96,6 @@ func (t *T) Fix() {
 		}
 	}
 
-	fix(t.metrics)
-	fix(t.tags)
 	fix(t.tkeys)
 
 	fixAll(t.tag_to_metrics)
@@ -112,7 +106,8 @@ func (t *T) Fix() {
 	fixAll(t.tkey_to_tags)
 	fixAll(t.tkey_to_tvals)
 
-	t.metric_names.Fix()
+	// t.metric_names.Fix()
+	t.metric_names = nil
 
 	t.fixed = true
 }
@@ -184,7 +179,8 @@ func (t *T) Add(metric string) bool {
 	// yowzer. now update all the things.
 	//
 
-	metrici, ok := t.metric_names.Put(mhash, tagis)
+	// metrici, ok := t.metric_names.Put(mhash, tagis)
+	metrici, ok := t.metric_names.Put(mhash)
 	if ok {
 		return false
 	}
@@ -234,9 +230,8 @@ func (t *T) Add(metric string) bool {
 	}
 
 	// record to all of our base bitmaps
-	t.metrics.Add(metrici)
-	t.tags.AddMany(tagis)
 	t.tkeys.AddMany(tkeyis)
+	t.card++
 
 	return true
 }
@@ -282,72 +277,74 @@ func (t *T) Count(input string) int {
 
 	// the only way it's here and still empty is if the input query was empty
 	if metrics.IsEmpty() {
-		metrics = t.metrics
+		return t.card
 	}
 
 	return int(metrics.GetCardinality())
 }
 
-func (t *T) Metrics(input string, buf []byte, cb func(buf []byte) bool) {
-	metrics := t.acquireBitmap()
-	defer t.replaceBitmap(metrics)
+// func (t *T) Metrics(input string, buf []byte, cb func(buf []byte) bool) {
+// 	metrics := t.acquireBitmap()
+// 	defer t.replaceBitmap(metrics)
 
-	for rest := input; len(rest) > 0; {
-		var tag, tkey string
-		var isKey bool
-		var bm *roaring.Bitmap
+// 	for rest := input; len(rest) > 0; {
+// 		var tag, tkey string
+// 		var isKey bool
+// 		var bm *roaring.Bitmap
 
-		tkey, tag, isKey, rest = popTag(rest)
-		if len(tag) == 0 {
-			continue
-		}
+// 		tkey, tag, isKey, rest = popTag(rest)
+// 		if len(tag) == 0 {
+// 			continue
+// 		}
 
-		if isKey {
-			name, ok := t.find(tkey, t.tkey_names)
-			if !ok {
-				return
-			}
-			bm = t.tkey_to_metrics[name]
-		} else {
-			name, ok := t.find(tag, t.tag_names)
-			if !ok {
-				return
-			}
-			bm = t.tag_to_metrics[name]
-		}
+// 		if isKey {
+// 			name, ok := t.find(tkey, t.tkey_names)
+// 			if !ok {
+// 				return
+// 			}
+// 			bm = t.tkey_to_metrics[name]
+// 		} else {
+// 			name, ok := t.find(tag, t.tag_names)
+// 			if !ok {
+// 				return
+// 			}
+// 			bm = t.tag_to_metrics[name]
+// 		}
 
-		if metrics.IsEmpty() {
-			metrics.Or(bm)
-		} else {
-			metrics.And(bm)
-		}
+// 		if metrics.IsEmpty() {
+// 			metrics.Or(bm)
+// 		} else {
+// 			metrics.And(bm)
+// 		}
 
-		if metrics.IsEmpty() {
-			return
-		}
-	}
+// 		if metrics.IsEmpty() {
+// 			return
+// 		}
+// 	}
 
-	// the only way it's here and still empty is if the input query was empty
-	if metrics.IsEmpty() {
-		metrics = t.metrics
-	}
+// 	// the only way it's here and still empty is if the input query was empty
+// 	if metrics.IsEmpty() {
+// 		// TODO: we know the set of all metrics is contiguous, so
+// 		// just loop
+// 		return
+// 	}
 
-	nbuf := make([]uint32, 0, 8)
+// 	nbuf := make([]uint32, 0, 8)
 
-	metrics.Iterate(func(name uint32) bool {
-		nbuf = t.metric_names.Get(name, nbuf[:0])
+// 	metrics.Iterate(func(name uint32) bool {
+// 		nbuf = t.metric_names.Get(name, nbuf[:0])
 
-		buf = buf[:0]
-		for i, part := range nbuf {
-			if i != 0 {
-				buf = append(buf, ',')
-			}
-			buf = append(buf, t.tag_names.Get(part)...)
-		}
+// 		buf = buf[:0]
+// 		for i, part := range nbuf {
+// 			if i != 0 {
+// 				buf = append(buf, ',')
+// 			}
+// 			buf = append(buf, t.tag_names.Get(part)...)
+// 		}
 
-		return cb(buf)
-	})
-}
+// 		return cb(buf)
+// 	})
+// }
 
 func (t *T) TagKeys(input string, cb func(result string) bool) {
 	tkeys := t.acquireBitmap()
@@ -477,51 +474,4 @@ func (t *T) TagValues(input, tkey string, cb func(result string) bool) {
 		}
 		return cb(tag[len(tkey)+1:])
 	})
-}
-
-func popTag(tags string) (tkey, tag string, isKey bool, rest string) {
-	// find the first unescaped ','
-	for j := uint(0); j < uint(len(tags)); {
-		i := strings.IndexByte(tags[j:], ',')
-		if i < 0 {
-			break
-		}
-		ui := uint(i)
-
-		if ui > 0 && ui-1 < uint(len(tags)) && tags[ui-1] == '\\' {
-			j = ui + 1
-			continue
-		}
-
-		idx := ui + j
-		tags, rest = tags[:idx], tags[idx+1:]
-		break
-	}
-
-	// if there's no =, then the tag key is the tag
-	tkey, isKey = tags, true
-
-	// find the first unescaped '='
-	for j := uint(0); j < uint(len(tkey)); {
-		i := strings.IndexByte(tkey[j:], '=')
-		if i < 0 {
-			break
-		}
-		ui := uint(i)
-
-		if ui > 0 && ui-1 < uint(len(tkey)) && tkey[ui-1] == '\\' {
-			j = ui + 1
-			continue
-		}
-
-		tkey, isKey = tkey[:ui+j], false
-		break
-	}
-
-	// if the tag has an empty string value, then drop the trailing =
-	if len(tags) == len(tkey)+1 && tags[len(tags)-1] == '=' {
-		tags, isKey = tags[:len(tags)-1], false
-	}
-
-	return tkey, tags, isKey, rest
 }

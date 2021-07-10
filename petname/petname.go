@@ -32,18 +32,22 @@ func NewStrings() *Strings {
 	}
 }
 
+func (t *Strings) Len() int {
+	return len(t.spans)
+}
+
 func (t *Strings) Size() uint64 {
 	return 0 +
 		1*uint64(len(t.buf)) +
 		// (hashSize+4)*uint64(len(t.idxs)) +
-		t.idxs.size() +
+		t.idxs.Size() +
 		8*uint64(len(t.spans)) +
 		0
 }
 
 func (t *Strings) Put(h Hash, v string) uint32 {
 	// n, ok := t.idxs[h]
-	n, ok := t.idxs.insert(h, uint32(len(t.spans)))
+	n, ok := t.idxs.Insert(h, uint32(len(t.spans)))
 	if !ok {
 		n = uint32(len(t.spans))
 		t.spans = append(t.spans, [2]uint32{
@@ -59,7 +63,7 @@ func (t *Strings) Put(h Hash, v string) uint32 {
 func (t *Strings) Find(h Hash) (uint32, bool) {
 	// n, ok := t.idxs[h]
 	// return n, ok
-	return t.idxs.find(h)
+	return t.idxs.Find(h)
 }
 
 func (t *Strings) Get(n uint32) string {
@@ -101,18 +105,22 @@ func (t *Uint32s) Fix() {
 	t.idxs = nil
 }
 
+func (t *Uint32s) Len() int {
+	return len(t.spans)
+}
+
 func (t *Uint32s) Size() uint64 {
 	return 0 +
 		1*uint64(t.buf.Cap()) +
 		// (hashSize+4)*uint64(len(t.idxs)) +
-		t.idxs.size() +
+		t.idxs.Size() +
 		6*uint64(len(t.spans)) +
 		0
 }
 
 func (t *Uint32s) Put(h Hash, vs []uint32) (uint32, bool) {
 	// n, ok := t.idxs[h]
-	n, ok := t.idxs.insert(h, uint32(len(t.spans)))
+	n, ok := t.idxs.Insert(h, uint32(len(t.spans)))
 	if !ok {
 		start := uint32(t.buf.Pos())
 		t.buf = t.buf.GrowN(9 * uintptr(len(vs)))
@@ -132,7 +140,7 @@ func (t *Uint32s) Put(h Hash, vs []uint32) (uint32, bool) {
 func (t *Uint32s) Find(h Hash) (uint32, bool) {
 	// n, ok := t.idxs[h]
 	// return n, ok
-	return t.idxs.find(h)
+	return t.idxs.Find(h)
 }
 
 func (t *Uint32s) Get(n uint32, buf []uint32) []uint32 {
@@ -156,4 +164,40 @@ func (t *Uint32s) Get(n uint32, buf []uint32) []uint32 {
 	}
 
 	return buf
+}
+
+//
+// set
+//
+
+type Set struct {
+	idxs *table
+}
+
+func NewSet() *Set {
+	return &Set{
+		idxs: newTable(),
+	}
+}
+
+func (t *Set) Len() int {
+	if t == nil {
+		return 0
+	}
+	return int(t.idxs.eles)
+}
+
+func (t *Set) Size() uint64 {
+	if t == nil {
+		return 0
+	}
+	return t.idxs.Size()
+}
+
+func (t *Set) Put(h Hash) (uint32, bool) {
+	return t.idxs.Insert(h, uint32(t.idxs.eles))
+}
+
+func (t *Set) Find(h Hash) (uint32, bool) {
+	return t.idxs.Find(h)
 }

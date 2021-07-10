@@ -4,20 +4,40 @@ import (
 	"testing"
 	"time"
 
+	"github.com/zeebo/assert"
 	"github.com/zeebo/pcg"
 )
 
 func TestTable(t *testing.T) {
 	tb := newTable()
+	const iters = 1e6
 
-	t.Log(tb.insert(Hash{1, 2}, 3))
-	t.Log(tb.insert(Hash{1, 2}, 4))
-	t.Log(tb.insert(Hash{4, 5}, 6))
-	t.Log(tb.insert(Hash{0, 2}, 7))
+	var rng pcg.T
+	for i := 0; i < iters; i++ {
+		_, ok := tb.Insert(Hash{Lo: rng.Uint64()}, uint32(i))
+		assert.That(t, !ok)
+	}
 
-	t.Log(tb.find(Hash{1, 2}))
-	t.Log(tb.find(Hash{2, 2}))
-	t.Log(tb.find(Hash{4, 5}))
+	rng = pcg.T{}
+	for i := 0; i < iters; i++ {
+		n, ok := tb.Find(Hash{Lo: rng.Uint64()})
+		assert.That(t, ok)
+		assert.Equal(t, i, n)
+	}
+
+	rng = pcg.T{}
+	for i := 0; i < iters; i++ {
+		n, ok := tb.Insert(Hash{Lo: rng.Uint64()}, uint32(i+1))
+		assert.That(t, ok)
+		assert.Equal(t, i, n)
+	}
+
+	rng = pcg.T{}
+	for i := 0; i < iters; i++ {
+		n, ok := tb.Find(Hash{Lo: rng.Uint64()})
+		assert.That(t, ok)
+		assert.Equal(t, i, n)
+	}
 }
 
 func BenchmarkTable(b *testing.B) {
@@ -32,7 +52,7 @@ func BenchmarkTable(b *testing.B) {
 			tb := newTable()
 
 			for j := 0; j < n; j++ {
-				tb.insert(Hash{Lo: rng.Uint64()}, uint32(j))
+				tb.Insert(Hash{Lo: rng.Uint64()}, uint32(j))
 			}
 		}
 

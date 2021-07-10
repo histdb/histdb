@@ -7,38 +7,23 @@ import (
 )
 
 const (
-	magicForEmpty     = 0b00000000
-	magicForReserved  = 0b01111110
-	magicForDirectHit = 0b10000000
-	magicForListEntry = 0b01000000
+	flagsEmpty    = 0b00000000
+	flagsReserved = 0b01111110
+	flagsHit      = 0b10000000
+	flagsList     = 0b01000000
 
-	bitsForDirectHit = 0b10000000
-	bitsForDistance  = 0b00111111
+	maskHit      = 0b10000000
+	maskDistance = 0b00111111
 
-	maxLoadFactor = 0.9375
+	maxLoadFactor = 0.95
 )
 
-var jumpDistances = [64]uint64{
+var jumpDistances = [64]uint16{
 	0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
-
 	21, 28, 36, 45, 55, 66, 78, 91, 105, 120, 136, 153, 171, 190, 210, 231,
 	253, 276, 300, 325, 351, 378, 406, 435, 465, 496, 528, 561, 595, 630,
 	666, 703, 741, 780, 820, 861, 903, 946, 990, 1035, 1081, 1128, 1176,
 	1225, 1275, 1326, 1378, 1431,
-
-	// 1485, 1540, 1596, 1653, 1711, 1770, 1830,
-	// 1891, 1953, 2016, 2080, 2145, 2211, 2278, 2346, 2415, 2485, 2556,
-
-	// 3741, 8385, 18915, 42486, 95703, 215496, 485605, 1091503, 2456436,
-	// 5529475, 12437578, 27986421, 62972253, 141700195, 318819126, 717314626,
-	// 1614000520, 3631437253, 8170829695, 18384318876, 41364501751,
-	// 93070021080, 209407709220, 471167588430, 1060127437995, 2385287281530,
-	// 5366895564381, 12075513791265, 27169907873235, 61132301007778,
-	// 137547673121001, 309482258302503, 696335090510256, 1566753939653640,
-	// 3525196427195653, 7931691866727775, 17846306747368716,
-	// 40154190394120111, 90346928493040500, 203280588949935750,
-	// 457381324898247375, 1029107980662394500, 2315492957028380766,
-	// 5209859150892887590,
 }
 
 func max(x, y uint64) uint64 {
@@ -48,251 +33,207 @@ func max(x, y uint64) uint64 {
 	return y
 }
 
-func np2(x uint64) uint64 {
-	return 1 << (uint(bits.Len64(x-1)) % 64)
-}
-
-func log2(x uint64) uint64 {
-	return uint64(bits.Len64(x)-1) % 64
-}
-
-type fibonacci struct{ shift uint64 }
-
-func (f fibonacci) index(hash uint64) uint64 {
-	return (11400714819323198485 * hash) >> (f.shift % 64)
-}
+func np2(x uint64) uint64  { return 1 << (uint(bits.Len64(x-1)) % 64) }
+func log2(x uint64) uint64 { return uint64(bits.Len64(x)-1) % 64 }
 
 type slot struct {
-	k Hash
+	k struct{ Hi, Lo uint64 }
 	v uint32
 	m uint8
 }
 
-const blockSize = 8
-
-type block struct {
-	// meta  [blockSize]byte
-	slots [blockSize]slot
+type slotIndex struct {
+	s *slot
+	i uint64
 }
 
-type blockIndex struct {
-	blk *block
-	idx uint64
-}
-
-func (bi blockIndex) next(t *table) blockIndex {
-	dist := bi.meta() & bitsForDistance
-	next := (bi.idx + jumpDistances[dist]) & t.slots
-	return t.getBlockIndex(next)
-}
-
-func (bi blockIndex) slot() slot     { return bi.blk.slots[bi.idx%blockSize] }
-func (bi blockIndex) setSlot(s slot) { bi.blk.slots[bi.idx%blockSize] = s }
-
-func (bi blockIndex) meta() byte     { return bi.blk.slots[bi.idx%blockSize].m }
-func (bi blockIndex) setMeta(m byte) { bi.blk.slots[bi.idx%blockSize].m = m }
-
-func (bi blockIndex) setNext(ji uint8) { bi.setMeta(bi.meta()&^bitsForDistance | ji) }
-func (bi blockIndex) hasNext() bool    { return bi.meta()&bitsForDistance != 0 }
+func (si slotIndex) slot() slot       { return *si.s }
+func (si slotIndex) setSlot(s slot)   { *si.s = s }
+func (si slotIndex) meta() uint8      { return si.s.m }
+func (si slotIndex) setMeta(m uint8)  { si.s.m = m }
+func (si slotIndex) setJump(ji uint8) { si.setMeta(si.meta()&^maskDistance | ji) }
+func (si slotIndex) hasJump() bool    { return si.meta()&maskDistance != 0 }
+func (si slotIndex) jump() uint8      { return si.meta() & maskDistance }
 
 type table struct {
-	blocks []block
-	slots  uint64
-	fib    fibonacci
-	eles   int
+	slots []slot
+	mask  uint64
+	shift uint64
+	eles  int
 }
 
-var emptyBlocks = []block{{}}
+var emptySlots = []slot{{}, {}}
 
 func newTable() *table {
 	return &table{
-		blocks: emptyBlocks,
-		fib:    fibonacci{shift: 63},
+		slots: emptySlots,
+		shift: 63,
 	}
 }
 
-func (t *table) size() uint64 {
+func (t *table) Size() uint64 {
 	if t == nil {
 		return 0
 	}
-	return uint64(unsafe.Sizeof(block{})) * uint64(len(t.blocks))
+	return uint64(unsafe.Sizeof(slot{})) * uint64(len(t.slots))
 }
 
-func (t *table) find(k Hash) (uint32, bool) {
-	idx := t.fib.index(k.Lo)
-	bi := t.getBlockIndex(idx)
-	meta := bi.meta()
+func (t *table) getSlotIndex(i uint64) slotIndex {
+	return slotIndex{
+		s: &t.slots[i],
+		i: i,
+	}
+}
 
-	if meta&bitsForDirectHit != magicForDirectHit {
+func (t *table) next(si slotIndex, ji uint8) slotIndex {
+	next := (si.i + uint64(jumpDistances[ji])) & t.mask
+	return t.getSlotIndex(next)
+}
+
+func (t *table) index(k Hash) uint64 {
+	return (11400714819323198485 * (k.Lo + k.Hi)) >> (t.shift % 64)
+}
+
+func (t *table) Find(k Hash) (uint32, bool) {
+	si := t.getSlotIndex(t.index(k))
+	if si.meta()&maskHit != flagsHit {
 		return 0, false
 	}
-
 	for {
-		if s := bi.slot(); s.k == k {
+		if s := si.slot(); s.k == k {
 			return s.v, true
 		}
-
-		next := meta & bitsForDistance
-		if next == 0 {
+		ji := si.jump()
+		if ji == 0 {
 			return 0, false
 		}
-		idx = (idx + jumpDistances[next]) & t.slots
-
-		bi = t.getBlockIndex(idx)
-		meta = bi.meta()
+		si = t.next(si, ji)
 	}
 }
 
-func (t *table) insert(k Hash, v uint32) (uint32, bool) {
-	idx := t.fib.index(k.Lo)
-	bi := t.getBlockIndex(idx)
-	meta := bi.meta()
-
-	if meta&bitsForDirectHit != magicForDirectHit {
-		return t.insertDirectHit(bi, k, v)
+func (t *table) Insert(k Hash, v uint32) (uint32, bool) {
+	si := t.getSlotIndex(t.index(k))
+	if si.meta()&maskHit != flagsHit {
+		return t.insertDirectHit(si, k, v)
 	}
-
 	for {
-		if s := bi.slot(); s.k == k {
+		if s := si.slot(); s.k == k {
 			return s.v, true
 		}
-
-		next := meta & bitsForDistance
-		if next == 0 {
-			return t.insertNew(bi, k, v)
+		ji := si.jump()
+		if ji == 0 {
+			return t.insertNew(si, k, v)
 		}
-		idx = (idx + jumpDistances[next]) & t.slots
-
-		bi = t.getBlockIndex(idx)
-		meta = bi.meta()
+		si = t.next(si, ji)
 	}
 }
 
-func (t *table) insertDirectHit(bi blockIndex, k Hash, v uint32) (uint32, bool) {
+func (t *table) insertDirectHit(si slotIndex, k Hash, v uint32) (uint32, bool) {
 	if t.isFull() {
 		t.grow()
-		return t.insert(k, v)
+		return t.Insert(k, v)
 	}
 
-	if bi.meta() == magicForEmpty {
-		bi.setSlot(slot{k, v, magicForDirectHit})
-		// bi.setMeta(magicForDirectHit)
+	if si.meta() == flagsEmpty {
+		si.setSlot(slot{k, v, flagsHit})
 		t.eles++
 		return v, false
 	}
 
-	parent := t.findParent(bi)
+	parent := t.findParent(si)
 	free, ji := t.findFree(parent)
 	if ji == 0 {
 		t.grow()
-		return t.insert(k, v)
+		return t.Insert(k, v)
 	}
 
-	for it := bi; ; {
+	for it := si; ; {
 		free.setSlot(it.slot())
-		parent.setNext(ji)
-		free.setMeta(magicForListEntry)
+		parent.setJump(ji)
+		free.setMeta(flagsList)
 
-		if !it.hasNext() {
-			it.setMeta(magicForEmpty)
+		if !it.hasJump() {
+			it.setMeta(flagsEmpty)
 			break
 		}
 
-		next := it.next(t)
-		it.setMeta(magicForEmpty)
-		bi.setMeta(magicForReserved)
+		next := t.next(it, it.jump())
+		it.setMeta(flagsEmpty)
+		si.setMeta(flagsReserved)
 		it, parent = next, free
 
 		free, ji = t.findFree(free)
 		if ji == 0 {
 			t.grow()
-			return t.insert(k, v)
+			return t.Insert(k, v)
 		}
 	}
 
-	bi.setSlot(slot{k, v, magicForDirectHit})
-	// bi.setMeta(magicForDirectHit)
+	si.setSlot(slot{k, v, flagsHit})
 	t.eles++
 	return v, false
 }
 
-func (t *table) insertNew(bi blockIndex, k Hash, v uint32) (uint32, bool) {
+func (t *table) insertNew(si slotIndex, k Hash, v uint32) (uint32, bool) {
 	if t.isFull() {
 		t.grow()
-		return t.insert(k, v)
+		return t.Insert(k, v)
 	}
 
-	free, ji := t.findFree(bi)
+	free, ji := t.findFree(si)
 	if ji == 0 {
 		t.grow()
-		return t.insert(k, v)
+		return t.Insert(k, v)
 	}
 
-	free.setSlot(slot{k, v, magicForListEntry})
-	// free.setMeta(magicForListEntry)
-	bi.setNext(ji)
+	free.setSlot(slot{k, v, flagsList})
+	si.setJump(ji)
 	t.eles++
 	return v, false
-}
-
-func (t *table) getBlockIndex(idx uint64) blockIndex {
-	blk := &t.blocks[idx/blockSize]
-	return blockIndex{blk, idx}
 }
 
 func (t *table) isFull() bool {
-	return t.slots == 0 || t.eles+1 > int(float64(t.slots+1)*maxLoadFactor)
+	return t.mask == 0 || t.eles+1 > int(float64(t.mask+1)*maxLoadFactor)
 }
 
-func (t *table) findDirectHit(bi blockIndex) blockIndex {
-	return t.getBlockIndex(t.fib.index(bi.slot().k.Lo))
+func (t *table) findDirectHit(si slotIndex) slotIndex {
+	return t.getSlotIndex(t.index(si.slot().k))
 }
 
-func (t *table) findParent(bi blockIndex) blockIndex {
-	parent := t.findDirectHit(bi)
+func (t *table) findParent(si slotIndex) slotIndex {
+	parent := t.findDirectHit(si)
 	for {
-		next := parent.next(t)
-		if next == bi {
+		next := t.next(parent, parent.jump())
+		if next == si {
 			return parent
 		}
 		parent = next
 	}
 }
 
-func (t *table) findFree(bi blockIndex) (blockIndex, uint8) {
-	for ji := uint8(1); ji < uint8(len(jumpDistances))-1; ji++ {
-		idx := (bi.idx + jumpDistances[ji]) & t.slots
-		bi := t.getBlockIndex(idx)
-		if bi.meta() == magicForEmpty {
-			return bi, ji
+func (t *table) findFree(si slotIndex) (slotIndex, uint8) {
+	for ji := uint8(1); ji < uint8(len(jumpDistances)); ji++ {
+		if si := t.next(si, ji); si.meta() == flagsEmpty {
+			return si, ji
 		}
 	}
-	return blockIndex{}, 0
+	return slotIndex{}, 0
 }
 
 func (t *table) grow() {
-	nitems := max(10, 2*t.slots)
-	nitems = max(nitems, uint64(math.Ceil(float64(t.eles)/maxLoadFactor)))
-	nitems = max(2, np2(nitems))
+	nslots := max(10, 2*t.mask)
+	nslots = max(nslots, uint64(math.Ceil(float64(t.eles)/maxLoadFactor)))
+	nslots = max(128, np2(nslots))
 
-	nblocks := nitems/blockSize + 1
-	if nitems%blockSize != 0 {
-		nblocks++
-	}
-	oldBlocks := t.blocks
+	slots := t.slots
+	t.shift = 64 - log2(nslots)
+	t.slots = make([]slot, nslots)
+	t.mask = nslots - 1
 
-	t.fib.shift = 64 - log2(nitems)
-	t.blocks = make([]block, nblocks)
-	t.slots = nitems - 1
-
-	for i := range oldBlocks {
-		blk := &oldBlocks[i]
-		for j := 0; j < blockSize; j++ {
-			meta := blk.slots[j].m
-			if meta != magicForEmpty && meta != magicForReserved {
-				s := blk.slots[j]
-				t.insert(s.k, s.v)
-			}
+	for i := range slots {
+		s := &slots[i]
+		if m := s.m; m != flagsEmpty && m != flagsReserved {
+			t.Insert(s.k, s.v)
 		}
 	}
 }
