@@ -1,7 +1,6 @@
 package leveln
 
 import (
-	"encoding/binary"
 	"testing"
 
 	"github.com/zeebo/assert"
@@ -27,9 +26,7 @@ func TestLevelNSeek(t *testing.T) {
 	lnw.Init(keys, values)
 
 	for i := 0; i < count; i++ {
-		var key histdb.Key
-		binary.BigEndian.PutUint64(key[0:8], uint64(i)/8)
-		binary.BigEndian.PutUint32(key[16:20], uint32(i))
+		key := testhelp.KeyFrom(uint64(i)/8, 0, uint32(i))
 		assert.NoError(t, lnw.Append(key, []byte{byte(i >> 8), byte(i)}))
 	}
 	assert.NoError(t, lnw.Finish())
@@ -39,9 +36,7 @@ func TestLevelNSeek(t *testing.T) {
 
 	it := lnr.Iterator()
 	for i := 0; i < count; i++ {
-		var key histdb.Key
-		binary.BigEndian.PutUint64(key[0:8], uint64(i)/8)
-		binary.BigEndian.PutUint32(key[16:20], uint32(i))
+		key := testhelp.KeyFrom(uint64(i)/8, 0, uint32(i))
 
 		assert.That(t, it.Seek(key))
 		assert.Equal(t, key, it.Key())
@@ -49,9 +44,8 @@ func TestLevelNSeek(t *testing.T) {
 		assert.Equal(t, it.Value()[1], byte(i))
 
 		if i%8 == 7 && i != count-1 {
-			binary.BigEndian.PutUint32(key[16:20], uint32(i+1))
-			assert.That(t, it.Seek(key))
-			binary.BigEndian.PutUint64(key[0:8], uint64(i+1)/8)
+			assert.That(t, it.Seek(testhelp.KeyFrom(uint64(i)/8, 0, uint32(i+1))))
+			key := testhelp.KeyFrom(uint64(i+1)/8, 0, uint32(i+1))
 			assert.Equal(t, key.String(), it.Key().String())
 			assert.Equal(t, it.Value()[0], byte((i+1)>>8))
 			assert.Equal(t, it.Value()[1], byte(i+1))
@@ -123,14 +117,11 @@ func BenchmarkLevelNReader(b *testing.B) {
 		lnw.Init(keys, values)
 
 		for i := 0; i < n; i++ {
-			var key histdb.Key
-			binary.BigEndian.PutUint64(key[0:8], uint64(i)/512)
-			binary.BigEndian.PutUint32(key[16:20], uint32(i))
+			key := testhelp.KeyFrom(uint64(i)/512, 0, uint32(i))
 			assert.NoError(b, lnw.Append(key, nil))
 		}
 		assert.NoError(b, lnw.Finish())
 
-		var key histdb.Key
 		var lnr Reader
 		lnr.Init(keys, values)
 		itr := lnr.Iterator()
@@ -140,8 +131,7 @@ func BenchmarkLevelNReader(b *testing.B) {
 
 		for i := 0; i < b.N; i++ {
 			n := rng.Uint32n(uint32(n))
-			binary.BigEndian.PutUint64(key[0:8], uint64(n)/512)
-			binary.BigEndian.PutUint32(key[16:20], uint32(n))
+			key := testhelp.KeyFrom(uint64(n)/512, 0, uint32(n))
 			itr.Seek(key)
 		}
 	}

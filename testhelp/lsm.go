@@ -1,8 +1,6 @@
 package testhelp
 
 import (
-	"encoding/binary"
-
 	"github.com/zeebo/pcg"
 
 	"github.com/histdb/histdb"
@@ -16,9 +14,14 @@ func Key() (key histdb.Key) {
 	return key
 }
 
-func KeyN(n uint32) (key histdb.Key) {
-	binary.BigEndian.PutUint32(key[0:4], n)
-	return key
+func KeyFrom(th uint64, mh uint64, ts uint32) histdb.Key {
+	return histdb.Key{
+		byte(th >> 0x38), byte(th >> 0x30), byte(th >> 0x28), byte(th >> 0x20),
+		byte(th >> 0x18), byte(th >> 0x10), byte(th >> 0x08), byte(th),
+		byte(mh >> 0x38), byte(mh >> 0x30), byte(mh >> 0x28), byte(mh >> 0x20),
+		byte(mh >> 0x18), byte(mh >> 0x10), byte(mh >> 0x08), byte(mh),
+		byte(ts >> 0x18), byte(ts >> 0x10), byte(ts >> 0x08), byte(ts),
+	}
 }
 
 func Timestamp() uint32 {

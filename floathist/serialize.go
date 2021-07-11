@@ -9,6 +9,15 @@ import (
 	"github.com/histdb/histdb/varint"
 )
 
+// TODO:
+//   1. instead of l0 bitmaps for serialization, each l2 is indexed by 8 bits
+//      this is almost certainly a win.
+//   2. instead of l2 being bitmap + non-zero varints, maybe it could be
+//      64*2bits of lengths, and that many bytes? the lengths could mean like
+//      {0, 1, 2, 8} so we don't write zeros, or {1, 2, 4, 8} which would
+//      make a l2 at least 80 bytes.
+//   3. maybe some other l2 serialization options?
+
 func (h *Histogram) Serialize(mem []byte) []byte {
 	le := binary.LittleEndian
 
