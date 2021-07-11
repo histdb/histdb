@@ -12,54 +12,52 @@ import (
 
 // TODO: we can have an LRU cache of common bitmaps based on tag hashes. for example
 // we always compute the tag_to_metrics intersection bitmap. if we do it smart, we can
-// keep track of the "path" along the way.
+// keep track of the "path" along the way. this would make subsequent queries that
+// have the same prefix faster.
 
 type T struct {
 	fixed bool
 	card  int
 
-	metric_names *petname.Set
-	tag_names    *petname.Strings
-	tkey_names   *petname.Strings
-
-	// metrics *roaring.Bitmap
-	tkeys *roaring.Bitmap
+	metric_names *petname.T
+	tag_names    *petname.T
+	tkey_names   *petname.T
 
 	tag_to_metrics  []*roaring.Bitmap
 	tag_to_tkeys    []*roaring.Bitmap
 	tag_to_tags     []*roaring.Bitmap
 	tkey_to_metrics []*roaring.Bitmap
 	tkey_to_tkeys   []*roaring.Bitmap
-	tkey_to_tags    []*roaring.Bitmap
-	tkey_to_tvals   []*roaring.Bitmap
+	tkey_to_tags    []*roaring.Bitmap // all other tags associated with tkey
+	tkey_to_tvals   []*roaring.Bitmap // only tags with tkey as the tag key
 
 	query_pool sync.Pool
 }
 
 func New() *T {
 	return &T{
-		metric_names: petname.NewSet(),
-		tag_names:    petname.NewStrings(),
-		tkey_names:   petname.NewStrings(),
-
-		// metrics: roaring.New(),
-		tkeys: roaring.New(),
+		metric_names: petname.New(),
+		tag_names:    petname.New(),
+		tkey_names:   petname.New(),
 
 		query_pool: sync.Pool{New: func() interface{} { return roaring.New() }},
 	}
 }
 
-func (t *T) find(v string, names *petname.Strings) (uint32, bool) {
+func (t *T) find(v string, names *petname.T) (uint32, bool) {
 	return names.Find(petname.Hash(xxh3.HashString128(v)))
 }
 
 func (t *T) replaceBitmap(m *roaring.Bitmap) {
-	m.Clear()
 	t.query_pool.Put(m)
 }
 
 func (t *T) acquireBitmap() *roaring.Bitmap {
-	return t.query_pool.Get().(*roaring.Bitmap)
+	bm := t.query_pool.Get().(*roaring.Bitmap)
+	if !bm.IsEmpty() {
+		bm.Clear()
+	}
+	return bm
 }
 
 func sliceSize(m []*roaring.Bitmap) (n uint64) {
@@ -74,7 +72,6 @@ func (t *T) Size() uint64 {
 		t.metric_names.Size() +
 		t.tag_names.Size() +
 		t.tkey_names.Size() +
-		t.tkeys.GetSizeInBytes() +
 		sliceSize(t.tag_to_metrics) +
 		sliceSize(t.tag_to_tkeys) +
 		sliceSize(t.tag_to_tags) +
@@ -86,27 +83,20 @@ func (t *T) Size() uint64 {
 }
 
 func (t *T) Fix() {
-	fix := func(bm *roaring.Bitmap) {
-		bm.RunOptimize()
-	}
-
-	fixAll := func(bms []*roaring.Bitmap) {
+	fix := func(bms []*roaring.Bitmap) {
 		for _, bm := range bms {
-			fix(bm)
+			bm.RunOptimize()
 		}
 	}
 
-	fix(t.tkeys)
+	fix(t.tag_to_metrics)
+	fix(t.tag_to_tkeys)
+	fix(t.tag_to_tags)
+	fix(t.tkey_to_metrics)
+	fix(t.tkey_to_tkeys)
+	fix(t.tkey_to_tags)
+	fix(t.tkey_to_tvals)
 
-	fixAll(t.tag_to_metrics)
-	fixAll(t.tag_to_tkeys)
-	fixAll(t.tag_to_tags)
-	fixAll(t.tkey_to_metrics)
-	fixAll(t.tkey_to_tkeys)
-	fixAll(t.tkey_to_tags)
-	fixAll(t.tkey_to_tvals)
-
-	// t.metric_names.Fix()
 	t.metric_names = nil
 
 	t.fixed = true
@@ -159,15 +149,15 @@ func (t *T) Add(metric string) bool {
 			continue
 		}
 
-		tagh := xxh3.HashString128(tag)
-		tagi := t.tag_names.Put(petname.Hash(tagh), tag)
+		tagh := petname.Hash(xxh3.HashString128(tag))
+		tagi, _ := t.tag_names.Put(tagh, tag)
 
 		var ok bool
 		tagis, tagus, ok = addUint32Set(tagis, tagus, tagi)
 
 		if ok {
-			tkeyh := xxh3.HashString128(tkey)
-			tkeyi := t.tkey_names.Put(petname.Hash(tkeyh), tkey)
+			tkeyh := petname.Hash(xxh3.HashString128(tkey))
+			tkeyi, _ := t.tkey_names.Put(tkeyh, tkey)
 			tkeyis = append(tkeyis, tkeyi)
 
 			mhash.Hi += tagh.Hi
@@ -179,66 +169,27 @@ func (t *T) Add(metric string) bool {
 	// yowzer. now update all the things.
 	//
 
-	// metrici, ok := t.metric_names.Put(mhash, tagis)
-	metrici, ok := t.metric_names.Put(mhash)
+	metrici, ok := t.metric_names.Put(mhash, "")
 	if ok {
 		return false
 	}
+	t.card++
 
 	for i := range tagis {
-		// tagis[i] should know about metric
-		getBitmap(&t.tag_to_metrics, tagis[i]).Add(metrici)
-
-		// tagis[i] should know about every other tkeyis
-		{
-			bm := getBitmap(&t.tag_to_tkeys, tagis[i])
-			for j := range tkeyis {
-				if tkeyis[i] != tkeyis[j] {
-					bm.Add(tkeyis[j])
-				}
-			}
-		}
-
-		// tagis[i] should know about every other tagis
-		{
-			bm := getBitmap(&t.tag_to_tags, tagis[i])
-			for j := range tagis {
-				if tagis[i] != tagis[j] {
-					bm.Add(tagis[j])
-				}
-			}
-		}
-
-		// tkeys[i] should know about every other tkeyis
-		{
-			bm := getBitmap(&t.tkey_to_tkeys, tkeyis[i])
-			for j := range tkeyis {
-				if tkeyis[i] != tkeyis[j] {
-					bm.Add(tkeyis[j])
-				}
-			}
-		}
-
-		// tkeys[i] should know about every other tagis[i]
-		getBitmap(&t.tkey_to_tags, tkeyis[i]).AddMany(tagis)
-
-		// tkeys[i] should know about tagis[i]
-		getBitmap(&t.tkey_to_tvals, tkeyis[i]).Add(tagis[i])
-
-		// tkeys[i] should know about metric
-		getBitmap(&t.tkey_to_metrics, tkeyis[i]).Add(metrici)
+		getBitmap(&t.tag_to_metrics, tagis[i]).Add(metrici)    // tagis[i] should know about metric
+		getBitmap(&t.tag_to_tkeys, tagis[i]).AddMany(tkeyis)   // tagis[i] should know about every other tkeyis
+		getBitmap(&t.tag_to_tags, tagis[i]).AddMany(tagis)     // tagis[i] should know about every other tagis
+		getBitmap(&t.tkey_to_tkeys, tkeyis[i]).AddMany(tkeyis) // tkeys[i] should know about every other tkeyis
+		getBitmap(&t.tkey_to_tags, tkeyis[i]).AddMany(tagis)   // tkeys[i] should know about every other tagis[i]
+		getBitmap(&t.tkey_to_tvals, tkeyis[i]).Add(tagis[i])   // tkeys[i] should know about tagis[i]
+		getBitmap(&t.tkey_to_metrics, tkeyis[i]).Add(metrici)  // tkeys[i] should know about metric
 	}
-
-	// record to all of our base bitmaps
-	t.tkeys.AddMany(tkeyis)
-	t.card++
 
 	return true
 }
 
 func (t *T) Count(input string) int {
-	metrics := t.acquireBitmap()
-	defer t.replaceBitmap(metrics)
+	var metrics *roaring.Bitmap
 
 	for rest := input; len(rest) > 0; {
 		var tag, tkey string
@@ -264,6 +215,11 @@ func (t *T) Count(input string) int {
 			bm = t.tag_to_metrics[name]
 		}
 
+		if metrics == nil {
+			metrics = t.acquireBitmap()
+			defer t.replaceBitmap(metrics)
+		}
+
 		if metrics.IsEmpty() {
 			metrics.Or(bm)
 		} else {
@@ -276,75 +232,12 @@ func (t *T) Count(input string) int {
 	}
 
 	// the only way it's here and still empty is if the input query was empty
-	if metrics.IsEmpty() {
+	if metrics == nil || metrics.IsEmpty() {
 		return t.card
 	}
 
 	return int(metrics.GetCardinality())
 }
-
-// func (t *T) Metrics(input string, buf []byte, cb func(buf []byte) bool) {
-// 	metrics := t.acquireBitmap()
-// 	defer t.replaceBitmap(metrics)
-
-// 	for rest := input; len(rest) > 0; {
-// 		var tag, tkey string
-// 		var isKey bool
-// 		var bm *roaring.Bitmap
-
-// 		tkey, tag, isKey, rest = popTag(rest)
-// 		if len(tag) == 0 {
-// 			continue
-// 		}
-
-// 		if isKey {
-// 			name, ok := t.find(tkey, t.tkey_names)
-// 			if !ok {
-// 				return
-// 			}
-// 			bm = t.tkey_to_metrics[name]
-// 		} else {
-// 			name, ok := t.find(tag, t.tag_names)
-// 			if !ok {
-// 				return
-// 			}
-// 			bm = t.tag_to_metrics[name]
-// 		}
-
-// 		if metrics.IsEmpty() {
-// 			metrics.Or(bm)
-// 		} else {
-// 			metrics.And(bm)
-// 		}
-
-// 		if metrics.IsEmpty() {
-// 			return
-// 		}
-// 	}
-
-// 	// the only way it's here and still empty is if the input query was empty
-// 	if metrics.IsEmpty() {
-// 		// TODO: we know the set of all metrics is contiguous, so
-// 		// just loop
-// 		return
-// 	}
-
-// 	nbuf := make([]uint32, 0, 8)
-
-// 	metrics.Iterate(func(name uint32) bool {
-// 		nbuf = t.metric_names.Get(name, nbuf[:0])
-
-// 		buf = buf[:0]
-// 		for i, part := range nbuf {
-// 			if i != 0 {
-// 				buf = append(buf, ',')
-// 			}
-// 			buf = append(buf, t.tag_names.Get(part)...)
-// 		}
-
-// 		return cb(buf)
-// 	})
-// }
 
 func (t *T) TagKeys(input string, cb func(result string) bool) {
 	tkeys := t.acquireBitmap()
@@ -354,22 +247,25 @@ func (t *T) TagKeys(input string, cb func(result string) bool) {
 	defer t.replaceBitmap(metrics)
 
 	for rest := input; len(rest) > 0; {
-		var tag, tkey string
-		var isKey bool
-		var bmk, bmm *roaring.Bitmap
+		var (
+			tag, tkey string
+			isKey     bool
+			bmk, bmm  *roaring.Bitmap
+		)
 
 		tkey, tag, isKey, rest = popTag(rest)
 		if len(tag) == 0 {
 			continue
 		}
 
+		tkeyn, ok := t.find(tkey, t.tkey_names)
+		if !ok {
+			return
+		}
+
 		if isKey {
-			name, ok := t.find(tkey, t.tkey_names)
-			if !ok {
-				return
-			}
-			bmk = t.tkey_to_tkeys[name]
-			bmm = t.tkey_to_metrics[name]
+			bmk = t.tkey_to_tkeys[tkeyn]
+			bmm = t.tkey_to_metrics[tkeyn]
 		} else {
 			name, ok := t.find(tag, t.tag_names)
 			if !ok {
@@ -387,6 +283,8 @@ func (t *T) TagKeys(input string, cb func(result string) bool) {
 			metrics.And(bmm)
 		}
 
+		tkeys.Remove(tkeyn)
+
 		if tkeys.IsEmpty() || metrics.IsEmpty() {
 			return
 		}
@@ -394,8 +292,12 @@ func (t *T) TagKeys(input string, cb func(result string) bool) {
 
 	// the only way it's here and still empty is if the input query was empty
 	if metrics.IsEmpty() {
-		tkeys = t.tkeys
-		metrics = nil
+		for i := 0; i < t.tkey_names.Len(); i++ {
+			if !cb(t.tkey_names.Get(uint32(i))) {
+				return
+			}
+		}
+		return
 	}
 
 	tkeys.Iterate(func(name uint32) bool {

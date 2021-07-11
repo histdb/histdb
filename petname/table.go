@@ -15,7 +15,7 @@ const (
 	maskHit      = 0b10000000
 	maskDistance = 0b00111111
 
-	maxLoadFactor = 0.95
+	maxLoadFactor = 0.80
 )
 
 var jumpDistances = [64]uint16{
@@ -71,11 +71,17 @@ func newTable() *table {
 	}
 }
 
+func (t *table) Len() int { return t.eles }
+
 func (t *table) Size() uint64 {
 	if t == nil {
 		return 0
 	}
 	return uint64(unsafe.Sizeof(slot{})) * uint64(len(t.slots))
+}
+
+func (t *table) Load() float64 {
+	return float64(t.eles) / float64(t.mask+1)
 }
 
 func (t *table) getSlotIndex(i uint64) slotIndex {
@@ -229,6 +235,7 @@ func (t *table) grow() {
 	t.shift = 64 - log2(nslots)
 	t.slots = make([]slot, nslots)
 	t.mask = nslots - 1
+	t.eles = 0
 
 	for i := range slots {
 		s := &slots[i]

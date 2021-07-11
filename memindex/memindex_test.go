@@ -57,32 +57,6 @@ func TestMemindex(t *testing.T) {
 		strings = strings[:0]
 		return func(x string) bool { strings = append(strings, x); return true }
 	}
-	// collectBytes := func() func([]byte) bool {
-	// 	strings = strings[:0]
-	// 	return func(x []byte) bool { strings = append(strings, string(x)); return true }
-	// }
-
-	// t.Run("Metrics", func(t *testing.T) {
-	// 	idx := New()
-
-	// 	assert.That(t, idx.Add("k0=v0,k1=v1,k2=v2"))
-	// 	assert.That(t, idx.Add("k0=v1,k1=v1,k2=v2"))
-
-	// 	idx.Metrics("k0=v0", nil, collectBytes())
-	// 	assert.DeepEqual(t, strings, []string{"k0=v0,k1=v1,k2=v2"})
-
-	// 	idx.Metrics("k0=v0,k1=v0", nil, collectBytes())
-	// 	assert.DeepEqual(t, strings, []string{})
-
-	// 	idx.Metrics("k0", nil, collectBytes())
-	// 	assert.DeepEqual(t, strings, []string{
-	// 		"k0=v0,k1=v1,k2=v2",
-	// 		"k0=v1,k1=v1,k2=v2",
-	// 	})
-
-	// 	idx.Metrics("k0=", nil, collectBytes())
-	// 	assert.DeepEqual(t, strings, []string{})
-	// })
 
 	t.Run("TagKeys", func(t *testing.T) {
 		idx := New()
@@ -143,20 +117,6 @@ func BenchmarkMemindex(b *testing.B) {
 	query := "app=storagenode-release,inst=12XzWDW7Nb496enKo4epRmpQamMe3cw7G3TUuhPrkoqoLb76rHK"
 	tkey := "name"
 
-	// var query, tkey string
-	// idx.Metrics("", nil, func(b []byte) (ok bool) {
-	// 	ok = query == ""
-	// 	query = string(b)
-	// 	tkey, _, _ = popTag(query)
-	// 	return ok
-	// })
-
-	// b.Log(query)
-	// idx.TagKeys(query, func(x string) bool {
-	// 	b.Log(x)
-	// 	return true
-	// })
-
 	b.Run("Count", func(b *testing.B) {
 		b.ReportAllocs()
 		count := 0
@@ -167,18 +127,6 @@ func BenchmarkMemindex(b *testing.B) {
 		b.ReportMetric(float64(count)/time.Since(start).Seconds()/1e6, "Mm/sec")
 		b.ReportMetric(float64(count)/float64(b.N), "m/query")
 	})
-
-	// b.Run("Metrics", func(b *testing.B) {
-	// 	buf := make([]byte, 0, 64)
-	// 	b.ReportAllocs()
-	// 	count := 0
-	// 	start := time.Now()
-	// 	for i := 0; i < b.N; i++ {
-	// 		idx.Metrics(query, buf, func([]byte) bool { count++; return true })
-	// 	}
-	// 	b.ReportMetric(float64(count)/time.Since(start).Seconds()/1e6, "Mm/sec")
-	// 	b.ReportMetric(float64(count)/float64(b.N), "m/query")
-	// })
 
 	b.Run("TagKeys", func(b *testing.B) {
 		b.ReportAllocs()
@@ -192,11 +140,6 @@ func BenchmarkMemindex(b *testing.B) {
 	})
 
 	b.Run("TagValues", func(b *testing.B) {
-		// fh, _ := os.Create("tv-cpu.pprof")
-		// defer fh.Close()
-		// _ = pprof.StartCPUProfile(fh)
-		// defer pprof.StopCPUProfile()
-
 		b.ReportAllocs()
 		count := 0
 		start := time.Now()
@@ -247,13 +190,9 @@ func dumpSizeStats(t testing.TB, idx *T) {
 		t.Log(name+":", "len:", len(x), "size:", ss(x), "card:", cs(x))
 	}
 
-	// t.Log("metric_names:", "size:", idx.metric_names.Size(), "len:", idx.metric_names.Len())
+	t.Log("metric_names:", "size:", idx.metric_names.Size(), "len:", idx.metric_names.Len())
 	t.Log("tag_names:", "size:", idx.tag_names.Size(), "len:", idx.tag_names.Len())
 	t.Log("tkey_names:", "size:", idx.tkey_names.Size(), "len:", idx.tkey_names.Len())
-
-	// t.Log("metrics:", "size:", idx.metrics.GetSizeInBytes(), "card:", idx.metrics.GetCardinality())
-	// t.Log("tags:", "size:", idx.tags.GetSizeInBytes(), "card:", idx.tags.GetCardinality())
-	t.Log("keys:", "size:", idx.tkeys.GetSizeInBytes(), "card:", idx.tkeys.GetCardinality())
 
 	dumpSlice("tag_to_metrics", idx.tag_to_metrics)
 	dumpSlice("tag_to_tkeys", idx.tag_to_tkeys)
@@ -267,7 +206,7 @@ func dumpSizeStats(t testing.TB, idx *T) {
 }
 
 func TestWhatever(t *testing.T) {
-	// t.SkipNow()
+	t.SkipNow()
 
 	idx := New()
 	loadLarge(idx)
@@ -295,10 +234,11 @@ func loadLarge(idx *T) {
 	lcount := 0
 
 	stats := func() {
+		msize := float64(idx.metric_names.Size())
 		size := float64(idx.Size())
 		card := idx.Count("")
 
-		fmt.Printf("Added (%-8d m) (%-8d um) | total (%0.2f%% unique) (%0.2f m/sec) (%0.2f um/sec) | recently (%0.2f%% unique) (%0.2f m/sec) (%0.2f um/sec) | (%0.2f MiB) (%0.2f b/m)\n",
+		fmt.Printf("Added (%-8d m) (%-8d um) | total (%0.2f%% unique) (%0.2f m/sec) (%0.2f um/sec) | recently (%0.2f%% unique) (%0.2f m/sec) (%0.2f um/sec) | (%0.2f MiB) (%0.2f b/m) | (%0.2f MiB) (%0.2f MiB) (%0.2f b/m)\n",
 			count,
 			card,
 
@@ -312,6 +252,10 @@ func loadLarge(idx *T) {
 
 			size/1024/1024,
 			size/float64(card),
+
+			msize/1024/1024,
+			(size-msize)/1024/1024,
+			(size-msize)/float64(card),
 		)
 
 		lstats = time.Now()
@@ -325,7 +269,7 @@ func loadLarge(idx *T) {
 		count++
 		if count%statEvery == 0 {
 			stats()
-			// if idx.Count("") >= 10000000 {
+			// if idx.Count("") >= 1e6 {
 			// 	break
 			// }
 		}
