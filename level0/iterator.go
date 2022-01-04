@@ -2,48 +2,68 @@ package level0
 
 import (
 	"encoding/binary"
+	"io"
+
+	"github.com/zeebo/errs/v2"
 
 	"github.com/histdb/histdb"
 	"github.com/histdb/histdb/filesystem"
 )
 
 type Iterator struct {
-	nvbuf []byte
-	nbuf  []byte // reference into nvbuf
-	vbuf  []byte // reference into nvbuf
-	idx   []byte // reference into idxb
-	err   error
+	ebuf []byte
+	nbuf []byte // reference into ebuf
+	vbuf []byte // reference into ebuf
+	idx  []byte // reference into idxb
+	idxf []byte // reference into idxb
+	err  error
 
 	fh   filesystem.Handle
-	hbuf [l0EntryHeaderSize]byte
+	keyb histdb.Key
 	idxb [l0IndexSize]byte
 }
 
 func (it *Iterator) Init(fh filesystem.Handle) {
 	it.fh = fh
-	it.err = nil
 	it.idx = nil
+	it.idxf = nil
+	it.err = nil
 }
 
 func (it *Iterator) readIndex() {
-	var n int
-	if n, it.err = it.fh.ReadAt(it.idxb[:], l0DataSize); it.err != nil {
+	n, err := it.fh.ReadAt(it.idxb[:], l0DataSize)
+	if err != nil && err != io.EOF {
+		it.err = errs.Wrap(err)
 		return
 	}
-	it.idx = it.idxb[:n]
+
+	split := uint(n) - 4
+	if split >= uint(len(it.idxb)) {
+		it.err = errs.Errorf("invalid checksum: index too short")
+		return
+	}
+
+	idx, sum := it.idxb[:split], it.idxb[split:]
+	if exp, got := checksum(idx), binary.BigEndian.Uint32(sum); exp != got {
+		it.err = errs.Errorf("invalid checksum: %08x != %08x", exp, got)
+		return
+	}
+
+	it.idxf = idx
+	it.idx = idx
 }
 
 func (it *Iterator) Next() bool {
 	if it.err != nil {
 		return false
-	} else if it.idx == nil {
+	} else if it.idxf == nil {
 		it.readIndex()
 	}
 	if len(it.idx) < 4 {
 		return false
 	}
 
-	offset := int64(binary.BigEndian.Uint16(it.idx[2:4])) * 32
+	offset := int64(binary.BigEndian.Uint16(it.idx[2:4])) * l0EntryAlignment
 	if offset == 0 {
 		return false
 	}
@@ -57,31 +77,54 @@ func (it *Iterator) Next() bool {
 }
 
 func (it *Iterator) readEntryHeader(offset int64) {
-	if _, it.err = it.fh.ReadAt(it.hbuf[:], offset); it.err != nil {
+	if len(it.ebuf) < l0EntryHeaderSize {
+		it.ebuf = make([]byte, 256)
+	}
+
+	if _, err := it.fh.ReadAt(it.ebuf, offset); err != nil && err != io.EOF {
+		it.err = errs.Wrap(err)
 		return
 	}
+
+	copy(it.keyb[:], it.ebuf[8:])
 }
 
-func (it *Iterator) readNameAndValue(offset int64) {
-	nlen := int64(binary.BigEndian.Uint32(it.hbuf[4:8]))
-	vlen := int64(binary.BigEndian.Uint32(it.hbuf[8:12]))
-	nvlen := nlen + vlen
-
-	if int64(cap(it.nvbuf)) < nvlen {
-		it.nvbuf = make([]byte, nvlen)
+func (it *Iterator) readNameAndValue(offset int64) int64 {
+	if it.err != nil {
+		return 0
+	} else if len(it.ebuf) < l0EntryHeaderSize {
+		it.err = errs.Errorf("invalid readNameAndValue")
+		return 0
 	}
 
-	it.nbuf = it.nvbuf[:nlen]
-	it.vbuf = it.nvbuf[nlen:]
+	nhead := int64(l0EntryHeaderSize)
+	ntail := nhead + int64(binary.BigEndian.Uint32(it.ebuf[0:4]))
+	etail := ntail + int64(binary.BigEndian.Uint32(it.ebuf[4:8]))
+	elen := etail + l0ChecksumSize
 
-	if _, it.err = it.fh.ReadAt(it.nvbuf[:nvlen], offset+l0EntryHeaderSize); it.err != nil {
-		return
+	if int64(len(it.ebuf)) < elen {
+		it.ebuf = make([]byte, elen)
+
+		if _, it.err = it.fh.ReadAt(it.ebuf, offset); it.err != nil {
+			it.err = errs.Wrap(it.err)
+			return 0
+		}
 	}
+
+	exp, got := checksum(it.ebuf[:etail]), binary.BigEndian.Uint32(it.ebuf[etail:elen])
+	if exp != got {
+		it.err = errs.Errorf("invalid entry checksum: %08x != %08x", exp, got)
+		return 0
+	}
+
+	it.nbuf = it.ebuf[nhead:ntail]
+	it.vbuf = it.ebuf[ntail:etail]
+
+	return (elen + l0EntryAlignmentMask) &^ l0EntryAlignmentMask
 }
 
-func (it *Iterator) Key() (k histdb.Key) {
-	copy(k[:], it.hbuf[12:12+len(k)])
-	return k
+func (it *Iterator) Key() histdb.Key {
+	return it.keyb
 }
 
 func (it *Iterator) Name() []byte {
@@ -99,27 +142,27 @@ func (it *Iterator) Err() error {
 func (it *Iterator) Seek(key histdb.Key) bool {
 	if it.err != nil {
 		return false
-	} else if it.idx == nil {
+	} else if it.idxf == nil {
 		it.readIndex()
 	}
-	if len(it.idxb) < 4 {
+	if len(it.idxf) < 4 {
 		return false
 	}
 
 	kp := binary.BigEndian.Uint16(key[0:2])
-	i, j := 0, len(it.idxb)/4
+	i, j := 0, len(it.idxf)/4
 	for i < j {
 		h := int(uint(i+j) / 2)
 
 		// check if we have a value there at all
-		offset := int64(binary.BigEndian.Uint16(it.idxb[4*h+2:])) * 32
+		offset := int64(binary.BigEndian.Uint16(it.idxf[4*h+2:])) * 32
 		if offset == 0 {
 			j = h
 			continue
 		}
 
 		// check if the prefix is definitely larger/smaller
-		kph := binary.BigEndian.Uint16(it.idxb[4*h:])
+		kph := binary.BigEndian.Uint16(it.idxf[4*h:])
 		if kph < kp {
 			i = h + 1
 			continue
@@ -142,6 +185,7 @@ func (it *Iterator) Seek(key histdb.Key) bool {
 		}
 	}
 
-	it.idx = it.idxb[4*i:]
+	it.idx = it.idxf[4*i:]
+
 	return it.Next()
 }

@@ -11,11 +11,13 @@ import (
 )
 
 const (
-	l0EntryHeaderSize = 1 << 5
-	l0EntryHeaderMask = l0EntryHeaderSize - 1
-	l0DataSize        = 2 << 20
-	l0IndexSize       = 256 << 10
-	l0BufferSize      = 64 << 10
+	l0EntryHeaderSize    = 28
+	l0EntryAlignment     = 32
+	l0EntryAlignmentMask = l0EntryAlignment - 1
+	l0ChecksumSize       = 4
+	l0DataSize           = 2 << 20
+	l0IndexSize          = 256 << 10
+	l0BufferSize         = 64 << 10
 
 	L0Size = l0DataSize + l0IndexSize
 )
@@ -28,13 +30,11 @@ type T struct {
 	pos  map[histdb.Key]idxBuf
 	err  error
 	done bool
+	ro   bool // readonly
 }
 
-func (t *T) Init(fh filesystem.Handle) error {
-	// TODO: should try to resume
-	// TODO: should check done
-
-	if err := fh.Fallocate(L0Size); err != nil {
+func (t *T) reset(fh filesystem.Handle) error {
+	if _, err := fh.Seek(0, io.SeekStart); err != nil {
 		return errs.Wrap(err)
 	}
 
@@ -54,6 +54,65 @@ func (t *T) Init(fh filesystem.Handle) error {
 		}
 	}
 
+	return nil
+}
+
+func (t *T) InitFinished(fh filesystem.Handle) error {
+	if err := t.reset(fh); err != nil {
+		return errs.Wrap(err)
+	}
+
+	t.ro = true
+	t.done = true
+
+	return nil
+}
+
+func (t *T) InitNew(fh filesystem.Handle) error {
+	if err := fh.Fallocate(l0DataSize); err != nil {
+		return errs.Wrap(err)
+	}
+
+	if err := t.reset(fh); err != nil {
+		return errs.Wrap(err)
+	}
+
+	return nil
+}
+
+func (t *T) InitCurrent(fh filesystem.Handle) error {
+	if err := t.reset(fh); err != nil {
+		return errs.Wrap(err)
+	}
+
+	t.ro = true
+
+	var it Iterator
+	it.Init(fh)
+
+	offset := int64(l0EntryAlignment)
+	for offset < l0DataSize {
+		it.readEntryHeader(offset)
+		if it.err != nil {
+			return errs.Wrap(it.err)
+		} else if it.Key().Zero() {
+			break
+		}
+
+		offset += it.readNameAndValue(offset)
+		if it.err != nil {
+			return errs.Wrap(it.err)
+		}
+
+		ok, err := t.Append(it.Key(), it.Name(), it.Value())
+		if !ok {
+			return errs.Errorf("unable to reopen L0 file from Append failure")
+		} else if err != nil {
+			return errs.Wrap(it.err)
+		}
+	}
+
+	t.ro = false
 	return nil
 }
 
@@ -77,44 +136,45 @@ func (t *T) Append(key histdb.Key, name, value []byte) (bool, error) {
 func (t *T) append(key histdb.Key, name, value []byte) (bool, error) {
 	if t.err != nil {
 		return false, t.err
-	} else if t.len&^31 != t.len {
+	} else if t.len&^l0EntryAlignmentMask != t.len {
 		return false, t.storeErr(errs.Errorf("unaligned corrupted length in level0 file"))
+	} else if t.done {
+		return false, errs.Errorf("attempt to append to done l0 file")
+	} else if key.Zero() {
+		return false, errs.Errorf("cannot append zero key")
 	}
 
 	// reserved header
 	if t.len == 0 {
-		t.buf = append(t.buf, make([]byte, l0EntryHeaderSize)...)
-		t.len = l0EntryHeaderSize
+		t.buf = append(t.buf, make([]byte, l0EntryAlignment)...)
+		t.len = l0EntryAlignment
 	}
 
-	length := l0EntryHeaderSize + uint32(len(name)) + uint32(len(value))
-	pad := ((length + l0EntryHeaderMask) &^ l0EntryHeaderMask) - length
+	length := l0EntryHeaderSize + uint32(len(name)) + uint32(len(value)) + l0ChecksumSize
+	padded := (length + l0EntryAlignmentMask) &^ l0EntryAlignmentMask
 
-	if t.len+length > l0DataSize {
+	if t.len+padded > l0DataSize {
 		return false, nil
 	}
 
-	t.buf = appendUint32(t.buf, length)
+	start := len(t.buf)
 	t.buf = appendUint32(t.buf, uint32(len(name)))
 	t.buf = appendUint32(t.buf, uint32(len(value)))
 	t.buf = append(t.buf, key[:]...)
 	t.buf = append(t.buf, name...)
 	t.buf = append(t.buf, value...)
-
-	// REVISIT: this checks if pad is non-negative for no reason (it's a uint32)
-	if pad > 0 {
-		t.buf = append(t.buf, make([]byte, pad)...)
-	}
+	t.buf = appendUint32(t.buf, checksum(t.buf[start:]))
+	t.buf = append(t.buf, make([]byte, padded-length)...)
 
 	ibuf, ok := t.pos[key]
 	if !ok {
 		t.keys = t.keys.Push(key)
 	}
 
-	ibuf.Append(uint16(t.len / l0EntryHeaderSize))
+	ibuf.Append(uint16(t.len / l0EntryAlignment))
 	t.pos[key] = ibuf
 
-	t.len += length + pad
+	t.len += padded
 	return true, nil
 }
 
@@ -124,8 +184,10 @@ func (t *T) storeErr(err error) error {
 }
 
 func (t *T) flush() error {
-	if _, err := t.fh.Write(t.buf); err != nil {
-		return t.storeErr(err)
+	if !t.ro {
+		if _, err := t.fh.Write(t.buf); err != nil {
+			return t.storeErr(err)
+		}
 	}
 
 	t.buf = t.buf[:0]
@@ -141,7 +203,11 @@ func (t *T) finish() error {
 		return t.storeErr(err)
 	}
 
-	buf := make([]byte, 0, len(t.keys)*4)
+	buf := t.buf[:0]
+	if cap(buf) < 4*len(t.keys)+4 {
+		buf = make([]byte, 0, 4*len(t.keys)+4)
+	}
+
 	var key histdb.Key
 	for len(t.keys) > 0 {
 		t.keys, key = t.keys.Pop()
@@ -156,8 +222,12 @@ func (t *T) finish() error {
 		}
 	}
 
-	if _, err := t.fh.Write(buf); err != nil {
-		return t.storeErr(err)
+	buf = appendUint32(buf, checksum(buf))
+
+	if !t.ro {
+		if _, err := t.fh.Write(buf); err != nil {
+			return t.storeErr(err)
+		}
 	}
 
 	t.done = true

@@ -103,4 +103,7 @@ func init() {
 	if b1 != b2 {
 		panic(fmt.Sprintf("not on little-endian machine: %x != %x", b1, b2))
 	}
+	if v := *(*uint64)(ptr(&b2[1])); v != 0x0102030405060708 {
+		panic(fmt.Sprintf("unaligned reads problem: %x", v))
+	}
 }

@@ -32,6 +32,8 @@ const (
 	timestampEnd   = timestampStart + TimestampSize
 )
 
+func (k Key) Zero() bool { return k == Key{} }
+
 func (k Key) String() string {
 	return fmt.Sprintf("(key %x %x %08x)", k.TagHash(), k.MetricHash(), k.Timestamp())
 }

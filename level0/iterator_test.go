@@ -22,7 +22,7 @@ func TestIterator(t *testing.T) {
 		assert.NoError(t, err)
 
 		for it.Next() {
-			assert.Equal(t, entries[0].Key, it.Key())
+			assert.Equal(t, entries[0].Key.String(), it.Key().String())
 			assert.Equal(t, string(entries[0].Value), string(it.Value()))
 			entries = entries[1:]
 		}
@@ -102,46 +102,51 @@ func TestIterator(t *testing.T) {
 }
 
 func BenchmarkIterator(b *testing.B) {
-	b.Run("Next", func(b *testing.B) {
-		fs, cleanup := testhelp.FS(b)
-		defer cleanup()
+	run := func(b *testing.B, nlen, vlen int) {
+		b.Run("Next", func(b *testing.B) {
+			fs, cleanup := testhelp.FS(b)
+			defer cleanup()
 
-		l0, entries, cleanup := Level0(b, fs, 0, 0)
-		defer cleanup()
-		var it Iterator
+			l0, entries, cleanup := Level0(b, fs, nlen, vlen)
+			defer cleanup()
+			var it Iterator
 
-		now := time.Now()
-		b.ReportAllocs()
-		b.ResetTimer()
+			now := time.Now()
+			b.ReportAllocs()
+			b.ResetTimer()
 
-		for i := 0; i < b.N; i++ {
-			it.Init(l0.fh)
-			for it.Next() {
-				_, _, _ = it.Key(), it.Name(), it.Value()
+			for i := 0; i < b.N; i++ {
+				it.Init(l0.fh)
+				for it.Next() {
+					_, _, _ = it.Key(), it.Name(), it.Value()
+				}
+				assert.NoError(b, it.Err())
 			}
-			assert.NoError(b, it.Err())
-		}
 
-		b.StopTimer()
-		b.ReportMetric(float64(b.N*len(entries))/time.Since(now).Seconds(), "keys/sec")
-		b.ReportMetric(float64(time.Since(now).Nanoseconds())/float64(len(entries)*b.N), "ns/key")
-	})
+			b.StopTimer()
+			b.ReportMetric(float64(b.N*len(entries))/time.Since(now).Seconds(), "keys/sec")
+			b.ReportMetric(float64(time.Since(now).Nanoseconds())/float64(len(entries)*b.N), "ns/key")
+		})
 
-	b.Run("Seek", func(b *testing.B) {
-		fs, cleanup := testhelp.FS(b)
-		defer cleanup()
+		b.Run("Seek", func(b *testing.B) {
+			fs, cleanup := testhelp.FS(b)
+			defer cleanup()
 
-		l0, _, cleanup := Level0(b, fs, 0, 0)
-		defer cleanup()
+			l0, _, cleanup := Level0(b, fs, nlen, vlen)
+			defer cleanup()
 
-		var it Iterator
-		it.Init(l0.fh)
+			var it Iterator
+			it.Init(l0.fh)
 
-		b.ReportAllocs()
-		b.ResetTimer()
+			b.ReportAllocs()
+			b.ResetTimer()
 
-		for i := 0; i < b.N; i++ {
-			it.Seek(testhelp.Key())
-		}
-	})
+			for i := 0; i < b.N; i++ {
+				it.Seek(testhelp.Key())
+			}
+		})
+	}
+
+	b.Run("Small", func(b *testing.B) { run(b, 0, 0) })
+	b.Run("Large", func(b *testing.B) { run(b, 32, 512) })
 }

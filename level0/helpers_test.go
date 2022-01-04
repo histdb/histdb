@@ -32,7 +32,7 @@ func Level0(tb testing.TB, fs *filesystem.T, nlen, vlen int) (*T, []Entry, func(
 	}()
 
 	var l0 T
-	assert.NoError(tb, l0.Init(fh))
+	assert.NoError(tb, l0.InitNew(fh))
 
 	var entries []Entry
 	for {
