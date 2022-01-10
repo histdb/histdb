@@ -18,8 +18,8 @@ func TestIterator(t *testing.T) {
 		l0, entries, cleanup := Level0(t, fs, 4, 4)
 		defer cleanup()
 
-		it, err := l0.Iterator()
-		assert.NoError(t, err)
+		var it Iterator
+		assert.NoError(t, l0.InitIterator(&it))
 
 		for it.Next() {
 			assert.Equal(t, entries[0].Key.String(), it.Key().String())
@@ -38,8 +38,8 @@ func TestIterator(t *testing.T) {
 		l0, entries, cleanup := Level0(t, fs, 0, 0)
 		defer cleanup()
 
-		it, err := l0.Iterator()
-		assert.NoError(t, err)
+		var it Iterator
+		assert.NoError(t, l0.InitIterator(&it))
 
 		for j := 0; j < 1000; j++ {
 			i := int(pcg.Uint32()) % len(entries)
@@ -83,8 +83,8 @@ func TestIterator(t *testing.T) {
 		l0, _, cleanup := Level0(t, fs, 0, 0)
 		defer cleanup()
 
-		it, err := l0.Iterator()
-		assert.NoError(t, err)
+		var it Iterator
+		assert.NoError(t, l0.InitIterator(&it))
 		assert.Equal(t, count(&it), 65535)
 	})
 
@@ -95,8 +95,8 @@ func TestIterator(t *testing.T) {
 		l0, _, cleanup := Level0(t, fs, 256, 256)
 		defer cleanup()
 
-		it, err := l0.Iterator()
-		assert.NoError(t, err)
+		var it Iterator
+		assert.NoError(t, l0.InitIterator(&it))
 		assert.Equal(t, count(&it), 3855)
 	})
 }
@@ -107,25 +107,26 @@ func BenchmarkIterator(b *testing.B) {
 			fs, cleanup := testhelp.FS(b)
 			defer cleanup()
 
-			l0, entries, cleanup := Level0(b, fs, nlen, vlen)
+			l0, _, cleanup := Level0(b, fs, nlen, vlen)
 			defer cleanup()
+
 			var it Iterator
+			it.Init(l0.fh)
 
 			now := time.Now()
 			b.ReportAllocs()
 			b.ResetTimer()
 
 			for i := 0; i < b.N; i++ {
-				it.Init(l0.fh)
-				for it.Next() {
-					_, _, _ = it.Key(), it.Name(), it.Value()
+				if !it.Next() {
+					it.SeekFirst()
 				}
+				_, _, _ = it.Key(), it.Name(), it.Value()
 				assert.NoError(b, it.Err())
 			}
 
 			b.StopTimer()
-			b.ReportMetric(float64(b.N*len(entries))/time.Since(now).Seconds(), "keys/sec")
-			b.ReportMetric(float64(time.Since(now).Nanoseconds())/float64(len(entries)*b.N), "ns/key")
+			b.ReportMetric(float64(b.N)/time.Since(now).Seconds(), "keys/sec")
 		})
 
 		b.Run("Seek", func(b *testing.B) {

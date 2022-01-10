@@ -11,16 +11,19 @@ import (
 )
 
 type Iterator struct {
+	eoff int64 // offset of ebuf
 	ebuf []byte
+
+	keyb histdb.Key
 	nbuf []byte // reference into ebuf
 	vbuf []byte // reference into ebuf
-	idx  []byte // reference into idxb
-	idxf []byte // reference into idxb
-	err  error
 
-	fh   filesystem.Handle
-	keyb histdb.Key
-	idxb [l0IndexSize]byte
+	ibuf []byte
+	idx  []byte // reference into ibuf
+	idxf []byte // reference into ibuf
+
+	err error
+	fh  filesystem.Handle
 }
 
 func (it *Iterator) Init(fh filesystem.Handle) {
@@ -31,19 +34,23 @@ func (it *Iterator) Init(fh filesystem.Handle) {
 }
 
 func (it *Iterator) readIndex() {
-	n, err := it.fh.ReadAt(it.idxb[:], l0DataSize)
+	if it.ibuf == nil {
+		it.ibuf = make([]byte, l0IndexSize)
+	}
+
+	n, err := it.fh.ReadAt(it.ibuf[:], l0DataSize)
 	if err != nil && err != io.EOF {
 		it.err = errs.Wrap(err)
 		return
 	}
 
 	split := uint(n) - 4
-	if split >= uint(len(it.idxb)) {
+	if split >= uint(len(it.ibuf)) {
 		it.err = errs.Errorf("invalid checksum: index too short")
 		return
 	}
 
-	idx, sum := it.idxb[:split], it.idxb[split:]
+	idx, sum := it.ibuf[:split], it.ibuf[split:]
 	if exp, got := checksum(idx), binary.BigEndian.Uint32(sum); exp != got {
 		it.err = errs.Errorf("invalid checksum: %08x != %08x", exp, got)
 		return
@@ -51,6 +58,11 @@ func (it *Iterator) readIndex() {
 
 	it.idxf = idx
 	it.idx = idx
+}
+
+func (it *Iterator) SeekFirst() bool {
+	it.idx = it.idxf
+	return it.Next()
 }
 
 func (it *Iterator) Next() bool {
@@ -76,17 +88,33 @@ func (it *Iterator) Next() bool {
 	return it.err == nil
 }
 
-func (it *Iterator) readEntryHeader(offset int64) {
-	if len(it.ebuf) < l0EntryHeaderSize {
-		it.ebuf = make([]byte, 256)
+func (it *Iterator) read(offset, length int64) []byte {
+	b := uint64(offset - it.eoff)
+	e := b + uint64(length)
+	if b < e && e < uint64(len(it.ebuf)) {
+		return it.ebuf[b:e]
 	}
 
-	if _, err := it.fh.ReadAt(it.ebuf, offset); err != nil && err != io.EOF {
-		it.err = errs.Wrap(err)
+	alloc := (length + 1023) &^ 1023
+	if int64(len(it.ebuf)) < alloc {
+		it.ebuf = make([]byte, alloc)
+	}
+
+	if _, it.err = it.fh.ReadAt(it.ebuf, offset); it.err != nil {
+		it.err = errs.Wrap(it.err)
+		return nil
+	}
+	it.eoff = offset
+
+	return it.ebuf[:length]
+}
+
+func (it *Iterator) readEntryHeader(offset int64) {
+	ebuf := it.read(offset, l0EntryHeaderSize)
+	if ebuf == nil {
 		return
 	}
-
-	copy(it.keyb[:], it.ebuf[8:])
+	copy(it.keyb[:], ebuf[8:])
 }
 
 func (it *Iterator) readNameAndValue(offset int64) int64 {
@@ -97,28 +125,28 @@ func (it *Iterator) readNameAndValue(offset int64) int64 {
 		return 0
 	}
 
+	b := uint64(offset - it.eoff)
+	e := b + uint64(l0EntryHeaderSize)
+	ebuf := it.ebuf[b:e]
+
 	nhead := int64(l0EntryHeaderSize)
 	ntail := nhead + int64(binary.BigEndian.Uint32(it.ebuf[0:4]))
 	etail := ntail + int64(binary.BigEndian.Uint32(it.ebuf[4:8]))
 	elen := etail + l0ChecksumSize
 
-	if int64(len(it.ebuf)) < elen {
-		it.ebuf = make([]byte, elen)
-
-		if _, it.err = it.fh.ReadAt(it.ebuf, offset); it.err != nil {
-			it.err = errs.Wrap(it.err)
-			return 0
-		}
+	ebuf = it.read(offset, elen)
+	if ebuf == nil {
+		return 0
 	}
 
-	exp, got := checksum(it.ebuf[:etail]), binary.BigEndian.Uint32(it.ebuf[etail:elen])
+	exp, got := checksum(ebuf[:etail]), binary.BigEndian.Uint32(ebuf[etail:elen])
 	if exp != got {
 		it.err = errs.Errorf("invalid entry checksum: %08x != %08x", exp, got)
 		return 0
 	}
 
-	it.nbuf = it.ebuf[nhead:ntail]
-	it.vbuf = it.ebuf[ntail:etail]
+	it.nbuf = ebuf[nhead:ntail]
+	it.vbuf = ebuf[ntail:etail]
 
 	return (elen + l0EntryAlignmentMask) &^ l0EntryAlignmentMask
 }

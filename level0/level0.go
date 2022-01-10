@@ -234,7 +234,7 @@ func (t *T) finish() error {
 	return nil
 }
 
-func (t *T) Iterator() (it Iterator, err error) {
+func (t *T) InitIterator(it *Iterator) (err error) {
 	if t.err != nil {
 		err = t.err
 	} else if !t.done {
@@ -242,7 +242,7 @@ func (t *T) Iterator() (it Iterator, err error) {
 	} else {
 		it.Init(t.fh)
 	}
-	return it, err
+	return err
 }
 
 //////////////////////////////////////

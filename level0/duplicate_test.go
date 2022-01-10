@@ -39,8 +39,8 @@ func TestDuplicate(t *testing.T) {
 	assert.NoError(t, l0.finish())
 
 	// iterate over the file and see the keys come in the right order
-	it, err := l0.Iterator()
-	assert.NoError(t, err)
+	var it Iterator
+	assert.NoError(t, l0.InitIterator(&it))
 
 	assert.That(t, it.Next())
 	assert.Equal(t, it.Key().String(), key.String())
