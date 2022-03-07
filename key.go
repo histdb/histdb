@@ -1,7 +1,6 @@
 package histdb
 
 import (
-	"bytes"
 	"encoding/binary"
 	"fmt"
 	"unsafe"
@@ -84,11 +83,3 @@ func (k Key) Timestamp() uint32 {
 func (k *Key) TimestampPtr() (ts *[TimestampSize]byte) {
 	return (*[TimestampSize]byte)(unsafe.Pointer(&k[timestampStart]))
 }
-
-type keyCmp struct{}
-
-var KeyCmp keyCmp
-
-func (keyCmp) Compare(a, b Key) int   { return bytes.Compare(a[:], b[:]) }
-func (keyCmp) Less(a, b Key) bool     { return string(a[:]) < string(b[:]) }
-func (keyCmp) LessPtr(a, b *Key) bool { return string(a[:]) < string(b[:]) }

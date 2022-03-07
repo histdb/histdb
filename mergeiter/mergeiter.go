@@ -1,6 +1,7 @@
 package mergeiter
 
 import (
+	"bytes"
 	"math/bits"
 
 	"github.com/histdb/histdb"
@@ -39,6 +40,8 @@ func (m *T) Init(iters []Iterator) {
 		}
 	}
 
+	compare := func(i, j histdb.Key) int { return bytes.Compare(i[:], j[:]) }
+
 	for i := range trn {
 		l, r := wins[2*i], wins[2*i+1]
 
@@ -46,7 +49,7 @@ func (m *T) Init(iters []Iterator) {
 			goto noSwap
 		} else if uint(r) >= uint(len(iters)) || iters[r] == nil {
 			// swap
-		} else if cmp := histdb.KeyCmp.Compare(iters[l].Key(), iters[r].Key()); cmp < 0 || (cmp == 0 && l < r) {
+		} else if cmp := compare(iters[l].Key(), iters[r].Key()); cmp < 0 || (cmp == 0 && l < r) {
 			// swap
 		} else {
 			goto noSwap
@@ -118,7 +121,7 @@ func (m *T) Next() bool {
 			goto noSwap
 		} else if ckey = iters[chal].Key(); uint(win) >= uint(len(iters)) || iters[win] == nil {
 			// swap
-		} else if cmp := histdb.KeyCmp.Compare(ckey, wkey); cmp == -1 || (cmp == 0 && chal < win) {
+		} else if cmp := bytes.Compare(ckey[:], wkey[:]); cmp == -1 || (cmp == 0 && chal < win) {
 			// swap
 		} else {
 			goto noSwap

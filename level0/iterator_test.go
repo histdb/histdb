@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/zeebo/assert"
-	"github.com/zeebo/pcg"
+	"github.com/zeebo/mwc"
 
 	"github.com/histdb/histdb/testhelp"
 )
@@ -41,8 +41,10 @@ func TestIterator(t *testing.T) {
 		var it Iterator
 		assert.NoError(t, l0.InitIterator(&it))
 
+		rng := mwc.Rand()
+
 		for j := 0; j < 1000; j++ {
-			i := int(pcg.Uint32()) % len(entries)
+			i := int(rng.Uint32()) % len(entries)
 			ent := entries[i]
 
 			lt, gt := ent.Key, ent.Key

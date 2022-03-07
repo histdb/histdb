@@ -206,7 +206,7 @@ func (it *Iterator) Seek(key histdb.Key) bool {
 			return false
 		}
 
-		if histdb.KeyCmp.Less(it.Key(), key) {
+		if string(it.keyb[:]) < string(key[:]) {
 			i = h + 1
 		} else {
 			j = h

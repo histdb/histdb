@@ -226,6 +226,9 @@ func (t *table) findFree(si slotIndex) (slotIndex, uint8) {
 	return slotIndex{}, 0
 }
 
+// TODO: maybe we can do background growth to avoid latency spikes
+// past the initial memory allocation.
+
 func (t *table) grow() {
 	nslots := max(10, 2*t.mask)
 	nslots = max(nslots, uint64(math.Ceil(float64(t.eles)/maxLoadFactor)))

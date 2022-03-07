@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/zeebo/assert"
-	"github.com/zeebo/pcg"
+	"github.com/zeebo/mwc"
 
 	"github.com/histdb/histdb"
 	"github.com/histdb/histdb/testhelp"
@@ -36,17 +36,19 @@ func TestMergedIterator(t *testing.T) {
 	})
 
 	t.Run("Fuzz", func(t *testing.T) {
+		rng := mwc.Rand()
+
 		for c := 0; c < 1000; c++ {
 			var exp []byte
 			keys := "abcdefghijklmnopqrstuvwxyz"
-			fmis := make([]fakeMergableIter, 1+pcg.Uint32n(32))
+			fmis := make([]fakeMergableIter, 1+rng.Uint32n(32))
 			for i := range fmis {
 				fmis[i] = append(fmis[i], "")
 			}
 
 			for i := range keys {
 				for j := 0; j < len(fmis); j++ {
-					if pcg.Uint32n(2) == 0 {
+					if rng.Uint32n(2) == 0 {
 						fmis[j] = append(fmis[j], keys[i:i+1])
 						exp = append(exp, keys[i])
 					}

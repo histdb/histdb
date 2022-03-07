@@ -5,14 +5,16 @@ import (
 	"testing"
 
 	"github.com/zeebo/assert"
-	"github.com/zeebo/pcg"
+	"github.com/zeebo/mwc"
 )
 
 func TestSerialize(t *testing.T) {
 	t.Run("Write", func(t *testing.T) {
+		rng := mwc.Rand()
+
 		h := new(Histogram)
 		for i := int64(0); i < 10000; i++ {
-			r := float32(pcg.Uint32n(1000) + 500)
+			r := float32(rng.Uint32n(1000) + 500)
 			h.Observe(r)
 		}
 
@@ -21,11 +23,13 @@ func TestSerialize(t *testing.T) {
 	})
 
 	t.Run("Load", func(t *testing.T) {
+		rng := mwc.Rand()
+
 		h1 := new(Histogram)
 		h2 := new(Histogram)
 
 		for i := int64(0); i < 10000; i++ {
-			r := float32(pcg.Uint32n(1000) + 500)
+			r := float32(rng.Uint32n(1000) + 500)
 			h1.Observe(r)
 		}
 		buf := h1.Serialize(nil)
@@ -44,9 +48,11 @@ func TestSerialize(t *testing.T) {
 
 func BenchmarkSerialize(b *testing.B) {
 	b.Run("Write", func(b *testing.B) {
+		rng := mwc.Rand()
+
 		h := new(Histogram)
 		for i := int64(0); i < 100000; i++ {
-			h.Observe(pcg.Float32())
+			h.Observe(rng.Float32())
 		}
 		buf := h.Serialize(nil)
 
@@ -62,9 +68,11 @@ func BenchmarkSerialize(b *testing.B) {
 	})
 
 	b.Run("Load", func(b *testing.B) {
+		rng := mwc.Rand()
+
 		h := new(Histogram)
 		for i := int64(0); i < 100000; i++ {
-			h.Observe(pcg.Float32())
+			h.Observe(rng.Float32())
 		}
 		buf := h.Serialize(nil)
 

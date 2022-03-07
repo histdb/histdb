@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/zeebo/assert"
-	"github.com/zeebo/pcg"
+	"github.com/zeebo/mwc"
 	"golang.org/x/sys/cpu"
 )
 
@@ -24,11 +24,13 @@ func TestSum(t *testing.T) {
 			assert.Equal(t, 64, int(tc.sum(layer2_truncate(l2))))
 		}
 
+		rng := mwc.Rand()
+
 		for i := 0; i < 1000; i++ {
 			l2 := tc.new()
 			var total uint64
 			for k := uint32(0); k < l2Size; k++ {
-				v := pcg.Uint64() % tc.max
+				v := rng.Uint64n(tc.max)
 				total += v
 				assert.That(t, layer2_unsafeSetCounter(l2, nil, k, v))
 			}

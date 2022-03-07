@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/zeebo/assert"
-	"github.com/zeebo/pcg"
+	"github.com/zeebo/mwc"
 
 	"github.com/histdb/histdb"
 	"github.com/histdb/histdb/testhelp"
@@ -35,46 +35,45 @@ func TestKeyReader(t *testing.T) {
 	var kr keyReader
 	kr.Init(fh)
 
-	check := func(i int, key histdb.Key) func(uint32, uint32, bool, error) {
-		return func(offset, length uint32, ok bool, err error) {
+	check := func(i int, key histdb.Key) func(uint32, bool, error) {
+		return func(offset uint32, ok bool, err error) {
 			t.Helper()
 			assert.NoError(t, err)
-			assert.Equal(t, i, offset)
-			assert.Equal(t, i, length)
 			assert.That(t, ok)
+			assert.Equal(t, i, offset)
 		}
 	}
 
 	for i := 0; i < count; i++ {
 		var key histdb.Key
 		binary.BigEndian.PutUint32(key[16:20], uint32(i*2+1))
-		check(i, key)(kr.Search(key))
+		check(i, key)(kr.Search(&key))
 		binary.BigEndian.PutUint32(key[16:20], uint32(i*2+2))
-		check(i, key)(kr.Search(key))
+		check(i, key)(kr.Search(&key))
 	}
 
 	var key histdb.Key
-	_, _, ok, err := kr.Search(key)
+	_, ok, err := kr.Search(&key)
 	assert.NoError(t, err)
 	assert.That(t, !ok)
 }
 
 func BenchmarkKeyReader(b *testing.B) {
-	run := func(b *testing.B, n int) {
+	run := func(b *testing.B, n uint64) {
 		fs, cleanup := testhelp.FS(b)
 		defer cleanup()
 
 		fh, cleanup := testhelp.Tempfile(b, fs)
 		defer cleanup()
 
-		var rng pcg.T
+		rng := mwc.Rand()
 
 		var kw keyWriter
 		kw.Init(fh)
 
-		for i := 0; i < n; i++ {
+		for i := uint64(0); i < n; i++ {
 			var ent kwEntry
-			ent.Set(testhelp.KeyFrom(uint64(i), 0, 0), uint32(i), uint32(i))
+			ent.Set(testhelp.KeyFrom(i, 0, 0), uint32(i), uint32(i))
 			kw.Append(ent)
 		}
 		assert.NoError(b, kw.Finish())
@@ -86,7 +85,8 @@ func BenchmarkKeyReader(b *testing.B) {
 		b.ResetTimer()
 
 		for i := 0; i < b.N; i++ {
-			_, _, _, _ = kr.Search(testhelp.KeyFrom(rng.Uint64(), 0, 0))
+			key := testhelp.KeyFrom(rng.Uint64n(n), 0, 0)
+			_, _, _ = kr.Search(&key)
 		}
 
 		b.ReportMetric(float64(kr.stats.reads)/float64(b.N), "reads/op")

@@ -52,7 +52,7 @@ func Level0(tb testing.TB, fs *filesystem.T, nlen, vlen int) (*T, []Entry, func(
 	}
 
 	sort.Slice(entries, func(i, j int) bool {
-		return histdb.KeyCmp.Less(entries[i].Key, entries[j].Key)
+		return string(entries[i].Key[:]) < string(entries[j].Key[:])
 	})
 
 	ok = true

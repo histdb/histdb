@@ -84,6 +84,10 @@ func newLayer2_marked() layer2 { return layer2_asMarked(new(layer2Small).asLayer
 func newLayer2_large() layer2  { return new(layer2Large).asLayer2() }
 
 const (
+	// since i already forgot this once: before the mark state is set, we
+	// can use faster avx2 code that doesn't have to handle the 64 counters
+	// overflowing. it only exists to enable that fast path.
+
 	growAt = 1 << 32 / 4   // set when about to overflow a 32 bit value
 	markAt = 1 << 32 / 128 // set when 64 additions may overflow a 32 bit value
 

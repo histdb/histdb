@@ -1,14 +1,21 @@
 package testhelp
 
 import (
-	"github.com/zeebo/pcg"
+	"github.com/zeebo/mwc"
 
 	"github.com/histdb/histdb"
 )
 
+var (
+	keyRng  = mwc.Rand()
+	tsRng   = mwc.Rand()
+	nameRng = mwc.Rand()
+	valRng  = mwc.Rand()
+)
+
 func Key() (key histdb.Key) {
 	for i := range key {
-		key[i] = byte(pcg.Uint32n(256))
+		key[i] = byte(keyRng.Uint64())
 	}
 	key[len(key)-1] = 0x80
 	return key
@@ -25,13 +32,13 @@ func KeyFrom(th uint64, mh uint64, ts uint32) histdb.Key {
 }
 
 func Timestamp() uint32 {
-	return pcg.Uint32()
+	return tsRng.Uint32()
 }
 
 func Name(n int) []byte {
 	v := make([]byte, n)
 	for i := range v {
-		v[i] = byte(pcg.Uint32n(256))
+		v[i] = byte(nameRng.Uint64())
 	}
 	return v
 }
@@ -39,7 +46,7 @@ func Name(n int) []byte {
 func Value(n int) []byte {
 	v := make([]byte, n)
 	for i := range v {
-		v[i] = byte(pcg.Uint32n(256))
+		v[i] = byte(valRng.Uint64())
 	}
 	return v
 }

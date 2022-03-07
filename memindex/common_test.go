@@ -4,11 +4,11 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/zeebo/pcg"
+	"github.com/zeebo/mwc"
 )
 
 func load(idx *T) {
-	rng := pcg.New(1)
+	rng := mwc.Rand()
 
 	const (
 		nkeys = 200

@@ -26,13 +26,14 @@ type keyReader struct {
 
 func (k *keyReader) Init(fh filesystem.Handle) {
 	*k = keyReader{
-		fh: fh,
+		fh:   fh,
+		root: ^uint32(0),
 	}
 }
 
 func (k *keyReader) cachePage(depth uint, id uint32) (*kwPage, error) {
 	// the root is always depth 0, so we ignore the id and load the root page
-	if depth == 0 {
+	if depth == 0 && k.root == ^uint32(0) {
 		size, err := k.fh.Size()
 		if err != nil {
 			return nil, errs.Wrap(err)
@@ -63,7 +64,7 @@ func (k *keyReader) cachePage(depth uint, id uint32) (*kwPage, error) {
 	return p.page, err
 }
 
-func (k *keyReader) Search(key histdb.Key) (entoff, entlen uint32, ok bool, err error) {
+func (k *keyReader) Search(key *histdb.Key) (offset uint32, ok bool, err error) {
 	keyp := binary.BigEndian.Uint64(key[0:8])
 	id := k.root
 
@@ -74,7 +75,7 @@ func (k *keyReader) Search(key histdb.Key) (entoff, entlen uint32, ok bool, err 
 		} else {
 			page, err = k.cachePage(depth, id)
 			if err != nil {
-				return
+				return 0, false, err
 			}
 		}
 
@@ -90,7 +91,7 @@ func (k *keyReader) Search(key histdb.Key) (entoff, entlen uint32, ok bool, err 
 				i = h
 			} else if keyhp > keyp {
 				j = h
-			} else if !histdb.KeyCmp.LessPtr(&key, ent.Key()) {
+			} else if string(key[:]) >= string(ent.Key()[:]) {
 				i = h
 			} else {
 				j = h
@@ -101,21 +102,21 @@ func (k *keyReader) Search(key histdb.Key) (entoff, entlen uint32, ok bool, err 
 			if i == -1 {
 				prev := page.hdr.Prev()
 				if prev == ^uint32(0) {
-					return 0, 0, false, nil
+					return 0, false, nil
 				}
 				page, err = k.cachePage(depth, prev)
 				if err != nil {
-					return
+					return 0, false, err
 				}
 				count := page.hdr.Count()
 				if count == 0 {
-					return 0, 0, false, nil
+					return 0, false, err
 				}
 				ent := &page.ents[count-1]
-				return ent.Offset(), ent.Length(), true, nil
+				return ent.Offset(), true, nil
 			}
 			ent := &page.ents[i]
-			return ent.Offset(), ent.Length(), true, nil
+			return ent.Offset(), true, nil
 		}
 
 		i++

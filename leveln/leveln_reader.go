@@ -23,9 +23,8 @@ func (r *Reader) Init(keys, values filesystem.Handle) {
 	}
 }
 
-func (r *Reader) Iterator() (it Iterator) {
+func (r *Reader) InitIterator(it *Iterator) {
 	it.Init(r.keys, r.values)
-	return it
 }
 
 type Iterator struct {
@@ -126,7 +125,7 @@ func (it *Iterator) Seek(key histdb.Key) bool {
 		return false
 	}
 
-	offset, _, _, err := it.kr.Search(key)
+	offset, _, err := it.kr.Search(&key)
 	if err != nil {
 		it.err = err
 		return false
@@ -135,10 +134,9 @@ func (it *Iterator) Seek(key histdb.Key) bool {
 	it.size = 0
 	it.span = nil
 	it.offset = offset
-	it.readNextSpan()
 
 	// no fancy comparisons because the prefix likely matches.
-	for it.Next() && histdb.KeyCmp.Less(it.Key(), key) {
+	for it.Next() && string(it.skey[:]) < string(key[:]) {
 	}
 
 	return it.err == nil

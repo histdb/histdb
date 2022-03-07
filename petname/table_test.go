@@ -5,34 +5,34 @@ import (
 	"time"
 
 	"github.com/zeebo/assert"
-	"github.com/zeebo/pcg"
+	"github.com/zeebo/mwc"
 )
 
 func TestTable(t *testing.T) {
 	tb := newTable()
 	const iters = 1e6
 
-	var rng pcg.T
+	rng := mwc.New(1, 1)
 	for i := 0; i < iters; i++ {
 		_, ok := tb.Insert(Hash{Lo: rng.Uint64()}, uint32(i))
 		assert.That(t, !ok)
 	}
 
-	rng = pcg.T{}
+	rng = mwc.New(1, 1)
 	for i := 0; i < iters; i++ {
 		n, ok := tb.Find(Hash{Lo: rng.Uint64()})
 		assert.That(t, ok)
 		assert.Equal(t, i, n)
 	}
 
-	rng = pcg.T{}
+	rng = mwc.New(1, 1)
 	for i := 0; i < iters; i++ {
 		n, ok := tb.Insert(Hash{Lo: rng.Uint64()}, uint32(i+1))
 		assert.That(t, ok)
 		assert.Equal(t, i, n)
 	}
 
-	rng = pcg.T{}
+	rng = mwc.New(1, 1)
 	for i := 0; i < iters; i++ {
 		n, ok := tb.Find(Hash{Lo: rng.Uint64()})
 		assert.That(t, ok)
@@ -43,7 +43,7 @@ func TestTable(t *testing.T) {
 func BenchmarkTable(b *testing.B) {
 	run := func(b *testing.B, n int) {
 		now := time.Now()
-		var rng pcg.T
+		rng := mwc.Rand()
 
 		b.ReportAllocs()
 		b.ResetTimer()
@@ -71,7 +71,7 @@ func BenchmarkTable(b *testing.B) {
 func BenchmarkStdlib(b *testing.B) {
 	run := func(b *testing.B, n int) {
 		now := time.Now()
-		var rng pcg.T
+		rng := mwc.Rand()
 
 		b.ReportAllocs()
 		b.ResetTimer()

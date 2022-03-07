@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/zeebo/pcg"
+	"github.com/zeebo/mwc"
 
 	"github.com/histdb/histdb"
 	"github.com/histdb/histdb/filesystem"
@@ -24,7 +24,7 @@ func BenchmarkLevelNAppend(b *testing.B) {
 
 		for i := 0; i < b.N; i++ {
 			func(fs *filesystem.T, n, i int) {
-				var rng pcg.T
+				rng := mwc.Rand()
 
 				keys, cleanup := testhelp.Tempfile(b, fs)
 				defer cleanup()

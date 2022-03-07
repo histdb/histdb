@@ -32,7 +32,10 @@ func TestLevelNWriterReader(t *testing.T) {
 	var lnr Reader
 	lnr.Init(keys, values)
 
-	it, i := lnr.Iterator(), 0
+	var it Iterator
+	lnr.InitIterator(&it)
+
+	i := 0
 	for ; it.Next(); i++ {
 		var key histdb.Key
 		binary.BigEndian.PutUint64(key.TagHashPtr()[:], uint64(i)/8)

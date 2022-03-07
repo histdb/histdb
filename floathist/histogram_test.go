@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/zeebo/assert"
-	"github.com/zeebo/pcg"
+	"github.com/zeebo/mwc"
 )
 
 func TestHistogram(t *testing.T) {
@@ -127,9 +127,11 @@ func BenchmarkHistogram(b *testing.B) {
 	})
 
 	b.Run("Min", func(b *testing.B) {
+		rng := mwc.Rand()
+
 		his := new(Histogram)
 		for i := 0; i < 1000000; i++ {
-			his.Observe(math.Float32frombits(pcg.Uint32() &^ ((1<<10 - 1) << 22)))
+			his.Observe(math.Float32frombits(rng.Uint32() &^ ((1<<10 - 1) << 22)))
 		}
 		b.ReportAllocs()
 		b.ResetTimer()
@@ -140,9 +142,11 @@ func BenchmarkHistogram(b *testing.B) {
 	})
 
 	b.Run("Max", func(b *testing.B) {
+		rng := mwc.Rand()
+
 		his := new(Histogram)
 		for i := 0; i < 1000000; i++ {
-			his.Observe(math.Float32frombits(pcg.Uint32() &^ ((1<<10 - 1) << 22)))
+			his.Observe(math.Float32frombits(rng.Uint32() &^ ((1<<10 - 1) << 22)))
 		}
 		b.ReportAllocs()
 		b.ResetTimer()
@@ -153,9 +157,11 @@ func BenchmarkHistogram(b *testing.B) {
 	})
 
 	b.Run("Total", func(b *testing.B) {
+		rng := mwc.Rand()
+
 		his := new(Histogram)
 		for i := 0; i < 1000000; i++ {
-			his.Observe(pcg.Float32())
+			his.Observe(rng.Float32())
 		}
 		b.ReportAllocs()
 		b.ResetTimer()
@@ -166,9 +172,11 @@ func BenchmarkHistogram(b *testing.B) {
 	})
 
 	b.Run("Total_Easy", func(b *testing.B) {
+		rng := mwc.Rand()
+
 		his := new(Histogram)
 		for i := 0; i < 1000000; i++ {
-			his.Observe(math.Float32frombits(pcg.Uint32() &^ ((1<<10 - 1) << 22)))
+			his.Observe(math.Float32frombits(rng.Uint32() &^ ((1<<10 - 1) << 22)))
 		}
 		assert.Equal(b, his.Total(), 1000000)
 		b.ReportAllocs()
@@ -180,65 +188,75 @@ func BenchmarkHistogram(b *testing.B) {
 	})
 
 	b.Run("Quantile", func(b *testing.B) {
+		rng := mwc.Rand()
+
 		his := new(Histogram)
 		for i := 0; i < 1000000; i++ {
-			his.Observe(pcg.Float32())
+			his.Observe(rng.Float32())
 		}
 		assert.Equal(b, his.Total(), 1000000)
 		b.ReportAllocs()
 		b.ResetTimer()
 
 		for i := 0; i < b.N; i++ {
-			his.Quantile(pcg.Float64())
+			his.Quantile(1.0)
 		}
 	})
 
 	b.Run("Quantile_Easy", func(b *testing.B) {
+		rng := mwc.Rand()
+
 		his := new(Histogram)
 		for i := 0; i < 1000000; i++ {
-			his.Observe(math.Float32frombits(pcg.Uint32() &^ ((1<<10 - 1) << 22)))
+			his.Observe(math.Float32frombits(rng.Uint32() &^ ((1<<10 - 1) << 22)))
 		}
 		assert.Equal(b, his.Total(), 1000000)
 		b.ReportAllocs()
 		b.ResetTimer()
 
 		for i := 0; i < b.N; i++ {
-			his.Quantile(pcg.Float64())
+			his.Quantile(rng.Float64())
 		}
 	})
 
 	b.Run("CDF", func(b *testing.B) {
+		rng := mwc.Rand()
+
 		his := new(Histogram)
 		for i := 0; i < 1000000; i++ {
-			his.Observe(pcg.Float32())
+			his.Observe(rng.Float32())
 		}
 		assert.Equal(b, his.Total(), 1000000)
 		b.ReportAllocs()
 		b.ResetTimer()
 
 		for i := 0; i < b.N; i++ {
-			his.CDF(pcg.Float32())
+			his.CDF(rng.Float32())
 		}
 	})
 
 	b.Run("CDF_Easy", func(b *testing.B) {
+		rng := mwc.Rand()
+
 		his := new(Histogram)
 		for i := 0; i < 1000000; i++ {
-			his.Observe(math.Float32frombits(pcg.Uint32() &^ ((1<<10 - 1) << 22)))
+			his.Observe(math.Float32frombits(rng.Uint32() &^ ((1<<10 - 1) << 22)))
 		}
 		assert.Equal(b, his.Total(), 1000000)
 		b.ReportAllocs()
 		b.ResetTimer()
 
 		for i := 0; i < b.N; i++ {
-			his.CDF(pcg.Float32())
+			his.CDF(rng.Float32())
 		}
 	})
 
 	b.Run("Summary", func(b *testing.B) {
+		rng := mwc.Rand()
+
 		his := new(Histogram)
 		for i := 0; i < 1000; i++ {
-			his.Observe(pcg.Float32())
+			his.Observe(rng.Float32())
 		}
 		assert.Equal(b, his.Total(), 1000)
 		b.ReportAllocs()

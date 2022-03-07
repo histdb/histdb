@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/zeebo/assert"
-	"github.com/zeebo/pcg"
+	"github.com/zeebo/mwc"
 
 	"github.com/histdb/histdb"
 	"github.com/histdb/histdb/testhelp"
@@ -34,7 +34,9 @@ func TestLevelNSeek(t *testing.T) {
 	var lnr Reader
 	lnr.Init(keys, values)
 
-	it := lnr.Iterator()
+	var it Iterator
+	lnr.InitIterator(&it)
+
 	for i := 0; i < count; i++ {
 		key := testhelp.KeyFrom(uint64(i)/8, 0, uint32(i))
 
@@ -76,7 +78,9 @@ func TestLevelNSeekBoundaries(t *testing.T) {
 	var lnr Reader
 	lnr.Init(keys, values)
 
-	it := lnr.Iterator()
+	var it Iterator
+	lnr.InitIterator(&it)
+
 	assert.NoError(t, it.Err())
 
 	assert.That(t, it.Seek(histdb.Key{0: 0x00, 16: 0x00}))
@@ -101,7 +105,7 @@ func TestLevelNSeekBoundaries(t *testing.T) {
 }
 
 func BenchmarkLevelNReader(b *testing.B) {
-	run := func(b *testing.B, n int) {
+	run := func(b *testing.B, n uint64) {
 		fs, cleanup := testhelp.FS(b)
 		defer cleanup()
 
@@ -111,28 +115,29 @@ func BenchmarkLevelNReader(b *testing.B) {
 		values, cleanup := testhelp.Tempfile(b, fs)
 		defer cleanup()
 
-		var rng pcg.T
+		rng := mwc.Rand()
 
 		var lnw Writer
 		lnw.Init(keys, values)
 
-		for i := 0; i < n; i++ {
-			key := testhelp.KeyFrom(uint64(i)/512, 0, uint32(i))
+		for i := uint64(0); i < n; i++ {
+			key := testhelp.KeyFrom(i/512, 0, uint32(i))
 			assert.NoError(b, lnw.Append(key, nil))
 		}
 		assert.NoError(b, lnw.Finish())
 
 		var lnr Reader
 		lnr.Init(keys, values)
-		itr := lnr.Iterator()
+
+		var it Iterator
+		lnr.InitIterator(&it)
 
 		b.ReportAllocs()
 		b.ResetTimer()
 
 		for i := 0; i < b.N; i++ {
-			n := rng.Uint32n(uint32(n))
-			key := testhelp.KeyFrom(uint64(n)/512, 0, uint32(n))
-			itr.Seek(key)
+			key := testhelp.KeyFrom(rng.Uint64n(n)/512, 0, uint32(n))
+			it.Seek(key)
 		}
 	}
 

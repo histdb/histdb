@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/zeebo/assert"
-	"github.com/zeebo/pcg"
+	"github.com/zeebo/mwc"
 
 	"github.com/histdb/histdb/buffer"
 )
@@ -42,12 +42,14 @@ func TestVarint(t *testing.T) {
 	})
 
 	t.Run("FastDirty", func(t *testing.T) {
+		rng := mwc.Rand()
+
 		for i := uint(0); i <= 64; i++ {
 			buf := buffer.Of(make([]byte, 9))
 
 			nbytes := Append(buf.Front9(), 1<<i-1)
 			for i := nbytes; i < 9; i++ {
-				*buf.Index(uintptr(i)) = uint8(pcg.Uint32())
+				*buf.Index(uintptr(i)) = uint8(rng.Uint64())
 			}
 
 			buf = buf.Advance(nbytes)
@@ -60,6 +62,8 @@ func TestVarint(t *testing.T) {
 	})
 
 	t.Run("RandomSafe", func(t *testing.T) {
+		rng := mwc.Rand()
+
 		for nb := 1; nb <= 9; nb++ {
 			mask := uint64(1)<<(7*nb) - 1
 			if nb == 9 {
@@ -67,7 +71,7 @@ func TestVarint(t *testing.T) {
 			}
 
 			for i := 0; i < 10; i++ {
-				exp := pcg.Uint64() & mask
+				exp := rng.Uint64() & mask
 				buf := buffer.Of(make([]byte, 9))
 
 				nbytes := Append(buf.Front9(), exp)
@@ -83,6 +87,8 @@ func TestVarint(t *testing.T) {
 	})
 
 	t.Run("RandomFast", func(t *testing.T) {
+		rng := mwc.Rand()
+
 		for nb := 1; nb <= 9; nb++ {
 			mask := uint64(1)<<(7*nb) - 1
 			if nb == 9 {
@@ -90,7 +96,7 @@ func TestVarint(t *testing.T) {
 			}
 
 			for i := 0; i < 10; i++ {
-				exp := pcg.Uint64() & mask
+				exp := rng.Uint64() & mask
 				buf := buffer.Of(make([]byte, 9))
 
 				nbytes := Append(buf.Front9(), exp)
@@ -106,9 +112,11 @@ func TestVarint(t *testing.T) {
 }
 
 func BenchmarkVarint(b *testing.B) {
+	rng := mwc.Rand()
+
 	randVals := make([]uint64, 1024*1024)
 	for i := range randVals {
-		randVals[i] = uint64(1<<pcg.Uint32n(65) - 1)
+		randVals[i] = uint64(1<<rng.Uint32n(65) - 1)
 	}
 	randBuf := buffer.Of(make([]byte, 16))
 	for _, val := range randVals {

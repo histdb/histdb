@@ -30,7 +30,7 @@ func (kh keyHeap) heapUp() {
 next:
 	if j := (i - 1) / 2; i != j && i < uint(len(kh)) && j < uint(len(kh)) {
 		ip, jp := &kh[i], &kh[j]
-		if histdb.KeyCmp.LessPtr(ip, jp) {
+		if string(ip[:]) < string(jp[:]) {
 			*ip, *jp, i = *jp, *ip, j
 			goto next
 		}
@@ -44,11 +44,12 @@ next:
 	if j := 2*i + 1; i < uint(len(kh)) && j < uint(len(kh)) {
 		ip, jp := &kh[i], &kh[j]
 
-		if jn := j + 1; jn < uint(len(kh)) && histdb.KeyCmp.LessPtr(&kh[jn], jp) {
+		if jn := j + 1; jn < uint(len(kh)) &&
+			string(kh[jn][:]) < string(jp[:]) {
 			jp, j = &kh[jn], jn
 		}
 
-		if histdb.KeyCmp.LessPtr(jp, ip) {
+		if string(jp[:]) < string(ip[:]) {
 			*ip, *jp, i = *jp, *ip, j
 			goto next
 		}

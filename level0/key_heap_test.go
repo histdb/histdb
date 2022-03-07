@@ -23,7 +23,7 @@ func TestKeyHeap(t *testing.T) {
 		}
 
 		sort.Slice(keys, func(i, j int) bool {
-			return histdb.KeyCmp.Less(keys[i], keys[j])
+			return string(keys[i][:]) < string(keys[j][:])
 		})
 
 		var key histdb.Key
