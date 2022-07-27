@@ -27,8 +27,8 @@ const (
 	//
 	// The memory usage is because we keep a page per depth in both the reader and writer.
 	kwPageSize   = 4096 * 4
-	kwEntrySize  = histdb.KeySize + 4 + 4
-	kwHeaderSize = 32 // 11 used
+	kwEntrySize  = histdb.KeySize + 4 + 1
+	kwHeaderSize = 34 // 11 used
 	kwEntries    = (kwPageSize - kwHeaderSize) / kwEntrySize
 
 	_ uintptr = (kwHeaderSize + kwEntries*kwEntrySize) - kwPageSize
@@ -38,26 +38,26 @@ const (
 // kwEntry is the byte representation of an entry in the index.
 type kwEntry [kwEntrySize]byte
 
+func (k *kwEntry) Child() uint32        { return binary.LittleEndian.Uint32(k[20:24]) }
+func (k *kwEntry) SetChild(next uint32) { binary.LittleEndian.PutUint32(k[20:24], next) }
+
 // Key returns a pointer to the key portion of the entry.
 func (k *kwEntry) Key() *histdb.Key { return (*histdb.Key)(unsafe.Pointer(k)) }
 
 // Offset returns the offset encoded into the entry.
-func (k *kwEntry) Offset() uint32 { return binary.BigEndian.Uint32(k[20:24]) }
+func (k *kwEntry) Offset() uint32 { return binary.LittleEndian.Uint32(k[20:24]) }
 
 // Length returns the length encoded into the entry.
-func (k *kwEntry) Length() uint32 { return binary.BigEndian.Uint32(k[24:28]) }
+func (k *kwEntry) Length() uint8 { return k[24] }
 
 // Set sets all of the fields of the entry.
-func (k *kwEntry) Set(key histdb.Key, offset, length uint32) {
+func (k *kwEntry) Set(key histdb.Key, offset uint32, length uint8) {
 	copy(k[0:20], key[0:20])
-	k[20] = byte(offset >> 24)
-	k[21] = byte(offset >> 16)
-	k[22] = byte(offset >> 8)
-	k[23] = byte(offset)
-	k[24] = byte(length >> 24)
-	k[25] = byte(length >> 16)
-	k[26] = byte(length >> 8)
-	k[27] = byte(length)
+	k[20] = byte(offset)
+	k[21] = byte(offset >> 8)
+	k[22] = byte(offset >> 16)
+	k[23] = byte(offset >> 24)
+	k[24] = byte(length)
 }
 
 // kwPageHeader is the header starting every page.
@@ -175,7 +175,7 @@ func (k *keyWriter) AppendSlow(ent kwEntry) error {
 	for _, page := range k.pages {
 		// if we had room left over, then we're done after the insertion.
 		if count := page.hdr.Count(); count < kwEntries {
-			binary.BigEndian.PutUint32(ent[20:24], k.id-1)
+			ent.SetChild(k.id - 1)
 			page.ents[count] = ent
 			page.hdr.SetCount(count + 1)
 			return nil
@@ -192,7 +192,7 @@ func (k *keyWriter) AppendSlow(ent kwEntry) error {
 
 	// all the pages were full. allocate a new one to hold the entry.
 	p := new(kwPage)
-	binary.BigEndian.PutUint32(ent[20:24], k.id-1)
+	ent.SetChild(k.id - 1)
 	p.ents[0] = ent
 	p.hdr.SetNext(next)
 	p.hdr.SetCount(1)

@@ -4,32 +4,22 @@ import (
 	"encoding/binary"
 	"fmt"
 	"unsafe"
+
+	"github.com/histdb/histdb/rwutils"
 )
 
 type Key [KeySize]byte
 
-type Hash [HashSize]byte
+func (k Key) Digest() uint64 {
+	return 0 +
+		le.Uint64(k[0:8]) +
+		le.Uint64(k[8:16]) +
+		uint64(le.Uint32(k[16:20])) +
+		0
+}
 
-const (
-	TagHashSize    = 8
-	MetricHashSize = 8
-	HashSize       = TagHashSize + MetricHashSize
-	TimestampSize  = 4
-
-	KeySize = HashSize + TimestampSize
-
-	tagHashStart = 0
-	tagHashEnd   = tagHashStart + TagHashSize
-
-	metricHashStart = tagHashEnd
-	metricHashEnd   = metricHashStart + MetricHashSize
-
-	hashStart = tagHashStart
-	hashEnd   = metricHashEnd
-
-	timestampStart = hashEnd
-	timestampEnd   = timestampStart + TimestampSize
-)
+func (k Key) AppendTo(w *rwutils.W)  { w.Bytes(k[:]) }
+func (k *Key) ReadFrom(r *rwutils.R) { copy(k[:], r.Bytes(len(k))) }
 
 func (k Key) Zero() bool { return k == Key{} }
 

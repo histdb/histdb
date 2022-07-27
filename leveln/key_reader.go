@@ -123,7 +123,7 @@ func (k *keyReader) Search(key *histdb.Key) (offset uint32, ok bool, err error) 
 		if i >= int(count) || i >= kwEntries {
 			id = page.hdr.Next()
 		} else {
-			id = page.ents[i].Offset()
+			id = page.ents[i].Child()
 		}
 	}
 }

@@ -59,20 +59,20 @@ func TestKeyWriterPage(t *testing.T) {
 }
 
 func BenchmarkKeyWriterAppend(b *testing.B) {
-	fs, cleanup := testhelp.FS(b)
-	defer cleanup()
-
-	fh, cleanup := testhelp.Tempfile(b, fs)
-	defer cleanup()
-
 	run := func(b *testing.B, n int) {
-		now := time.Now()
+		fs, cleanup := testhelp.FS(b)
+		defer cleanup()
 
+		fh, cleanup := testhelp.Tempfile(b, fs)
+		defer cleanup()
+
+		now := time.Now()
 		b.ReportAllocs()
 		b.ResetTimer()
 
 		for i := 0; i < b.N; i++ {
 			_, _ = fh.Seek(0, io.SeekStart)
+			fh.Truncate(0)
 
 			kw := new(keyWriter)
 			kw.Init(fh)

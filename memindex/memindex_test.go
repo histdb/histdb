@@ -8,48 +8,39 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unsafe"
 
 	"github.com/RoaringBitmap/roaring"
 	"github.com/zeebo/assert"
+
+	"github.com/histdb/histdb"
+	"github.com/histdb/histdb/metrics"
 )
 
-func TestPopTags(t *testing.T) {
-	check := func(tags string, tkey, tag string, iskey bool, rest string) {
-		gtkey, gtag, giskey, grest := popTag(tags)
-		assert.Equal(t, tkey, gtkey)
-		assert.Equal(t, tag, gtag)
-		assert.Equal(t, iskey, giskey)
-		assert.Equal(t, rest, grest)
-	}
-
-	check("foo=bar,foo=bar", "foo", "foo=bar", false, "foo=bar")
-	check("foo=bar", "foo", "foo=bar", false, "")
-	check("foo=", "foo", "foo", false, "")
-	check("foo", "foo", "foo", true, "")
-
-	// TODO: check escape sequences
-}
-
 func TestMemindex(t *testing.T) {
-	t.Run("Duplicate Tags", func(t *testing.T) {
-		idx := New()
+	h := func(x histdb.Hash, _ bool) histdb.Hash { return x }
+	b := func(_ histdb.Hash, x bool) bool { return x }
 
-		assert.That(t, idx.Add("foo=bar"))
-		assert.That(t, !idx.Add("foo=bar"))
-		assert.That(t, !idx.Add("foo=bar,foo=bar"))
+	t.Run("Duplicate Tags", func(t *testing.T) {
+		var idx T
+
+		assert.That(t, b(idx.Add("foo=bar")))
+		assert.That(t, !b(idx.Add("foo=bar")))
+		assert.That(t, !b(idx.Add("foo=bar,foo=bar")))
+		assert.That(t, !b(idx.Add("foo=bar,foo=baz")))
 	})
 
 	t.Run("Empty Value", func(t *testing.T) {
-		idx := New()
+		var idx T
 
-		assert.That(t, idx.Add("foo=bar,baz"))
-		assert.That(t, idx.Add("bif"))
-		assert.That(t, idx.Add("baz"))
-		assert.That(t, !idx.Add("baz="))
+		assert.That(t, b(idx.Add("foo=bar,baz")))
+		assert.That(t, b(idx.Add("bif")))
+		assert.That(t, b(idx.Add("baz")))
+		assert.That(t, !b(idx.Add("baz=")))
 
-		assert.Equal(t, idx.Count("baz"), 2)
-		assert.Equal(t, idx.Count("bif"), 1)
-		assert.Equal(t, idx.Count(""), 3)
+		// assert.Equal(t, idx.Count("baz"), 2)
+		// assert.Equal(t, idx.Count("bif"), 1)
+		// assert.Equal(t, idx.Count(""), 3)
 	})
 
 	var strings []string
@@ -59,12 +50,12 @@ func TestMemindex(t *testing.T) {
 	}
 
 	t.Run("TagKeys", func(t *testing.T) {
-		idx := New()
+		var idx T
 
-		assert.That(t, idx.Add("k0=v0,k1=v1,k2=v2"))
-		assert.That(t, idx.Add("k0=v0,foo"))
-		assert.That(t, idx.Add("k1=v1,foo,baz"))
-		assert.That(t, idx.Add("k0=v1,bar"))
+		assert.That(t, b(idx.Add("k0=v0,k1=v1,k2=v2")))
+		assert.That(t, b(idx.Add("k0=v0,foo")))
+		assert.That(t, b(idx.Add("k1=v1,foo,baz")))
+		assert.That(t, b(idx.Add("k0=v1,bar")))
 
 		idx.TagKeys("k0=v0", collectStrings())
 		assert.DeepEqual(t, strings, []string{"k1", "k2", "foo"})
@@ -83,14 +74,15 @@ func TestMemindex(t *testing.T) {
 	})
 
 	t.Run("TagValues", func(t *testing.T) {
-		idx := New()
+		var idx T
 
-		assert.That(t, idx.Add("k0=v0,k1=va,k2=v2"))
-		assert.That(t, idx.Add("k0=v0,k1=vb,k2=v3"))
-		assert.That(t, idx.Add("k0=v0,k2=v4"))
-		assert.That(t, idx.Add("k1=va,k2=v4"))
-		assert.That(t, idx.Add("k1=vb,k2=v4"))
-		assert.That(t, idx.Add("k0=v1,k2=v5"))
+		assert.That(t, b(idx.Add("k0=v0,k1=va,k2=v2")))
+		assert.That(t, b(idx.Add("k0=v0,k1=vb,k2=v3")))
+		assert.That(t, b(idx.Add("k0=v0,k2=v4")))
+		assert.That(t, b(idx.Add("k1=va,k2=v4")))
+		assert.That(t, b(idx.Add("k1=vb,k2=v4")))
+		assert.That(t, b(idx.Add("k0=v1,k2=v5")))
+		assert.That(t, b(idx.Add("k3=vx,k2=v6")))
 
 		idx.TagValues("k0=v0", "k2", collectStrings())
 		assert.DeepEqual(t, strings, []string{"v2", "v3", "v4"})
@@ -98,35 +90,39 @@ func TestMemindex(t *testing.T) {
 		idx.TagValues("k0", "k2", collectStrings())
 		assert.DeepEqual(t, strings, []string{"v2", "v3", "v4", "v5"})
 
+		idx.TagValues("", "k2", collectStrings())
+		assert.DeepEqual(t, strings, []string{"v2", "v3", "v4", "v5", "v6"})
+
 		idx.TagValues("k0=v0,k1=va", "k2", collectStrings())
 		assert.DeepEqual(t, strings, []string{"v2"})
 
 		idx.TagValues("k0=v0,k1=vb", "k2", collectStrings())
 		assert.DeepEqual(t, strings, []string{"v3"})
 	})
+
+	t.Run("Hash", func(t *testing.T) {
+		var idx T
+
+		assert.Equal(t, h(idx.Add("k0=v0")), metrics.Hash("k0=v0"))
+		assert.Equal(t, h(idx.Add("k0=v0,k1=v1")), metrics.Hash("k0=v0,k1=v1"))
+		assert.Equal(t, h(idx.Add("k0=v0,k1=v1")), metrics.Hash("k0=v0,k1=v1"))
+		assert.NotEqual(t, h(idx.Add("k0=v0,k1=v1")), metrics.Hash("k0=v0,k1=v2"))
+		assert.Equal(t, h(idx.Add("k0=v0,k0=v1")), metrics.Hash("k0=v0,k0=v1"))
+		assert.Equal(t, h(idx.Add("k0=v0,k0=v1")), metrics.Hash("k0=v0"))
+		assert.Equal(t, h(idx.Add("k0=v0")), metrics.Hash("k0=v0,k0=v1"))
+	})
 }
 
 func BenchmarkMemindex(b *testing.B) {
-	idx := New()
-	loadLarge(idx)
-	dumpSizeStats(b, idx)
+	var idx T
+	loadLarge(&idx)
+	dumpSizeStats(b, &idx)
 
 	// query := "k0=v0"
 	// tkey := "k9"
 
 	query := "app=storagenode-release,inst=12XzWDW7Nb496enKo4epRmpQamMe3cw7G3TUuhPrkoqoLb76rHK"
 	tkey := "name"
-
-	b.Run("Count", func(b *testing.B) {
-		b.ReportAllocs()
-		count := 0
-		start := time.Now()
-		for i := 0; i < b.N; i++ {
-			count += idx.Count(query)
-		}
-		b.ReportMetric(float64(count)/time.Since(start).Seconds()/1e6, "Mm/sec")
-		b.ReportMetric(float64(count)/float64(b.N), "m/query")
-	})
 
 	b.Run("TagKeys", func(b *testing.B) {
 		b.ReportAllocs()
@@ -153,7 +149,7 @@ func BenchmarkMemindex(b *testing.B) {
 	b.Run("AddExisting", func(b *testing.B) {
 		const m = "foo=bar,baz=bif,foo=bar,a=b,c=d,e=f,g=h"
 
-		idx := New()
+		var idx T
 		idx.Add(m)
 
 		start := time.Now()
@@ -190,7 +186,7 @@ func dumpSizeStats(t testing.TB, idx *T) {
 		t.Log(name+":", "len:", len(x), "size:", ss(x), "card:", cs(x))
 	}
 
-	t.Log("metric_names:", "size:", idx.metric_names.Size(), "len:", idx.metric_names.Len())
+	t.Log("metric_set:", "size:", idx.metric_set.Size(), "len:", idx.metric_set.Len())
 	t.Log("tag_names:", "size:", idx.tag_names.Size(), "len:", idx.tag_names.Len())
 	t.Log("tkey_names:", "size:", idx.tkey_names.Size(), "len:", idx.tkey_names.Len())
 
@@ -202,15 +198,15 @@ func dumpSizeStats(t testing.TB, idx *T) {
 	dumpSlice("tkey_to_tags", idx.tkey_to_tags)
 	dumpSlice("tkey_to_tvals", idx.tkey_to_tvals)
 
-	t.Log("idx:", "size:", idx.Size(), "count:", idx.Count(""), "bpm:", float64(idx.Size())/float64(idx.Count("")))
+	t.Log("idx:", "size:", idx.Size(), "count:", idx.Cardinality(), "bpm:", float64(idx.Size())/float64(idx.Cardinality()))
 }
 
 func TestWhatever(t *testing.T) {
 	t.SkipNow()
 
-	idx := New()
-	loadLarge(idx)
-	dumpSizeStats(t, idx)
+	var idx T
+	loadLarge(&idx)
+	dumpSizeStats(t, &idx)
 }
 
 func loadLarge(idx *T) {
@@ -234,11 +230,12 @@ func loadLarge(idx *T) {
 	lcount := 0
 
 	stats := func() {
-		msize := float64(idx.metric_names.Size())
+		msize := float64(idx.metric_set.Size()) +
+			(24 + float64(unsafe.Sizeof(histdb.Hash{}))*float64(len(idx.metric_hashes)))
 		size := float64(idx.Size())
-		card := idx.Count("")
+		card := idx.Cardinality()
 
-		fmt.Printf("Added (%-8d m) (%-8d um) | total (%0.2f%% unique) (%0.2f m/sec) (%0.2f um/sec) | recently (%0.2f%% unique) (%0.2f m/sec) (%0.2f um/sec) | (%0.2f MiB) (%0.2f b/m) | (%0.2f MiB) (%0.2f MiB) (%0.2f b/m)\n",
+		fmt.Printf("Added (%-8d m) (%-8d um) | total (%0.2f%% unique) (%0.2f m/sec) (%0.2f um/sec) | recently (%0.2f%% unique) (%0.2f m/sec) (%0.2f um/sec) | index size (%0.2f MiB) (%0.2f b/m) | metric size (%0.2f MiB) (%0.2f MiB) (%0.2f b/m)\n",
 			count,
 			card,
 

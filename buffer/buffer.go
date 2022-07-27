@@ -1,6 +1,7 @@
 package buffer
 
 import (
+	"reflect"
 	"unsafe"
 )
 
@@ -83,6 +84,22 @@ func (buf T) Front8() *[8]byte {
 
 func (buf T) Front9() *[9]byte {
 	return (*[9]byte)(ptr(uptr(buf.base) + buf.pos))
+}
+
+func (buf T) FrontN(n int) (x []byte) {
+	xh := (*reflect.SliceHeader)(ptr(&x))
+	xh.Data = uptr(buf.At(0))
+	xh.Cap = n
+	xh.Len = n
+	return
+}
+
+func (buf T) Suffix() (x []byte) {
+	xh := (*reflect.SliceHeader)(ptr(&x))
+	xh.Data = uptr(buf.At(0))
+	xh.Cap = int(buf.Remaining())
+	xh.Len = int(buf.Remaining())
+	return
 }
 
 func (buf T) Remaining() uptr {

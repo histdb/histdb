@@ -1,12 +1,17 @@
 package memindex
 
 import (
+	"encoding/binary"
 	"fmt"
 	"sync"
+	"unsafe"
 
 	"github.com/RoaringBitmap/roaring"
 	"github.com/zeebo/xxh3"
 
+	"github.com/histdb/histdb"
+	"github.com/histdb/histdb/hashtbl"
+	"github.com/histdb/histdb/metrics"
 	"github.com/histdb/histdb/petname"
 )
 
@@ -15,13 +20,58 @@ import (
 // keep track of the "path" along the way. this would make subsequent queries that
 // have the same prefix faster.
 
+var le = binary.LittleEndian
+
+var queryPool = sync.Pool{New: func() interface{} { return roaring.New() }}
+
+func replaceBitmap(m *roaring.Bitmap) {
+	queryPool.Put(m)
+}
+
+func acquireBitmap() *roaring.Bitmap {
+	bm := queryPool.Get().(*roaring.Bitmap)
+	if !bm.IsEmpty() {
+		bm.Clear()
+	}
+	return bm
+}
+
+func addSet[T comparable](l []T, s map[T]struct{}, v T) ([]T, map[T]struct{}, bool) {
+	if s != nil {
+		if _, ok := s[v]; ok {
+			return l, s, false
+		}
+		l = append(l, v)
+		s[v] = struct{}{}
+		return l, s, true
+	}
+
+	for _, u := range l {
+		if u == v {
+			return l, s, false
+		}
+	}
+
+	l = append(l, v)
+	if len(l) == cap(l) {
+		s = make(map[T]struct{})
+		for _, u := range l {
+			s[u] = struct{}{}
+		}
+	}
+
+	return l, s, true
+}
+
 type T struct {
 	fixed bool
 	card  int
 
-	metric_names *petname.T
-	tag_names    *petname.T
-	tkey_names   *petname.T
+	metric_set    hashtbl.T[histdb.Hash, *histdb.Hash]
+	metric_hashes []histdb.Hash
+
+	tag_names  petname.T
+	tkey_names petname.T
 
 	tag_to_metrics  []*roaring.Bitmap
 	tag_to_tkeys    []*roaring.Bitmap
@@ -30,55 +80,34 @@ type T struct {
 	tkey_to_tkeys   []*roaring.Bitmap
 	tkey_to_tags    []*roaring.Bitmap // all other tags associated with tkey
 	tkey_to_tvals   []*roaring.Bitmap // only tags with tkey as the tag key
-
-	query_pool sync.Pool
-}
-
-func New() *T {
-	return &T{
-		metric_names: petname.New(),
-		tag_names:    petname.New(),
-		tkey_names:   petname.New(),
-
-		query_pool: sync.Pool{New: func() interface{} { return roaring.New() }},
-	}
 }
 
 func (t *T) find(v string, names *petname.T) (uint32, bool) {
-	return names.Find(petname.Hash(xxh3.HashString128(v)))
-}
-
-func (t *T) replaceBitmap(m *roaring.Bitmap) {
-	t.query_pool.Put(m)
-}
-
-func (t *T) acquireBitmap() *roaring.Bitmap {
-	bm := t.query_pool.Get().(*roaring.Bitmap)
-	if !bm.IsEmpty() {
-		bm.Clear()
-	}
-	return bm
+	return names.Find(xxh3.HashString(v))
 }
 
 func sliceSize(m []*roaring.Bitmap) (n uint64) {
 	for _, bm := range m {
 		n += bm.GetSizeInBytes()
 	}
-	return n + 8*uint64(len(m))
+	return 24 + n + 8*uint64(len(m))
 }
 
 func (t *T) Size() uint64 {
 	return 0 +
-		t.metric_names.Size() +
-		t.tag_names.Size() +
-		t.tkey_names.Size() +
-		sliceSize(t.tag_to_metrics) +
-		sliceSize(t.tag_to_tkeys) +
-		sliceSize(t.tag_to_tags) +
-		sliceSize(t.tkey_to_metrics) +
-		sliceSize(t.tkey_to_tkeys) +
-		sliceSize(t.tkey_to_tags) +
-		sliceSize(t.tkey_to_tvals) +
+		/* fixed           */ 8 +
+		/* card            */ 8 +
+		/* metric_set      */ t.metric_set.Size() +
+		/* metric_hashes   */ 24 + uint64(unsafe.Sizeof(histdb.Hash{}))*uint64(len(t.metric_hashes)) +
+		/* tag_names       */ t.tag_names.Size() +
+		/* tkey_names      */ t.tkey_names.Size() +
+		/* tag_to_metrics  */ sliceSize(t.tag_to_metrics) +
+		/* tag_to_tkeys    */ sliceSize(t.tag_to_tkeys) +
+		/* tag_to_tags     */ sliceSize(t.tag_to_tags) +
+		/* tkey_to_metrics */ sliceSize(t.tkey_to_metrics) +
+		/* tkey_to_tkeys   */ sliceSize(t.tkey_to_tkeys) +
+		/* tkey_to_tags    */ sliceSize(t.tkey_to_tags) +
+		/* tkey_to_tvals   */ sliceSize(t.tkey_to_tvals) +
 		0
 }
 
@@ -97,27 +126,9 @@ func (t *T) Fix() {
 	fix(t.tkey_to_tags)
 	fix(t.tkey_to_tvals)
 
-	t.metric_names = nil
+	t.metric_set = hashtbl.T[histdb.Hash, *histdb.Hash]{}
 
 	t.fixed = true
-}
-
-func (t *T) Hash(metric string) petname.Hash {
-	var mhash petname.Hash
-
-	for rest := metric; len(rest) > 0; {
-		var tag string
-		_, tag, _, rest = popTag(rest)
-		if len(tag) == 0 {
-			continue
-		}
-
-		hash := xxh3.HashString128(tag)
-		mhash.Hi += hash.Hi
-		mhash.Lo += hash.Lo
-	}
-
-	return mhash
 }
 
 func getBitmap(bmsp *[]*roaring.Bitmap, n uint32) (bm *roaring.Bitmap) {
@@ -132,166 +143,121 @@ func getBitmap(bmsp *[]*roaring.Bitmap, n uint32) (bm *roaring.Bitmap) {
 	return bm
 }
 
-func (t *T) Add(metric string) bool {
-	if t.fixed {
-		return false
-	}
-
+func (t *T) Add(metric string) (histdb.Hash, bool) {
 	tkeyis := make([]uint32, 0, 8)
 	tagis := make([]uint32, 0, 8)
-	var tagus map[uint32]struct{}
-	var mhash petname.Hash
+	var tkeyus map[uint32]struct{}
+	var hash histdb.Hash
 
 	for rest := metric; len(rest) > 0; {
 		var tkey, tag string
-		tkey, tag, _, rest = popTag(rest)
+		tkey, tag, _, rest = metrics.PopTag(rest)
 		if len(tag) == 0 {
 			continue
 		}
 
-		tagh := petname.Hash(xxh3.HashString128(tag))
-		tagi, _ := t.tag_names.Put(tagh, tag)
+		tkeyh := xxh3.HashString(tkey)
+		tkeyi := t.tkey_names.Put(tkeyh, tkey)
 
 		var ok bool
-		tagis, tagus, ok = addUint32Set(tagis, tagus, tagi)
+		tkeyis, tkeyus, ok = addSet(tkeyis, tkeyus, tkeyi)
 
 		if ok {
-			tkeyh := petname.Hash(xxh3.HashString128(tkey))
-			tkeyi, _ := t.tkey_names.Put(tkeyh, tkey)
-			tkeyis = append(tkeyis, tkeyi)
+			th := le.Uint64(hash.TagHashPtr()[:])
+			le.PutUint64(hash.TagHashPtr()[:], th+tkeyh)
 
-			mhash.Hi += tagh.Hi
-			mhash.Lo += tagh.Lo
+			tagh := xxh3.HashString(tag)
+			mh := le.Uint64(hash.MetricHashPtr()[:])
+			le.PutUint64(hash.MetricHashPtr()[:], mh+tagh)
+
+			tagi := t.tag_names.Put(tagh, tag)
+			tagis = append(tagis, tagi)
 		}
 	}
 
-	//
-	// yowzer. now update all the things.
-	//
-
-	metrici, ok := t.metric_names.Put(mhash, "")
-	if ok {
-		return false
+	if t.fixed || t.metric_set.Len() > 1<<31-1 {
+		return hash, false
 	}
+
+	metrici, ok := t.metric_set.Insert(hash, uint32(t.metric_set.Len()))
+	if ok {
+		return hash, false
+	}
+
+	t.metric_hashes = append(t.metric_hashes, hash)
 	t.card++
 
 	for i := range tagis {
-		getBitmap(&t.tag_to_metrics, tagis[i]).Add(metrici)    // tagis[i] should know about metric
-		getBitmap(&t.tag_to_tkeys, tagis[i]).AddMany(tkeyis)   // tagis[i] should know about every other tkeyis
-		getBitmap(&t.tag_to_tags, tagis[i]).AddMany(tagis)     // tagis[i] should know about every other tagis
-		getBitmap(&t.tkey_to_tkeys, tkeyis[i]).AddMany(tkeyis) // tkeys[i] should know about every other tkeyis
-		getBitmap(&t.tkey_to_tags, tkeyis[i]).AddMany(tagis)   // tkeys[i] should know about every other tagis[i]
-		getBitmap(&t.tkey_to_tvals, tkeyis[i]).Add(tagis[i])   // tkeys[i] should know about tagis[i]
-		getBitmap(&t.tkey_to_metrics, tkeyis[i]).Add(metrici)  // tkeys[i] should know about metric
+		tagi := tagis[i]
+		tkeyi := tkeyis[i]
+
+		getBitmap(&t.tag_to_metrics, tagi).Add(metrici)    // tagis[i] should know about metric
+		getBitmap(&t.tag_to_tkeys, tagi).AddMany(tkeyis)   // tagis[i] should know about every other tkeyis
+		getBitmap(&t.tag_to_tags, tagi).AddMany(tagis)     // tagis[i] should know about every other tagis
+		getBitmap(&t.tkey_to_tkeys, tkeyi).AddMany(tkeyis) // tkeys[i] should know about every other tkeyis
+		getBitmap(&t.tkey_to_tags, tkeyi).AddMany(tagis)   // tkeys[i] should know about every other tagis[i]
+		getBitmap(&t.tkey_to_tvals, tkeyi).Add(tagis[i])   // tkeys[i] should know about tagis[i]
+		getBitmap(&t.tkey_to_metrics, tkeyi).Add(metrici)  // tkeys[i] should know about metric
 	}
 
-	return true
+	return hash, true
 }
 
-func (t *T) Count(input string) int {
-	var metrics *roaring.Bitmap
-
-	for rest := input; len(rest) > 0; {
-		var tag, tkey string
-		var isKey bool
-		var bm *roaring.Bitmap
-
-		tkey, tag, isKey, rest = popTag(rest)
-		if len(tag) == 0 {
-			continue
-		}
-
-		if isKey {
-			name, ok := t.find(tkey, t.tkey_names)
-			if !ok {
-				return 0
-			}
-			bm = t.tkey_to_metrics[name]
-		} else {
-			name, ok := t.find(tag, t.tag_names)
-			if !ok {
-				return 0
-			}
-			bm = t.tag_to_metrics[name]
-		}
-
-		if metrics == nil {
-			metrics = t.acquireBitmap()
-			defer t.replaceBitmap(metrics)
-		}
-
-		if metrics.IsEmpty() {
-			metrics.Or(bm)
-		} else {
-			metrics.And(bm)
-		}
-
-		if metrics.IsEmpty() {
-			return 0
-		}
-	}
-
-	// the only way it's here and still empty is if the input query was empty
-	if metrics == nil || metrics.IsEmpty() {
-		return t.card
-	}
-
-	return int(metrics.GetCardinality())
-}
+func (t *T) Cardinality() int { return t.card }
 
 func (t *T) TagKeys(input string, cb func(result string) bool) {
-	tkeys := t.acquireBitmap()
-	defer t.replaceBitmap(tkeys)
+	tkbm := acquireBitmap()
+	defer replaceBitmap(tkbm)
 
-	metrics := t.acquireBitmap()
-	defer t.replaceBitmap(metrics)
+	mbm := acquireBitmap()
+	defer replaceBitmap(mbm)
 
 	for rest := input; len(rest) > 0; {
 		var (
-			tag, tkey string
-			isKey     bool
-			bmk, bmm  *roaring.Bitmap
+			tag, tkey   string
+			isKey       bool
+			ltkbm, lmbm *roaring.Bitmap
 		)
 
-		tkey, tag, isKey, rest = popTag(rest)
+		tkey, tag, isKey, rest = metrics.PopTag(rest)
 		if len(tag) == 0 {
 			continue
 		}
 
-		tkeyn, ok := t.find(tkey, t.tkey_names)
+		tkeyn, ok := t.find(tkey, &t.tkey_names)
 		if !ok {
 			return
 		}
 
 		if isKey {
-			bmk = t.tkey_to_tkeys[tkeyn]
-			bmm = t.tkey_to_metrics[tkeyn]
+			ltkbm = t.tkey_to_tkeys[tkeyn]
+			lmbm = t.tkey_to_metrics[tkeyn]
 		} else {
-			name, ok := t.find(tag, t.tag_names)
+			name, ok := t.find(tag, &t.tag_names)
 			if !ok {
 				return
 			}
-			bmk = t.tag_to_tkeys[name]
-			bmm = t.tag_to_metrics[name]
+			ltkbm = t.tag_to_tkeys[name]
+			lmbm = t.tag_to_metrics[name]
 		}
 
-		if metrics.IsEmpty() {
-			tkeys.Or(bmk)
-			metrics.Or(bmm)
+		if mbm.IsEmpty() {
+			tkbm.Or(ltkbm)
+			mbm.Or(lmbm)
 		} else {
-			tkeys.And(bmk)
-			metrics.And(bmm)
+			tkbm.And(ltkbm)
+			mbm.And(lmbm)
 		}
 
-		tkeys.Remove(tkeyn)
+		tkbm.Remove(tkeyn)
 
-		if tkeys.IsEmpty() || metrics.IsEmpty() {
+		if tkbm.IsEmpty() || mbm.IsEmpty() {
 			return
 		}
 	}
 
 	// the only way it's here and still empty is if the input query was empty
-	if metrics.IsEmpty() {
+	if mbm.IsEmpty() {
 		for i := 0; i < t.tkey_names.Len(); i++ {
 			if !cb(t.tkey_names.Get(uint32(i))) {
 				return
@@ -300,8 +266,8 @@ func (t *T) TagKeys(input string, cb func(result string) bool) {
 		return
 	}
 
-	tkeys.Iterate(func(name uint32) bool {
-		if metrics != nil && !metrics.Intersects(t.tkey_to_metrics[name]) {
+	tkbm.Iterate(func(name uint32) bool {
+		if mbm != nil && !mbm.Intersects(t.tkey_to_metrics[name]) {
 			return true
 		}
 		return cb(t.tkey_names.Get(name))
@@ -309,69 +275,69 @@ func (t *T) TagKeys(input string, cb func(result string) bool) {
 }
 
 func (t *T) TagValues(input, tkey string, cb func(result string) bool) {
-	name, ok := t.find(tkey, t.tkey_names)
+	name, ok := t.find(tkey, &t.tkey_names)
 	if !ok {
 		return
 	}
 
-	tags := t.acquireBitmap()
-	defer t.replaceBitmap(tags)
+	tbm := acquireBitmap()
+	defer replaceBitmap(tbm)
 
-	metrics := t.acquireBitmap()
-	defer t.replaceBitmap(metrics)
+	mbm := acquireBitmap()
+	defer replaceBitmap(mbm)
 
 	for rest := input; len(rest) > 0; {
 		var tag, tkey string
 		var isKey bool
-		var bmt, bmm *roaring.Bitmap
+		var ltbm, lmbm *roaring.Bitmap
 
-		tkey, tag, isKey, rest = popTag(rest)
+		tkey, tag, isKey, rest = metrics.PopTag(rest)
 		if len(tag) == 0 {
 			continue
 		}
 
 		if isKey {
-			name, ok := t.find(tkey, t.tkey_names)
+			name, ok := t.find(tkey, &t.tkey_names)
 			if !ok {
 				return
 			}
-			bmt = t.tkey_to_tags[name]
-			bmm = t.tkey_to_metrics[name]
+			ltbm = t.tkey_to_tags[name]
+			lmbm = t.tkey_to_metrics[name]
 		} else {
-			name, ok := t.find(tag, t.tag_names)
+			name, ok := t.find(tag, &t.tag_names)
 			if !ok {
 				return
 			}
-			bmt = t.tag_to_tags[name]
-			bmm = t.tag_to_metrics[name]
+			ltbm = t.tag_to_tags[name]
+			lmbm = t.tag_to_metrics[name]
 		}
 
-		if metrics.IsEmpty() {
-			tags.Or(bmt)
-			metrics.Or(bmm)
+		if mbm.IsEmpty() {
+			tbm.Or(ltbm)
+			mbm.Or(lmbm)
 		} else {
-			tags.And(bmt)
-			metrics.And(bmm)
+			tbm.And(ltbm)
+			mbm.And(lmbm)
 		}
 
-		if tags.IsEmpty() || metrics.IsEmpty() {
+		if tbm.IsEmpty() || mbm.IsEmpty() {
 			return
 		}
 	}
 
 	// the only way it's here and still empty is if the input query was empty
-	if metrics.IsEmpty() {
-		tags = t.tkey_to_tvals[name]
-		metrics = nil
+	if mbm.IsEmpty() {
+		tbm = t.tkey_to_tvals[name]
+		mbm = nil
 	} else {
-		tags.And(t.tkey_to_tvals[name])
+		tbm.And(t.tkey_to_tvals[name])
 	}
 
-	tags.Iterate(func(name uint32) bool {
+	tbm.Iterate(func(name uint32) bool {
 		tag := t.tag_names.Get(name)
 		if len(tag) <= len(tkey) {
 			return true
-		} else if metrics != nil && !metrics.Intersects(t.tag_to_metrics[name]) {
+		} else if mbm != nil && !mbm.Intersects(t.tag_to_metrics[name]) {
 			return true
 		}
 		return cb(tag[len(tkey)+1:])

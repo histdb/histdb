@@ -55,15 +55,20 @@ func (v *valueWriter) BeginSpan(key histdb.Key) {
 	copy(v.span[0:histdb.HashSize], key[:histdb.HashSize])
 }
 
-func (v *valueWriter) FinishSpan() (offset, length uint32, err error) {
-	// record span beginning offset and check for overflow
+func (v *valueWriter) FinishSpan() (offset uint32, length uint8, err error) {
+	// compute span beginning offset
 	offset = uint32(v.n / vwSpanAlign)
+
+	// round up to the alignment including end of span
+	sn := (v.sn + 2 + vwSpanMask) &^ vwSpanMask
+
+	// check for overflow
 	if uint64(offset)*vwSpanAlign != v.n {
 		return 0, 0, errs.Errorf("values file too large")
+	} else if sn/vwSpanAlign > 255 {
+		return 0, 0, errs.Errorf("values span too large")
 	}
 
-	// round up to the alignment and increase bytes written
-	sn := (v.sn + 2 + vwSpanMask) &^ vwSpanMask
 	v.n += uint64(sn)
 
 	// add a zero entry to mark end of span
@@ -72,5 +77,5 @@ func (v *valueWriter) FinishSpan() (offset, length uint32, err error) {
 
 	_, err = v.fh.Write(v.span[:sn])
 
-	return offset, uint32(sn / vwSpanAlign), errs.Wrap(err)
+	return offset, uint8(sn / vwSpanAlign), errs.Wrap(err)
 }
