@@ -5,6 +5,7 @@ import (
 	"compress/gzip"
 	"fmt"
 	"os"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -111,6 +112,33 @@ func TestMemindex(t *testing.T) {
 		assert.Equal(t, h(idx.Add("k0=v0,k0=v1")), metrics.Hash("k0=v0"))
 		assert.Equal(t, h(idx.Add("k0=v0")), metrics.Hash("k0=v0,k0=v1"))
 	})
+
+	t.Run("Metrics", func(t *testing.T) {
+		var idx T
+
+		h0, _ := idx.Add("k0=v0a,k1=v1a,k2=v2a")
+		h1, _ := idx.Add("k0=v0b,k1=v1b,k2=v2b")
+		h2, _ := idx.Add("k0=v0c,k1=v1c")
+		h3, _ := idx.Add("k0=v0c,k1=v1c,k2=v2a")
+		h4, _ := idx.Add("k0=v0c,k1=v1c,k2=v2b")
+		h5, _ := idx.Add("k0=v0c,k1=v1c,k2=v2c")
+
+		exp := []histdb.Hash{h0, h1, h2, h3, h4, h5}
+		got := []histdb.Hash{}
+
+		idx.Metrics("k0,k1", func(metrics *roaring.Bitmap, tags []string) bool {
+			idx.MetricHashes(metrics, func(h histdb.Hash) bool {
+				got = append(got, h)
+				return true
+			})
+			return true
+		})
+
+		sort.Slice(exp, func(i, j int) bool { return string(exp[i][:]) < string(exp[j][:]) })
+		sort.Slice(got, func(i, j int) bool { return string(got[i][:]) < string(got[j][:]) })
+
+		assert.DeepEqual(t, got, exp)
+	})
 }
 
 func BenchmarkMemindex(b *testing.B) {
@@ -121,8 +149,11 @@ func BenchmarkMemindex(b *testing.B) {
 	// query := "k0=v0"
 	// tkey := "k9"
 
-	query := "app=storagenode-release,inst=12XzWDW7Nb496enKo4epRmpQamMe3cw7G3TUuhPrkoqoLb76rHK"
-	tkey := "name"
+	const (
+		query  = "app=storagenode-release,inst=12XzWDW7Nb496enKo4epRmpQamMe3cw7G3TUuhPrkoqoLb76rHK"
+		tkey   = "name"
+		mquery = query + "," + tkey
+	)
 
 	b.Run("TagKeys", func(b *testing.B) {
 		b.ReportAllocs()
@@ -161,6 +192,26 @@ func BenchmarkMemindex(b *testing.B) {
 		}
 
 		b.ReportMetric(float64(b.N)/time.Since(start).Seconds()/1e6, "Mm/sec")
+	})
+
+	b.Run("Metrics", func(b *testing.B) {
+		b.ReportAllocs()
+		b.ResetTimer()
+		start := time.Now()
+
+		var sets uint64
+		var count uint64
+		for i := 0; i < b.N; i++ {
+			idx.Metrics(mquery, func(metrics *roaring.Bitmap, tags []string) bool {
+				sets++
+				count += metrics.GetCardinality()
+				return true
+			})
+		}
+
+		b.ReportMetric(float64(sets)/float64(b.N), "sets/op")
+		b.ReportMetric(float64(count)/float64(b.N), "metrics/op")
+		b.ReportMetric(float64(b.N)/time.Since(start).Seconds(), "ops/sec")
 	})
 }
 
@@ -207,6 +258,12 @@ func TestWhatever(t *testing.T) {
 	var idx T
 	loadLarge(&idx)
 	dumpSizeStats(t, &idx)
+
+	idx.Metrics("app=storagenode-release,inst=12XzWDW7Nb496enKo4epRmpQamMe3cw7G3TUuhPrkoqoLb76rHK,name",
+		func(metrics *roaring.Bitmap, tags []string) bool {
+			fmt.Println(tags, metrics.GetCardinality())
+			return true
+		})
 }
 
 func loadLarge(idx *T) {
@@ -266,7 +323,7 @@ func loadLarge(idx *T) {
 		count++
 		if count%statEvery == 0 {
 			stats()
-			// if idx.Count("") >= 1e6 {
+			// if idx.Cardinality() >= 1e6 {
 			// 	break
 			// }
 		}

@@ -3,6 +3,7 @@ package memindex
 import (
 	"encoding/binary"
 	"fmt"
+	"strings"
 	"sync"
 	"unsafe"
 
@@ -73,13 +74,13 @@ type T struct {
 	tag_names  petname.T
 	tkey_names petname.T
 
-	tag_to_metrics  []*roaring.Bitmap
-	tag_to_tkeys    []*roaring.Bitmap
-	tag_to_tags     []*roaring.Bitmap
-	tkey_to_metrics []*roaring.Bitmap
-	tkey_to_tkeys   []*roaring.Bitmap
-	tkey_to_tags    []*roaring.Bitmap // all other tags associated with tkey
-	tkey_to_tvals   []*roaring.Bitmap // only tags with tkey as the tag key
+	tag_to_metrics  []*roaring.Bitmap // what metrics include this tag
+	tag_to_tkeys    []*roaring.Bitmap // what tag keys exist in any metric with tag
+	tag_to_tags     []*roaring.Bitmap // what tags exist in any metric with tag
+	tkey_to_metrics []*roaring.Bitmap // what metrics include this tag key
+	tkey_to_tkeys   []*roaring.Bitmap // what tag keys exist in any metric with tag key
+	tkey_to_tags    []*roaring.Bitmap // what tags exist in any metric with tag key
+	tkey_to_tvals   []*roaring.Bitmap // what tags exist for the specific tag key in any metric with tag key
 }
 
 func (t *T) find(v string, names *petname.T) (uint32, bool) {
@@ -204,6 +205,79 @@ func (t *T) Add(metric string) (histdb.Hash, bool) {
 }
 
 func (t *T) Cardinality() int { return t.card }
+
+func (t *T) MetricHashes(metrics *roaring.Bitmap, cb func(histdb.Hash) bool) {
+	metrics.Iterate(func(metricn uint32) bool {
+		return cb(t.metric_hashes[metricn])
+	})
+}
+
+func (t *T) Metrics(query string, cb func(*roaring.Bitmap, []string) bool) {
+	tags := make([]string, 0, strings.Count(query, ",")+1)
+	t.metricsHelper(nil, query, tags, cb)
+}
+
+func (t *T) metricsHelper(mbm *roaring.Bitmap, query string, tags []string, cb func(*roaring.Bitmap, []string) bool) bool {
+	if query == "" {
+		if mbm == nil || mbm.IsEmpty() {
+			return true
+		}
+		return cb(mbm, tags)
+	}
+
+	tkey, tag, isKey, query := metrics.PopTag(query)
+	if len(tag) == 0 {
+		return true
+	}
+
+	mbmc := acquireBitmap()
+	defer replaceBitmap(mbmc)
+
+	emit := func(tagn uint32) bool {
+		tmbm := t.tag_to_metrics[tagn]
+		mbmc.Clear()
+		if mbm != nil {
+			mbmc.Or(mbm)
+			mbmc.And(tmbm)
+		} else {
+			mbmc.Or(tmbm)
+		}
+
+		if mbmc.IsEmpty() {
+			return true
+		}
+
+		tags = append(tags, t.tag_names.Get(tagn))
+		res := t.metricsHelper(mbmc, query, tags, cb)
+		tags = tags[:len(tags)-1]
+
+		return res
+	}
+
+	if isKey {
+		tkeyn, ok := t.find(tkey, &t.tkey_names)
+		if !ok {
+			return false
+		}
+
+		tvals := t.tkey_to_tvals[tkeyn]
+
+		// TODO: check if keeping track of an over approximation of the
+		// set of available tags to intersect with tvals here is worth
+		// doing.
+
+		var cont bool
+		tvals.Iterate(func(tagn uint32) bool {
+			cont = emit(tagn)
+			return cont
+		})
+		return cont
+
+	} else {
+		tagn, ok := t.find(tag, &t.tag_names)
+		return ok && emit(tagn)
+	}
+}
 
 func (t *T) TagKeys(input string, cb func(result string) bool) {
 	tkbm := acquireBitmap()
