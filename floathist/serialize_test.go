@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"testing"
 
+	"github.com/histdb/histdb/rwutils"
 	"github.com/zeebo/assert"
 	"github.com/zeebo/mwc"
 )
@@ -18,7 +19,9 @@ func TestSerialize(t *testing.T) {
 			h.Observe(r)
 		}
 
-		data := h.Serialize(nil)
+		var w rwutils.W
+		h.AppendTo(&w)
+		data := w.Done().Prefix()
 		t.Logf("%d\n%s", len(data), hex.Dump(data))
 	})
 
@@ -32,10 +35,16 @@ func TestSerialize(t *testing.T) {
 			r := float32(rng.Uint32n(1000) + 500)
 			h1.Observe(r)
 		}
-		buf := h1.Serialize(nil)
+
+		var w rwutils.W
+		var r rwutils.R
+		h1.AppendTo(&w)
 
 		for i := float64(1); i < 10; i++ {
-			assert.NoError(t, h2.Load(buf))
+			r.Init(w.Done().Reset())
+			h2.ReadFrom(&r)
+			_, err := r.Done()
+			assert.NoError(t, err)
 
 			tot1, sum1, avg1, _ := h1.Summary()
 			tot2, sum2, avg2, _ := h2.Summary()
@@ -47,44 +56,52 @@ func TestSerialize(t *testing.T) {
 }
 
 func BenchmarkSerialize(b *testing.B) {
-	b.Run("Write", func(b *testing.B) {
+	b.Run("AppendTo", func(b *testing.B) {
 		rng := mwc.Rand()
 
 		h := new(Histogram)
 		for i := int64(0); i < 100000; i++ {
 			h.Observe(rng.Float32())
 		}
-		buf := h.Serialize(nil)
 
-		b.SetBytes(int64(len(buf)))
+		var w rwutils.W
+		h.AppendTo(&w)
+
+		b.SetBytes(int64(w.Done().Pos()))
+		b.ReportMetric(float64(w.Done().Pos()), "bytes")
+
 		b.ResetTimer()
 		b.ReportAllocs()
 
 		for i := 0; i < b.N; i++ {
-			h.Serialize(buf[:0])
+			w.Init(w.Done().Reset())
+			h.AppendTo(&w)
 		}
-
-		b.ReportMetric(float64(len(buf)), "bytes")
 	})
 
-	b.Run("Load", func(b *testing.B) {
+	b.Run("ReadFrom", func(b *testing.B) {
 		rng := mwc.Rand()
 
 		h := new(Histogram)
 		for i := int64(0); i < 100000; i++ {
 			h.Observe(rng.Float32())
 		}
-		buf := h.Serialize(nil)
 
-		b.SetBytes(int64(len(buf)))
+		var w rwutils.W
+		h.AppendTo(&w)
+
+		b.SetBytes(int64(w.Done().Pos()))
+		b.ReportMetric(float64(w.Done().Pos()), "bytes")
+
 		b.ResetTimer()
 		b.ReportAllocs()
 
 		for i := 0; i < b.N; i++ {
-			var h Histogram
-			_ = h.Load(buf)
-		}
+			var r rwutils.R
+			r.Init(w.Done().Reset())
 
-		b.ReportMetric(float64(len(buf)), "bytes")
+			var h Histogram
+			h.ReadFrom(&r)
+		}
 	})
 }

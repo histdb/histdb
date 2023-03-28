@@ -15,31 +15,31 @@ func (h Hash) Digest() uint64 {
 		0
 }
 
-func (h Hash) AppendTo(w *rwutils.W)  { w.Bytes(h[:]) }
-func (h *Hash) ReadFrom(r *rwutils.R) { copy(h[:], r.Bytes(len(h))) }
+func (h Hash) AppendTo(w *rwutils.W)  { w.Bytes16(h) }
+func (h *Hash) ReadFrom(r *rwutils.R) { *h = r.Bytes16() }
 
-func (h *Hash) SetTagHash(th [TagHashSize]byte) {
-	copy(h[tagHashStart:tagHashEnd], th[0:TagHashSize])
+func (h *Hash) SetTagKeyHash(th TagKeyHash) {
+	copy(h[tagHashStart:tagHashEnd], th[0:TagKeyHashSize])
 }
 
-func (h Hash) TagHash() (th [TagHashSize]byte) {
-	copy(th[0:TagHashSize], h[tagHashStart:tagHashEnd])
+func (h Hash) TagKeyHash() (th TagKeyHash) {
+	copy(th[0:TagKeyHashSize], h[tagHashStart:tagHashEnd])
 	return th
 }
 
-func (h *Hash) TagHashPtr() (th *[TagHashSize]byte) {
-	return (*[TagHashSize]byte)(unsafe.Pointer(&h[tagHashStart]))
+func (h *Hash) TagKeyHashPtr() (th *TagKeyHash) {
+	return (*TagKeyHash)(unsafe.Pointer(&h[tagHashStart]))
 }
 
-func (h *Hash) SetMetricHash(mh [MetricHashSize]byte) {
-	copy(h[metricHashStart:metricHashEnd], mh[0:MetricHashSize])
+func (h *Hash) SetTagHash(mh TagHash) {
+	copy(h[metricHashStart:metricHashEnd], mh[0:TagHashSize])
 }
 
-func (h Hash) MetricHash() (mh [MetricHashSize]byte) {
-	copy(mh[0:MetricHashSize], h[metricHashStart:metricHashEnd])
+func (h Hash) TagHash() (mh TagHash) {
+	copy(mh[0:TagHashSize], h[metricHashStart:metricHashEnd])
 	return mh
 }
 
-func (h *Hash) MetricHashPtr() (mh *[MetricHashSize]byte) {
-	return (*[MetricHashSize]byte)(unsafe.Pointer(&h[metricHashStart]))
+func (h *Hash) TagHashPtr() (mh *TagHash) {
+	return (*TagHash)(unsafe.Pointer(&h[metricHashStart]))
 }

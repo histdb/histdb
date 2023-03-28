@@ -26,7 +26,7 @@ func TestLevelNSeek(t *testing.T) {
 	lnw.Init(keys, values)
 
 	for i := 0; i < count; i++ {
-		key := testhelp.KeyFrom(uint64(i)/8, 0, uint32(i))
+		key := testhelp.KeyFrom(uint32(i)/8, 0, uint32(i))
 		assert.NoError(t, lnw.Append(key, []byte{byte(i >> 8), byte(i)}))
 	}
 	assert.NoError(t, lnw.Finish())
@@ -38,7 +38,7 @@ func TestLevelNSeek(t *testing.T) {
 	lnr.InitIterator(&it)
 
 	for i := 0; i < count; i++ {
-		key := testhelp.KeyFrom(uint64(i)/8, 0, uint32(i))
+		key := testhelp.KeyFrom(uint32(i)/8, 0, uint32(i))
 
 		assert.That(t, it.Seek(key))
 		assert.Equal(t, key, it.Key())
@@ -46,8 +46,8 @@ func TestLevelNSeek(t *testing.T) {
 		assert.Equal(t, it.Value()[1], byte(i))
 
 		if i%8 == 7 && i != count-1 {
-			assert.That(t, it.Seek(testhelp.KeyFrom(uint64(i)/8, 0, uint32(i+1))))
-			key := testhelp.KeyFrom(uint64(i+1)/8, 0, uint32(i+1))
+			assert.That(t, it.Seek(testhelp.KeyFrom(uint32(i)/8, 0, uint32(i+1))))
+			key := testhelp.KeyFrom(uint32(i+1)/8, 0, uint32(i+1))
 			assert.Equal(t, key.String(), it.Key().String())
 			assert.Equal(t, it.Value()[0], byte((i+1)>>8))
 			assert.Equal(t, it.Value()[1], byte(i+1))
@@ -105,7 +105,7 @@ func TestLevelNSeekBoundaries(t *testing.T) {
 }
 
 func BenchmarkLevelNReader(b *testing.B) {
-	run := func(b *testing.B, n uint64) {
+	run := func(b *testing.B, n uint32) {
 		fs, cleanup := testhelp.FS(b)
 		defer cleanup()
 
@@ -120,7 +120,7 @@ func BenchmarkLevelNReader(b *testing.B) {
 		var lnw Writer
 		lnw.Init(keys, values)
 
-		for i := uint64(0); i < n; i++ {
+		for i := uint32(0); i < n; i++ {
 			key := testhelp.KeyFrom(i/512, 0, uint32(i))
 			assert.NoError(b, lnw.Append(key, nil))
 		}
@@ -136,7 +136,7 @@ func BenchmarkLevelNReader(b *testing.B) {
 		b.ResetTimer()
 
 		for i := 0; i < b.N; i++ {
-			key := testhelp.KeyFrom(rng.Uint64n(n)/512, 0, uint32(n))
+			key := testhelp.KeyFrom(rng.Uint32n(n)/512, 0, uint32(n))
 			it.Seek(key)
 		}
 	}

@@ -3,7 +3,7 @@ package metrics
 import (
 	"testing"
 
-	"gotest.tools/assert"
+	"github.com/zeebo/assert"
 )
 
 func TestPopTags(t *testing.T) {

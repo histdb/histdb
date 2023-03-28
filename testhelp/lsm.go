@@ -21,12 +21,12 @@ func Key() (key histdb.Key) {
 	return key
 }
 
-func KeyFrom(th uint64, mh uint64, ts uint32) histdb.Key {
+func KeyFrom(th uint32, mh uint64, ts uint32) (k histdb.Key) {
 	return histdb.Key{
-		byte(th >> 0x38), byte(th >> 0x30), byte(th >> 0x28), byte(th >> 0x20),
 		byte(th >> 0x18), byte(th >> 0x10), byte(th >> 0x08), byte(th),
 		byte(mh >> 0x38), byte(mh >> 0x30), byte(mh >> 0x28), byte(mh >> 0x20),
 		byte(mh >> 0x18), byte(mh >> 0x10), byte(mh >> 0x08), byte(mh),
+		byte(0), byte(0), byte(0), byte(0),
 		byte(ts >> 0x18), byte(ts >> 0x10), byte(ts >> 0x08), byte(ts),
 	}
 }

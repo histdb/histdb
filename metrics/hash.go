@@ -15,6 +15,9 @@ func Hash(metric string) histdb.Hash {
 	var tkeyus map[uint64]struct{}
 	var hash histdb.Hash
 
+	mhp := hash.TagHashPtr()
+	thp := hash.TagKeyHashPtr()
+
 	for rest := metric; len(rest) > 0; {
 		var tag string
 		var tkey string
@@ -29,12 +32,11 @@ func Hash(metric string) histdb.Hash {
 		tkeyis, tkeyus, ok = addSet(tkeyis, tkeyus, tkeyh)
 
 		if ok {
-			th := le.Uint64(hash.TagHashPtr()[:])
-			le.PutUint64(hash.TagHashPtr()[:], th+tkeyh)
+			tagh := xxh3.HashString128(tag)
 
-			tagh := xxh3.HashString(tag)
-			mh := le.Uint64(hash.MetricHashPtr()[:])
-			le.PutUint64(hash.MetricHashPtr()[:], mh+tagh)
+			le.PutUint32(thp[:], le.Uint32(thp[:])+uint32(tkeyh))
+			le.PutUint64(mhp[0:8], le.Uint64(mhp[0:8])+tagh.Lo)
+			le.PutUint32(mhp[8:12], le.Uint32(mhp[8:12])+uint32(tagh.Hi))
 		}
 	}
 

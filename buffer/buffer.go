@@ -20,7 +20,7 @@ type T struct {
 	cap  uptr
 }
 
-func Of(n []byte) T {
+func OfCap(n []byte) T {
 	return T{
 		base: *(*ptr)(ptr(&n)),
 		pos:  0,
@@ -34,6 +34,15 @@ func OfLen(n []byte) T {
 		pos:  0,
 		cap:  uptr(len(n)),
 	}
+}
+
+func (buf T) Trim() T {
+	buf.cap = buf.pos
+	return buf
+}
+
+func (buf T) Valid() bool {
+	return buf.pos < buf.cap
 }
 
 func (buf T) Base() ptr {
@@ -86,6 +95,14 @@ func (buf T) Front9() *[9]byte {
 	return (*[9]byte)(ptr(uptr(buf.base) + buf.pos))
 }
 
+func (buf T) Front12() *[12]byte {
+	return (*[12]byte)(ptr(uptr(buf.base) + buf.pos))
+}
+
+func (buf T) Front16() *[16]byte {
+	return (*[16]byte)(ptr(uptr(buf.base) + buf.pos))
+}
+
 func (buf T) FrontN(n int) (x []byte) {
 	xh := (*reflect.SliceHeader)(ptr(&x))
 	xh.Data = uptr(buf.At(0))
@@ -106,22 +123,22 @@ func (buf T) Remaining() uptr {
 	return buf.cap - buf.pos
 }
 
-func (buf T) Grow() T {
-	if rem := buf.Remaining(); rem < 9 {
-		buf.cap = buf.cap*2 + 9
-		n := make([]byte, buf.cap)
-		copy(n, buf.Prefix())
-		buf.base = *(*ptr)(ptr(&n))
-	}
+//go:noinline
+func (buf T) grow(n uintptr) T {
+	buf.cap = buf.cap*2 + n
+	nb := make([]byte, buf.cap)
+	copy(nb, buf.Prefix())
+	buf.base = *(*ptr)(ptr(&nb))
 	return buf
 }
 
-func (buf T) GrowN(n uintptr) T {
-	if rem := buf.Remaining(); rem < n {
-		buf.cap = buf.cap*2 + n
-		n := make([]byte, buf.cap)
-		copy(n, buf.Prefix())
-		buf.base = *(*ptr)(ptr(&n))
+func (buf T) Grow9() T {
+	return buf.Grow(9)
+}
+
+func (buf T) Grow(n uintptr) T {
+	if buf.cap-buf.pos < n {
+		return buf.grow(n)
 	}
 	return buf
 }

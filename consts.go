@@ -5,18 +5,18 @@ import "encoding/binary"
 var le = binary.LittleEndian
 
 const (
-	TagHashSize    = 8
-	MetricHashSize = 8
-	HashSize       = TagHashSize + MetricHashSize
+	TagKeyHashSize = 4
+	TagHashSize    = 12
+	HashSize       = TagKeyHashSize + TagHashSize
 	TimestampSize  = 4
 
 	KeySize = HashSize + TimestampSize
 
 	tagHashStart = 0
-	tagHashEnd   = tagHashStart + TagHashSize
+	tagHashEnd   = tagHashStart + TagKeyHashSize
 
 	metricHashStart = tagHashEnd
-	metricHashEnd   = metricHashStart + MetricHashSize
+	metricHashEnd   = metricHashStart + TagHashSize
 
 	hashStart = tagHashStart
 	hashEnd   = metricHashEnd

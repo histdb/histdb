@@ -1,17 +1,13 @@
 package memindex
 
 import (
-	"encoding/binary"
 	"fmt"
 	"strings"
 	"sync"
-	"unsafe"
 
 	"github.com/RoaringBitmap/roaring"
-	"github.com/zeebo/xxh3"
 
 	"github.com/histdb/histdb"
-	"github.com/histdb/histdb/hashtbl"
 	"github.com/histdb/histdb/metrics"
 	"github.com/histdb/histdb/petname"
 )
@@ -20,8 +16,6 @@ import (
 // we always compute the tag_to_metrics intersection bitmap. if we do it smart, we can
 // keep track of the "path" along the way. this would make subsequent queries that
 // have the same prefix faster.
-
-var le = binary.LittleEndian
 
 var queryPool = sync.Pool{New: func() interface{} { return roaring.New() }}
 
@@ -68,11 +62,9 @@ type T struct {
 	fixed bool
 	card  int
 
-	metric_set    hashtbl.T[histdb.Hash, *histdb.Hash]
-	metric_hashes []histdb.Hash
-
-	tag_names  petname.T
-	tkey_names petname.T
+	metrics    hashSet
+	tag_names  petname.T[histdb.TagHash, *histdb.TagHash]
+	tkey_names petname.T[histdb.TagKeyHash, *histdb.TagKeyHash]
 
 	tag_to_metrics  []*roaring.Bitmap // what metrics include this tag
 	tag_to_tkeys    []*roaring.Bitmap // what tag keys exist in any metric with tag
@@ -81,10 +73,6 @@ type T struct {
 	tkey_to_tkeys   []*roaring.Bitmap // what tag keys exist in any metric with tag key
 	tkey_to_tags    []*roaring.Bitmap // what tags exist in any metric with tag key
 	tkey_to_tvals   []*roaring.Bitmap // what tags exist for the specific tag key in any metric with tag key
-}
-
-func (t *T) find(v string, names *petname.T) (uint32, bool) {
-	return names.Find(xxh3.HashString(v))
 }
 
 func sliceSize(m []*roaring.Bitmap) (n uint64) {
@@ -98,8 +86,7 @@ func (t *T) Size() uint64 {
 	return 0 +
 		/* fixed           */ 8 +
 		/* card            */ 8 +
-		/* metric_set      */ t.metric_set.Size() +
-		/* metric_hashes   */ 24 + uint64(unsafe.Sizeof(histdb.Hash{}))*uint64(len(t.metric_hashes)) +
+		/* hash_set        */ t.metrics.Size() +
 		/* tag_names       */ t.tag_names.Size() +
 		/* tkey_names      */ t.tkey_names.Size() +
 		/* tag_to_metrics  */ sliceSize(t.tag_to_metrics) +
@@ -127,7 +114,7 @@ func (t *T) Fix() {
 	fix(t.tkey_to_tags)
 	fix(t.tkey_to_tvals)
 
-	t.metric_set = hashtbl.T[histdb.Hash, *histdb.Hash]{}
+	t.metrics.Fix()
 
 	t.fixed = true
 }
@@ -150,6 +137,9 @@ func (t *T) Add(metric string) (histdb.Hash, bool) {
 	var tkeyus map[uint32]struct{}
 	var hash histdb.Hash
 
+	mhp := hash.TagHashPtr()
+	thp := hash.TagKeyHashPtr()
+
 	for rest := metric; len(rest) > 0; {
 		var tkey, tag string
 		tkey, tag, _, rest = metrics.PopTag(rest)
@@ -157,35 +147,32 @@ func (t *T) Add(metric string) (histdb.Hash, bool) {
 			continue
 		}
 
-		tkeyh := xxh3.HashString(tkey)
+		tkeyh := histdb.NewTagKeyHash(tkey)
 		tkeyi := t.tkey_names.Put(tkeyh, tkey)
 
 		var ok bool
 		tkeyis, tkeyus, ok = addSet(tkeyis, tkeyus, tkeyi)
 
 		if ok {
-			th := le.Uint64(hash.TagHashPtr()[:])
-			le.PutUint64(hash.TagHashPtr()[:], th+tkeyh)
+			tagh := histdb.NewTagHash(tag)
 
-			tagh := xxh3.HashString(tag)
-			mh := le.Uint64(hash.MetricHashPtr()[:])
-			le.PutUint64(hash.MetricHashPtr()[:], mh+tagh)
+			thp.Add(tkeyh)
+			mhp.Add(tagh)
 
 			tagi := t.tag_names.Put(tagh, tag)
 			tagis = append(tagis, tagi)
 		}
 	}
 
-	if t.fixed || t.metric_set.Len() > 1<<31-1 {
+	if t.fixed || t.metrics.Len() > 1<<31-1 {
 		return hash, false
 	}
 
-	metrici, ok := t.metric_set.Insert(hash, uint32(t.metric_set.Len()))
+	metrici, ok := t.metrics.Insert(hash)
 	if ok {
 		return hash, false
 	}
 
-	t.metric_hashes = append(t.metric_hashes, hash)
 	t.card++
 
 	for i := range tagis {
@@ -208,7 +195,7 @@ func (t *T) Cardinality() int { return t.card }
 
 func (t *T) MetricHashes(metrics *roaring.Bitmap, cb func(histdb.Hash) bool) {
 	metrics.Iterate(func(metricn uint32) bool {
-		return cb(t.metric_hashes[metricn])
+		return cb(t.metrics.Hash(metricn))
 	})
 }
 
@@ -255,7 +242,7 @@ func (t *T) metricsHelper(mbm *roaring.Bitmap, query string, tags []string, cb f
 	}
 
 	if isKey {
-		tkeyn, ok := t.find(tkey, &t.tkey_names)
+		tkeyn, ok := t.tkey_names.Find(histdb.NewTagKeyHash(tkey))
 		if !ok {
 			return false
 		}
@@ -274,7 +261,7 @@ func (t *T) metricsHelper(mbm *roaring.Bitmap, query string, tags []string, cb f
 		return cont
 
 	} else {
-		tagn, ok := t.find(tag, &t.tag_names)
+		tagn, ok := t.tag_names.Find(histdb.NewTagHash(tag))
 		return ok && emit(tagn)
 	}
 }
@@ -298,7 +285,7 @@ func (t *T) TagKeys(input string, cb func(result string) bool) {
 			continue
 		}
 
-		tkeyn, ok := t.find(tkey, &t.tkey_names)
+		tkeyn, ok := t.tkey_names.Find(histdb.NewTagKeyHash(tkey))
 		if !ok {
 			return
 		}
@@ -307,7 +294,7 @@ func (t *T) TagKeys(input string, cb func(result string) bool) {
 			ltkbm = t.tkey_to_tkeys[tkeyn]
 			lmbm = t.tkey_to_metrics[tkeyn]
 		} else {
-			name, ok := t.find(tag, &t.tag_names)
+			name, ok := t.tag_names.Find(histdb.NewTagHash(tag))
 			if !ok {
 				return
 			}
@@ -349,7 +336,7 @@ func (t *T) TagKeys(input string, cb func(result string) bool) {
 }
 
 func (t *T) TagValues(input, tkey string, cb func(result string) bool) {
-	name, ok := t.find(tkey, &t.tkey_names)
+	name, ok := t.tkey_names.Find(histdb.NewTagKeyHash(tkey))
 	if !ok {
 		return
 	}
@@ -371,14 +358,14 @@ func (t *T) TagValues(input, tkey string, cb func(result string) bool) {
 		}
 
 		if isKey {
-			name, ok := t.find(tkey, &t.tkey_names)
+			name, ok := t.tkey_names.Find(histdb.NewTagKeyHash(tkey))
 			if !ok {
 				return
 			}
 			ltbm = t.tkey_to_tags[name]
 			lmbm = t.tkey_to_metrics[name]
 		} else {
-			name, ok := t.find(tag, &t.tag_names)
+			name, ok := t.tag_names.Find(histdb.NewTagHash(tag))
 			if !ok {
 				return
 			}

@@ -1,14 +1,13 @@
 package hashtbl
 
 import (
-	"bytes"
 	"testing"
 	"time"
 
+	"github.com/histdb/histdb/buffer"
+	"github.com/histdb/histdb/rwutils"
 	"github.com/zeebo/assert"
 	"github.com/zeebo/mwc"
-
-	"github.com/histdb/histdb/rwutils"
 )
 
 func TestTable(t *testing.T) {
@@ -52,21 +51,21 @@ func TestTableSerialize(t *testing.T) {
 		assert.Equal(t, val, i)
 	}
 
-	var buf bytes.Buffer
 	var w rwutils.W
-	w.Init(&buf, make([]byte, 4096))
 	tb.AppendTo(&w)
-	assert.NoError(t, w.Done())
+	w.Uint8(1)
+	w.Uint8(2)
+	w.Uint8(3)
 
-	data := append(buf.Bytes(), 1, 2, 3)
+	var r rwutils.R
+	r.Init(w.Done().Trim().Reset())
 
 	var tb2 T[U64, *U64]
-	var r rwutils.R
-	r.Init(data)
 	tb2.ReadFrom(&r)
+
 	rem, err := r.Done()
 	assert.NoError(t, err)
-	assert.Equal(t, rem, []byte{1, 2, 3})
+	assert.Equal(t, rem.Suffix(), []byte{1, 2, 3})
 
 	for i := uint64(0); i < 1000; i++ {
 		val, ok := tb2.Insert(U64(i), ^uint32(0))
@@ -142,12 +141,11 @@ func BenchmarkTableSerialize(b *testing.B) {
 
 	b.Run("AppendTo", func(b *testing.B) {
 		run := func(b *testing.B, n int) {
-			buf := new(bytes.Buffer)
 			tmp := make([]byte, 0, 4096)
 			tb := mk(n)
 
 			var w rwutils.W
-			w.Init(buf, tmp)
+			w.Init(buffer.OfCap(tmp))
 			tb.AppendTo(&w)
 
 			now := time.Now()
@@ -155,8 +153,7 @@ func BenchmarkTableSerialize(b *testing.B) {
 			b.ResetTimer()
 
 			for i := 0; i < b.N; i++ {
-				buf.Reset()
-				w.Init(buf, tmp)
+				w.Init(w.Done())
 				tb.AppendTo(&w)
 			}
 
@@ -174,13 +171,10 @@ func BenchmarkTableSerialize(b *testing.B) {
 
 	b.Run("ReadFrom", func(b *testing.B) {
 		run := func(b *testing.B, n int) {
-			buf := new(bytes.Buffer)
-			tmp := make([]byte, 0, 4096)
 			tb := mk(n)
 
 			var w rwutils.W
 			var r rwutils.R
-			w.Init(buf, tmp)
 			tb.AppendTo(&w)
 
 			now := time.Now()
@@ -188,7 +182,7 @@ func BenchmarkTableSerialize(b *testing.B) {
 			b.ResetTimer()
 
 			for i := 0; i < b.N; i++ {
-				r.Init(buf.Bytes())
+				r.Init(w.Done().Reset())
 				tb.ReadFrom(&r)
 			}
 

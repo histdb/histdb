@@ -2,11 +2,10 @@ package rwutils
 
 import (
 	"encoding/binary"
-	"io"
-
-	"github.com/zeebo/errs/v2"
 
 	"github.com/histdb/histdb/buffer"
+	"github.com/histdb/histdb/varint"
+	"github.com/zeebo/errs/v2"
 )
 
 var le = binary.LittleEndian
@@ -17,59 +16,75 @@ type RW interface {
 }
 
 type W struct {
-	buf []byte
-	err error
-	w   io.Writer
+	buf buffer.T
 }
 
-func (w *W) Init(wr io.Writer, buf []byte) {
-	*w = W{
-		buf: buf[:0],
-		w:   wr,
-	}
+func (w *W) Init(buf buffer.T) {
+	*w = W{buf: buf}
 }
 
-func (w *W) Done() error {
-	w.flush()
-	return w.err
+func (w *W) Done() buffer.T {
+	return w.buf
+}
+
+func (w *W) Varint(x uint64) {
+	w.buf = w.buf.Grow9()
+	n := varint.Append(w.buf.Front9(), x)
+	w.buf = w.buf.Advance(n)
+}
+
+func (w *W) StageUint64(n uintptr) *[8]byte {
+	pos := w.buf.Pos()
+	w.buf = w.buf.Grow(n + 8).Advance(8)
+	return w.buf.Index8(pos)
+}
+
+func (w *W) Bytes4(x [4]byte) {
+	w.buf = w.buf.Grow(4)
+	*w.buf.Front4() = x
+	w.buf = w.buf.Advance(4)
+}
+
+func (w *W) Bytes12(x [12]byte) {
+	w.buf = w.buf.Grow(12)
+	*w.buf.Front12() = x
+	w.buf = w.buf.Advance(12)
+}
+
+func (w *W) Bytes16(x [16]byte) {
+	w.buf = w.buf.Grow(16)
+	*w.buf.Front16() = x
+	w.buf = w.buf.Advance(16)
 }
 
 func (w *W) Uint64(x uint64) {
-	if len(w.buf)+8 > cap(w.buf) {
-		w.flush()
-	}
-	w.buf = append(w.buf,
-		byte(x), byte(x>>8), byte(x>>16), byte(x>>24),
-		byte(x>>32), byte(x>>40), byte(x>>48), byte(x>>56),
-	)
+	w.buf = w.buf.Grow(8)
+	le.PutUint64(w.buf.Front8()[:], x)
+	w.buf = w.buf.Advance(8)
 }
 
 func (w *W) Uint32(x uint32) {
-	if len(w.buf)+4 > cap(w.buf) {
-		w.flush()
-	}
-	w.buf = append(w.buf, byte(x), byte(x>>8), byte(x>>16), byte(x>>24))
+	w.buf = w.buf.Grow(4)
+	le.PutUint32(w.buf.Front4()[:], x)
+	w.buf = w.buf.Advance(4)
+}
+
+func (w *W) Uint16(x uint16) {
+	w.buf = w.buf.Grow(2)
+	le.PutUint16(w.buf.Front2()[:], x)
+	w.buf = w.buf.Advance(2)
+}
+
+func (w *W) Uint8(x uint8) {
+	w.buf = w.buf.Grow(1)
+	*w.buf.Front() = x
+	w.buf = w.buf.Advance(1)
 }
 
 func (w *W) Bytes(buf []byte) {
-	if len(w.buf)+len(buf) > cap(w.buf) {
-		w.flush()
-		if len(buf) > cap(w.buf) {
-			if w.err == nil {
-				_, w.err = w.w.Write(buf)
-			}
-			return
-		}
-	}
-	w.buf = append(w.buf, buf...)
-}
-
-//go:noinline
-func (w *W) flush() {
-	if w.err == nil {
-		_, w.err = w.w.Write(w.buf)
-	}
-	w.buf = w.buf[:0]
+	w.buf = w.buf.Grow(uintptr(len(buf)))
+	copy(w.buf.Suffix(), buf)
+	w.buf = w.buf.Advance(uintptr(len(buf)))
 }
 
 type R struct {
@@ -77,53 +92,112 @@ type R struct {
 	err error
 }
 
-func (r *R) Init(buf []byte) {
-	*r = R{
-		buf: buffer.OfLen(buf),
-	}
+func (r *R) Init(buf buffer.T) {
+	*r = R{buf: buf}
 }
 
-func (r *R) Done() ([]byte, error) {
-	return r.buf.Suffix(), r.err
+func (r *R) Done() (buffer.T, error) {
+	return r.buf, r.err
+}
+
+func (r *R) Varint() (x uint64) {
+	if r.buf.Remaining() >= 9 {
+		var n uintptr
+		n, x = varint.FastConsume(r.buf.Front9())
+		r.buf = r.buf.Advance(n)
+	} else {
+		var ok bool
+		x, r.buf, ok = varint.SafeConsume(r.buf)
+		if !ok {
+			r.Invalid(errs.Errorf("short buffer: varint truncated"))
+		}
+	}
+	return
 }
 
 func (r *R) Uint64() (x uint64) {
-	if r.err == nil {
-		if r.buf.Remaining() >= 8 {
-			x = le.Uint64(r.buf.Front8()[:])
-			r.buf = r.buf.Advance(8)
-		} else {
-			r.bad(8)
-		}
+	if r.buf.Remaining() >= 8 {
+		x = le.Uint64(r.buf.Front8()[:])
+		r.buf = r.buf.Advance(8)
+	} else {
+		r.Invalid(errs.Errorf("short buffer: needed 8 bytes"))
 	}
 	return
 }
 
 func (r *R) Uint32() (x uint32) {
-	if r.err == nil {
-		if r.buf.Remaining() >= 4 {
-			x = le.Uint32(r.buf.Front4()[:])
-			r.buf = r.buf.Advance(4)
-		} else {
-			r.bad(4)
-		}
+	if r.buf.Remaining() >= 4 {
+		x = le.Uint32(r.buf.Front4()[:])
+		r.buf = r.buf.Advance(4)
+	} else {
+		r.Invalid(errs.Errorf("short buffer: needed 4 bytes"))
+	}
+	return
+}
+
+func (r *R) Uint16() (x uint16) {
+	if r.buf.Remaining() >= 2 {
+		x = le.Uint16(r.buf.Front2()[:])
+		r.buf = r.buf.Advance(2)
+	} else {
+		r.Invalid(errs.Errorf("short buffer: needed 2 bytes"))
+	}
+	return
+}
+
+func (r *R) Uint8() (x uint8) {
+	if r.buf.Remaining() >= 1 {
+		x = *r.buf.Front()
+		r.buf = r.buf.Advance(1)
+	} else {
+		r.Invalid(errs.Errorf("short buffer: needed 1 byte"))
+	}
+	return
+}
+
+func (r *R) Bytes4() (x [4]byte) {
+	if r.buf.Remaining() >= 4 {
+		x = *r.buf.Front4()
+		r.buf = r.buf.Advance(4)
+	} else {
+		r.Invalid(errs.Errorf("short buffer: needed 4 bytes"))
+	}
+	return
+}
+
+func (r *R) Bytes12() (x [12]byte) {
+	if r.buf.Remaining() >= 12 {
+		x = *r.buf.Front12()
+		r.buf = r.buf.Advance(12)
+	} else {
+		r.Invalid(errs.Errorf("short buffer: needed 12 bytes"))
+	}
+	return
+}
+
+func (r *R) Bytes16() (x [16]byte) {
+	if r.buf.Remaining() >= 16 {
+		x = *r.buf.Front16()
+		r.buf = r.buf.Advance(16)
+	} else {
+		r.Invalid(errs.Errorf("short buffer: needed 16 bytes"))
 	}
 	return
 }
 
 func (r *R) Bytes(n int) (x []byte) {
-	if r.err == nil {
-		if r.buf.Remaining() >= uintptr(n) {
-			x = r.buf.FrontN(n)
-			r.buf = r.buf.Advance(uintptr(n))
-		} else {
-			r.bad(n)
-		}
+	if r.buf.Remaining() >= uintptr(n) {
+		x = r.buf.FrontN(n)
+		r.buf = r.buf.Advance(uintptr(n))
+	} else {
+		r.Invalid(errs.Errorf("short buffer: needed %d bytes", n))
 	}
 	return
 }
 
-func (r *R) bad(n int) {
-	r.err = errs.Errorf("short buffer: needed %d bytes", n)
-	r.buf = r.buf.Advance(r.buf.Remaining())
+func (r *R) Invalid(err error) {
+	if r.err == nil {
+		r.err = err
+		r.buf = buffer.T{}
+	}
 }

@@ -24,42 +24,42 @@ func (k *Key) ReadFrom(r *rwutils.R) { copy(k[:], r.Bytes(len(k))) }
 func (k Key) Zero() bool { return k == Key{} }
 
 func (k Key) String() string {
-	return fmt.Sprintf("(key %x %x %08x)", k.TagHash(), k.MetricHash(), k.Timestamp())
+	return fmt.Sprintf("(key %08x %024x %08x)", k.TagKeyHash(), k.TagHash(), k.Timestamp())
 }
 
-func (k Key) Hash() (h [HashSize]byte) {
+func (k Key) Hash() (h Hash) {
 	copy(h[0:HashSize], k[hashStart:hashEnd])
 	return h
 }
 
-func (k *Key) HashPtr() *[HashSize]byte {
-	return (*[HashSize]byte)(unsafe.Pointer(&k[hashStart]))
+func (k *Key) HashPtr() *Hash {
+	return (*Hash)(unsafe.Pointer(&k[hashStart]))
 }
 
-func (k *Key) SetTagHash(th [TagHashSize]byte) {
-	copy(k[tagHashStart:tagHashEnd], th[0:TagHashSize])
+func (k *Key) SetTagKeyHash(th TagKeyHash) {
+	copy(k[tagHashStart:tagHashEnd], th[0:TagKeyHashSize])
 }
 
-func (k Key) TagHash() (th [TagHashSize]byte) {
-	copy(th[0:TagHashSize], k[tagHashStart:tagHashEnd])
+func (k Key) TagKeyHash() (th TagKeyHash) {
+	copy(th[0:TagKeyHashSize], k[tagHashStart:tagHashEnd])
 	return th
 }
 
-func (k *Key) TagHashPtr() (th *[TagHashSize]byte) {
-	return (*[TagHashSize]byte)(unsafe.Pointer(&k[tagHashStart]))
+func (k *Key) TagKeyHashPtr() (th *TagKeyHash) {
+	return (*TagKeyHash)(unsafe.Pointer(&k[tagHashStart]))
 }
 
-func (k *Key) SetMetricHash(mh [MetricHashSize]byte) {
-	copy(k[metricHashStart:metricHashEnd], mh[0:MetricHashSize])
+func (k *Key) SetTagHash(mh TagHash) {
+	copy(k[metricHashStart:metricHashEnd], mh[0:TagHashSize])
 }
 
-func (k Key) MetricHash() (mh [MetricHashSize]byte) {
-	copy(mh[0:MetricHashSize], k[metricHashStart:metricHashEnd])
+func (k Key) TagHash() (mh TagHash) {
+	copy(mh[0:TagHashSize], k[metricHashStart:metricHashEnd])
 	return mh
 }
 
-func (k *Key) MetricHashPtr() (mh *[MetricHashSize]byte) {
-	return (*[MetricHashSize]byte)(unsafe.Pointer(&k[metricHashStart]))
+func (k *Key) TagHashPtr() (mh *TagHash) {
+	return (*TagHash)(unsafe.Pointer(&k[metricHashStart]))
 }
 
 func (k *Key) SetTimestamp(ts uint32) {

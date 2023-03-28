@@ -7,13 +7,13 @@ import (
 	"github.com/zeebo/mwc"
 )
 
-func load(idx *T) {
+func loadRandom(idx *T) {
 	rng := mwc.Rand()
 
 	const (
-		nkeys = 200
-		ntags = 10000
-		nmets = 200000
+		nkeys = 20
+		ntags = 1000
+		nmets = 20000
 	)
 
 	var tags []string

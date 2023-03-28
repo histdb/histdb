@@ -3,11 +3,12 @@ package petname
 import (
 	"testing"
 
+	"github.com/histdb/histdb/hashtbl"
 	"github.com/zeebo/assert"
 )
 
 func TestPetname(t *testing.T) {
-	var pn T
+	var pn T[hashtbl.U64, *hashtbl.U64]
 
 	assert.Equal(t, pn.Len(), 0)
 	assert.Equal(t, pn.Size(), 0x68)
@@ -18,9 +19,11 @@ func TestPetname(t *testing.T) {
 	assert.Equal(t, i0, i2)
 
 	f0, ok := pn.Find(1)
+	assert.That(t, ok)
 	assert.Equal(t, f0, i0)
 
 	f1, ok := pn.Find(2)
+	assert.That(t, ok)
 	assert.Equal(t, f1, i1)
 
 	_, ok = pn.Find(3)

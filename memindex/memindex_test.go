@@ -1,21 +1,19 @@
 package memindex
 
 import (
-	"bufio"
-	"compress/gzip"
 	"fmt"
 	"os"
 	"sort"
-	"strings"
 	"testing"
 	"time"
-	"unsafe"
 
 	"github.com/RoaringBitmap/roaring"
 	"github.com/zeebo/assert"
 
 	"github.com/histdb/histdb"
+	"github.com/histdb/histdb/buffer"
 	"github.com/histdb/histdb/metrics"
+	"github.com/histdb/histdb/rwutils"
 )
 
 func TestMemindex(t *testing.T) {
@@ -118,7 +116,7 @@ func TestMemindex(t *testing.T) {
 
 		h0, _ := idx.Add("k0=v0a,k1=v1a,k2=v2a")
 		h1, _ := idx.Add("k0=v0b,k1=v1b,k2=v2b")
-		h2, _ := idx.Add("k0=v0c,k1=v1c")
+		h2, _ := idx.Add("k0=v0b,k1=v1b")
 		h3, _ := idx.Add("k0=v0c,k1=v1c,k2=v2a")
 		h4, _ := idx.Add("k0=v0c,k1=v1c,k2=v2b")
 		h5, _ := idx.Add("k0=v0c,k1=v1c,k2=v2c")
@@ -127,7 +125,9 @@ func TestMemindex(t *testing.T) {
 		got := []histdb.Hash{}
 
 		idx.Metrics("k0,k1", func(metrics *roaring.Bitmap, tags []string) bool {
+			t.Log(tags, metrics)
 			idx.MetricHashes(metrics, func(h histdb.Hash) bool {
+				t.Logf("\t%032x", h)
 				got = append(got, h)
 				return true
 			})
@@ -139,15 +139,58 @@ func TestMemindex(t *testing.T) {
 
 		assert.DeepEqual(t, got, exp)
 	})
+
+	t.Run("Serialize", func(t *testing.T) {
+		var idx T
+		loadRandom(&idx)
+
+		var w rwutils.W
+		idx.AppendTo(&w)
+
+		var r rwutils.R
+		r.Init(w.Done().Trim().Reset())
+
+		var idx2 T
+		idx2.ReadFrom(&r)
+		_, err := r.Done()
+		assert.NoError(t, err)
+
+		assert.Equal(t, idx.card, idx2.card)
+
+		assert.Equal(t, idx.metrics, idx2.metrics)
+		// assert.Equal(t, idx.metric_hashes, idx2.metric_hashes)
+
+		assert.Equal(t, idx.tag_names, idx2.tag_names)
+		assert.Equal(t, idx.tkey_names, idx2.tkey_names)
+
+		equalBitmaps := func(a, b []*roaring.Bitmap) {
+			assert.Equal(t, len(a), len(b))
+			for i := range a {
+				assert.That(t, a[i].Equals(b[i]))
+			}
+		}
+
+		equalBitmaps(idx.tag_to_metrics, idx2.tag_to_metrics)
+		equalBitmaps(idx.tag_to_tkeys, idx2.tag_to_tkeys)
+		equalBitmaps(idx.tag_to_tags, idx2.tag_to_tags)
+		equalBitmaps(idx.tkey_to_metrics, idx2.tkey_to_metrics)
+		equalBitmaps(idx.tkey_to_tkeys, idx2.tkey_to_tkeys)
+		equalBitmaps(idx.tkey_to_tags, idx2.tkey_to_tags)
+		equalBitmaps(idx.tkey_to_tvals, idx2.tkey_to_tvals)
+	})
 }
 
 func BenchmarkMemindex(b *testing.B) {
-	var idx T
-	loadLarge(&idx)
-	dumpSizeStats(b, &idx)
+	data, _ := os.ReadFile("metrics.idx")
+	var r rwutils.R
+	r.Init(buffer.OfLen(data))
 
-	// query := "k0=v0"
-	// tkey := "k9"
+	var idx T
+	idx.ReadFrom(&r)
+	_, err := r.Done()
+	assert.NoError(b, err)
+
+	dumpSizeStats(b, &idx)
 
 	const (
 		query  = "app=storagenode-release,inst=12XzWDW7Nb496enKo4epRmpQamMe3cw7G3TUuhPrkoqoLb76rHK"
@@ -194,6 +237,26 @@ func BenchmarkMemindex(b *testing.B) {
 		b.ReportMetric(float64(b.N)/time.Since(start).Seconds()/1e6, "Mm/sec")
 	})
 
+	b.Run("Add1KNew", func(b *testing.B) {
+		metrics := make([]string, 1000)
+		for i := range metrics {
+			metrics[i] = fmt.Sprintf("foo=%d,bar=fixed", i)
+		}
+
+		start := time.Now()
+		b.ResetTimer()
+		b.ReportAllocs()
+
+		for i := 0; i < b.N; i++ {
+			var idx T
+			for _, m := range metrics {
+				idx.Add(m)
+			}
+		}
+
+		b.ReportMetric(1000*float64(b.N)/time.Since(start).Seconds()/1e6, "Mm/sec")
+	})
+
 	b.Run("Metrics", func(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
@@ -213,12 +276,35 @@ func BenchmarkMemindex(b *testing.B) {
 		b.ReportMetric(float64(count)/float64(b.N), "metrics/op")
 		b.ReportMetric(float64(b.N)/time.Since(start).Seconds(), "ops/sec")
 	})
+
+	b.Run("AppendTo", func(b *testing.B) {
+		var w rwutils.W
+		idx.AppendTo(&w)
+
+		b.ReportAllocs()
+		b.ResetTimer()
+
+		for i := 0; i < b.N; i++ {
+			w.Init(w.Done().Reset())
+			idx.AppendTo(&w)
+		}
+	})
+
+	b.Run("ReadFrom", func(b *testing.B) {
+		b.ReportAllocs()
+		b.ResetTimer()
+
+		for i := 0; i < b.N; i++ {
+			var r rwutils.R
+			r.Init(buffer.OfLen(data))
+
+			var idx T
+			idx.ReadFrom(&r)
+		}
+	})
 }
 
 func dumpSizeStats(t testing.TB, idx *T) {
-	const query = "k0=v0"
-	const tkey = "k9"
-
 	ss := func(x []*roaring.Bitmap) (o uint64) {
 		for _, bm := range x {
 			o += bm.GetSizeInBytes()
@@ -234,101 +320,19 @@ func dumpSizeStats(t testing.TB, idx *T) {
 	}
 
 	dumpSlice := func(name string, x []*roaring.Bitmap) {
-		t.Log(name+":", "len:", len(x), "size:", ss(x), "card:", cs(x))
+		t.Log(name, "len:", len(x), "\t\tsize:", ss(x), "\t\tcard:", cs(x))
 	}
 
-	t.Log("metric_set:", "size:", idx.metric_set.Size(), "len:", idx.metric_set.Len())
-	t.Log("tag_names:", "size:", idx.tag_names.Size(), "len:", idx.tag_names.Len())
-	t.Log("tkey_names:", "size:", idx.tkey_names.Size(), "len:", idx.tkey_names.Len())
+	t.Log("idx:            ", "len:", idx.Cardinality(), "\tsize:", idx.Size(), "\tbpm: ", float64(idx.Size())/float64(idx.Cardinality()))
+	t.Log("metric_set:     ", "len:", idx.metrics.Len(), "\tsize:", idx.metrics.Size(), "\tbpm: ", float64(idx.metrics.Size())/float64(idx.metrics.Len()))
+	t.Log("tag_names:      ", "len:", idx.tag_names.Len(), "\t\tsize:", idx.tag_names.Size())
+	t.Log("tkey_names:     ", "len:", idx.tkey_names.Len(), "\t\tsize:", idx.tkey_names.Size())
 
-	dumpSlice("tag_to_metrics", idx.tag_to_metrics)
-	dumpSlice("tag_to_tkeys", idx.tag_to_tkeys)
-	dumpSlice("tag_to_tags", idx.tag_to_tags)
-	dumpSlice("tkey_to_metrics", idx.tkey_to_metrics)
-	dumpSlice("tkey_to_tkeys", idx.tkey_to_tkeys)
-	dumpSlice("tkey_to_tags", idx.tkey_to_tags)
-	dumpSlice("tkey_to_tvals", idx.tkey_to_tvals)
-
-	t.Log("idx:", "size:", idx.Size(), "count:", idx.Cardinality(), "bpm:", float64(idx.Size())/float64(idx.Cardinality()))
-}
-
-func TestWhatever(t *testing.T) {
-	t.SkipNow()
-
-	var idx T
-	loadLarge(&idx)
-	dumpSizeStats(t, &idx)
-
-	idx.Metrics("app=storagenode-release,inst=12XzWDW7Nb496enKo4epRmpQamMe3cw7G3TUuhPrkoqoLb76rHK,name",
-		func(metrics *roaring.Bitmap, tags []string) bool {
-			fmt.Println(tags, metrics.GetCardinality())
-			return true
-		})
-}
-
-func loadLarge(idx *T) {
-	fh, err := os.Open("/home/jeff/go/src/github.com/zeebo/rothko/index/memindex/metrics.txt")
-	if err != nil {
-		panic(err)
-	}
-	defer fh.Close()
-
-	gzfh, err := gzip.NewReader(fh)
-	if err != nil {
-		panic(err)
-	}
-
-	const statEvery = 100000
-	start := time.Now()
-	count := 0
-
-	lstats := start
-	lcard := 0
-	lcount := 0
-
-	stats := func() {
-		msize := float64(idx.metric_set.Size()) +
-			(24 + float64(unsafe.Sizeof(histdb.Hash{}))*float64(len(idx.metric_hashes)))
-		size := float64(idx.Size())
-		card := idx.Cardinality()
-
-		fmt.Printf("Added (%-8d m) (%-8d um) | total (%0.2f%% unique) (%0.2f m/sec) (%0.2f um/sec) | recently (%0.2f%% unique) (%0.2f m/sec) (%0.2f um/sec) | index size (%0.2f MiB) (%0.2f b/m) | metric size (%0.2f MiB) (%0.2f MiB) (%0.2f b/m)\n",
-			count,
-			card,
-
-			float64(card)/float64(count)*100,
-			float64(count)/time.Since(start).Seconds(),
-			float64(card)/time.Since(start).Seconds(),
-
-			float64(card-lcard)/float64(count-lcount)*100,
-			float64(count-lcount)/time.Since(lstats).Seconds(),
-			float64(card-lcard)/time.Since(lstats).Seconds(),
-
-			size/1024/1024,
-			size/float64(card),
-
-			msize/1024/1024,
-			(size-msize)/1024/1024,
-			(size-msize)/float64(card),
-		)
-
-		lstats = time.Now()
-		lcard = card
-		lcount = count
-	}
-
-	scanner := bufio.NewScanner(gzfh)
-	for scanner.Scan() {
-		idx.Add(strings.TrimSpace(scanner.Text()))
-		count++
-		if count%statEvery == 0 {
-			stats()
-			// if idx.Cardinality() >= 1e6 {
-			// 	break
-			// }
-		}
-	}
-
-	idx.Fix()
-	stats()
+	dumpSlice("tag_to_metrics: ", idx.tag_to_metrics)
+	dumpSlice("tag_to_tkeys:   ", idx.tag_to_tkeys)
+	dumpSlice("tag_to_tags:    ", idx.tag_to_tags)
+	dumpSlice("tkey_to_metrics:", idx.tkey_to_metrics)
+	dumpSlice("tkey_to_tkeys:  ", idx.tkey_to_tkeys)
+	dumpSlice("tkey_to_tags:   ", idx.tkey_to_tags)
+	dumpSlice("tkey_to_tvals:  ", idx.tkey_to_tvals)
 }

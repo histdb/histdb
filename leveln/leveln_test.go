@@ -24,7 +24,7 @@ func TestLevelNWriterReader(t *testing.T) {
 	lnw.Init(keys, values)
 
 	for i := 0; i < 1000; i++ {
-		key := testhelp.KeyFrom(uint64(i)/8, 0, uint32(i))
+		key := testhelp.KeyFrom(uint32(i)/8, 0, uint32(i))
 		assert.NoError(t, lnw.Append(key, []byte{byte(i >> 8), byte(i)}))
 	}
 	assert.NoError(t, lnw.Finish())
@@ -38,7 +38,7 @@ func TestLevelNWriterReader(t *testing.T) {
 	i := 0
 	for ; it.Next(); i++ {
 		var key histdb.Key
-		binary.BigEndian.PutUint64(key.TagHashPtr()[:], uint64(i)/8)
+		binary.BigEndian.PutUint32(key.TagKeyHashPtr()[:], uint32(i)/8)
 		key.SetTimestamp(uint32(i))
 
 		assert.Equal(t, key, it.Key())

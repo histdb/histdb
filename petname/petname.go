@@ -11,20 +11,20 @@ type span struct {
 	end   uint32
 }
 
-type T struct {
+type T[K hashtbl.Key, RWK hashtbl.RWKey[K]] struct {
 	buf   []byte
-	idxs  hashtbl.T[hashtbl.U64, *hashtbl.U64]
+	idxs  hashtbl.T[K, RWK]
 	spans []span
 }
 
-func (t *T) Len() int {
+func (t *T[K, RWK]) Len() int {
 	if t == nil {
 		return 0
 	}
 	return t.idxs.Len()
 }
 
-func (t *T) Size() uint64 {
+func (t *T[K, RWK]) Size() uint64 {
 	return 0 +
 		/* buf   */ 24 + 1*uint64(len(t.buf)) +
 		/* idxs  */ t.idxs.Size() +
@@ -32,8 +32,8 @@ func (t *T) Size() uint64 {
 		0
 }
 
-func (t *T) Put(h uint64, v string) uint32 {
-	n, ok := t.idxs.Insert(hashtbl.U64(h), uint32(t.idxs.Len()))
+func (t *T[K, RWK]) Put(h K, v string) uint32 {
+	n, ok := t.idxs.Insert(h, uint32(t.idxs.Len()))
 	if !ok && len(v) > 0 {
 		t.spans = append(t.spans, span{
 			begin: uint32(len(t.buf)),
@@ -44,11 +44,11 @@ func (t *T) Put(h uint64, v string) uint32 {
 	return n
 }
 
-func (t *T) Find(h uint64) (uint32, bool) {
-	return t.idxs.Find(hashtbl.U64(h))
+func (t *T[K, RWK]) Find(h K) (uint32, bool) {
+	return t.idxs.Find(h)
 }
 
-func (t *T) Get(n uint32) string {
+func (t *T[K, RWK]) Get(n uint32) string {
 	if uint64(n) < uint64(len(t.spans)) {
 		s := t.spans[n]
 		b, e := uint64(s.begin), uint64(s.end)

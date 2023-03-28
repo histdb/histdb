@@ -9,10 +9,7 @@ import (
 	"github.com/histdb/histdb/buffer"
 )
 
-type (
-	ptr  = unsafe.Pointer
-	uptr = uintptr
-)
+type ptr = unsafe.Pointer
 
 //
 // varint support

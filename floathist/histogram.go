@@ -8,13 +8,13 @@ import (
 )
 
 func lowerValue(i, j, k uint32) float32 {
-	obs := i<<l0Shift | j<<l1Shift | k<<l2Shift
+	obs := i<<l0Sh | j<<l1Sh | k<<l2Sh
 	obs ^= ^uint32(int32(obs)>>31) | (1 << 31)
 	return math.Float32frombits(obs)
 }
 
 func upperValue(i, j, k uint32) float32 {
-	obs := i<<l0Shift | j<<l1Shift | k<<l2Shift | 1<<halfShift
+	obs := i<<l0Sh | j<<l1Sh | k<<l2Sh | 1<<halfSh
 	obs ^= ^uint32(int32(obs)>>31) | (1 << 31)
 	return math.Float32frombits(obs)
 }
@@ -26,11 +26,11 @@ type Histogram struct {
 // Reset clears the histogram without freeing the memory it is using. It is
 // not safe to call with concurrent reads or writes to h.
 func (h *Histogram) Reset() {
-	for bm := h.l0.bm.Clone(); !bm.Empty(); bm.Next() {
+	for bm := h.l0.bm.AtomicClone(); !bm.Empty(); bm.Next() {
 		i := bm.Lowest()
 		l1 := layer1_load(&h.l0.l1s[i])
 
-		for bm := l1.bm.Clone(); !bm.Empty(); bm.Next() {
+		for bm := l1.bm.AtomicClone(); !bm.Empty(); bm.Next() {
 			j := bm.Lowest()
 			l2 := layer2_load(&l1.l2s[j])
 
@@ -42,7 +42,7 @@ func (h *Histogram) Reset() {
 // Merge adds all of the values from g into h. It is not safe to call with
 // concurrent mutations to g or h.
 func (h *Histogram) Merge(g *Histogram) error {
-	for bm := g.l0.bm.Clone(); !bm.Empty(); bm.Next() {
+	for bm := g.l0.bm.AtomicClone(); !bm.Empty(); bm.Next() {
 		l1idx := bm.Lowest()
 		l1g := g.l0.l1s[l1idx]
 		l1h := h.l0.l1s[l1idx]
@@ -50,20 +50,20 @@ func (h *Histogram) Merge(g *Histogram) error {
 		if l1h == nil {
 			l1h = new(layer1)
 			h.l0.l1s[l1idx] = l1h
-			h.l0.bm.SetIdx(l1idx)
+			h.l0.bm.AtomicSetIdx(l1idx)
 		}
 
-		for bm := l1g.bm.Clone(); !bm.Empty(); bm.Next() {
+		for bm := l1g.bm.AtomicClone(); !bm.Empty(); bm.Next() {
 			l2idx := bm.Lowest()
 			l2g := l1g.l2s[l2idx]
 			l2h := l1h.l2s[l2idx]
 
 			if l2h == nil {
 				l2h = newLayer2()
-				l1h.bm.SetIdx(l2idx)
+				l1h.bm.AtomicSetIdx(l2idx)
 			}
 
-			for k := uint32(0); k < l2Size; k++ {
+			for k := uint32(0); k < l2S; k++ {
 				hn := layer2_loadCounter(l2h, k)
 				gn := layer2_loadCounter(l2g, k)
 				if gn == 0 {
@@ -93,9 +93,9 @@ func (h *Histogram) Observe(v float32) {
 	bits := math.Float32bits(v)
 	bits ^= uint32(int32(bits)>>31) | (1 << 31)
 
-	l1idx := (bits >> l0Shift) % l0Size
-	l2idx := (bits >> l1Shift) % l1Size
-	idx := (bits >> l2Shift) % l2Size
+	l1idx := (bits >> l0Sh) % l0S
+	l2idx := (bits >> l1Sh) % l1S
+	idx := (bits >> l2Sh) % l2S
 
 	l1_addr := &h.l0.l1s[l1idx]
 	l1 := layer1_load(l1_addr)
@@ -104,7 +104,7 @@ func (h *Histogram) Observe(v float32) {
 		if !layer1_cas(l1_addr, l1) {
 			l1 = layer1_load(l1_addr)
 		} else {
-			h.l0.bm.SetIdx(l1idx)
+			h.l0.bm.AtomicSetIdx(l1idx)
 		}
 	}
 
@@ -115,7 +115,7 @@ func (h *Histogram) Observe(v float32) {
 		if !layer2_cas(l2_addr, nil, l2) {
 			l2 = layer2_load(l2_addr)
 		} else {
-			l1.bm.SetIdx(l2idx)
+			l1.bm.AtomicSetIdx(l2idx)
 		}
 	}
 
@@ -142,35 +142,35 @@ func (h *Histogram) Observe(v float32) {
 //
 // It is safe to be called concurrently.
 func (h *Histogram) Min() float32 {
-	bm0 := h.l0.bm.Clone()
+	bm0 := h.l0.bm.AtomicClone()
 	i := bm0.Lowest()
 	l1 := layer1_load(&h.l0.l1s[i])
 
-	bm1 := l1.bm.Clone()
+	bm1 := l1.bm.AtomicClone()
 	j := bm1.Lowest()
 	l2 := layer2_load(&l1.l2s[j])
 
-	for k := uint32(0); k < l2Size; k++ {
+	for k := uint32(0); k < l2S; k++ {
 		if layer2_loadCounter(l2, uint32(k)) > 0 {
 			return lowerValue(i, j, k)
 		}
 	}
-	return lowerValue(i, j, l2Size-1)
+	return lowerValue(i, j, l2S-1)
 }
 
 // Max returns an approximation of the largest value stored in the histogram.
 //
 // It is safe to be called concurrently.
 func (h *Histogram) Max() float32 {
-	bm0 := h.l0.bm.Clone()
+	bm0 := h.l0.bm.AtomicClone()
 	i := bm0.Highest()
 	l1 := layer1_load(&h.l0.l1s[i])
 
-	bm1 := l1.bm.Clone()
+	bm1 := l1.bm.AtomicClone()
 	j := bm1.Highest()
 	l2 := layer2_load(&l1.l2s[j])
 
-	for k := int32(l2Size) - 1; k >= 0; k-- {
+	for k := int32(l2S) - 1; k >= 0; k-- {
 		if layer2_loadCounter(l2, uint32(k)) > 0 {
 			return upperValue(i, j, uint32(k))
 		}
@@ -182,11 +182,11 @@ func (h *Histogram) Max() float32 {
 //
 // It is safe to be called concurrently.
 func (h *Histogram) Total() (total uint64) {
-	for bm := h.l0.bm.Clone(); !bm.Empty(); bm.Next() {
+	for bm := h.l0.bm.AtomicClone(); !bm.Empty(); bm.Next() {
 		i := bm.Lowest()
 		l1 := layer1_load(&h.l0.l1s[i])
 
-		for bm := l1.bm.Clone(); !bm.Empty(); bm.Next() {
+		for bm := l1.bm.AtomicClone(); !bm.Empty(); bm.Next() {
 			j := bm.Lowest()
 			l2 := layer2_load(&l1.l2s[j])
 
@@ -204,11 +204,11 @@ func (h *Histogram) Total() (total uint64) {
 func (h *Histogram) Quantile(q float64) (v float32) {
 	target, acc := uint64(q*float64(h.Total())+0.5), uint64(0)
 
-	for bm := h.l0.bm.Clone(); !bm.Empty(); bm.Next() {
+	for bm := h.l0.bm.AtomicClone(); !bm.Empty(); bm.Next() {
 		i := bm.Lowest()
 		l1 := layer1_load(&h.l0.l1s[i])
 
-		for bm := l1.bm.Clone(); !bm.Empty(); bm.Next() {
+		for bm := l1.bm.AtomicClone(); !bm.Empty(); bm.Next() {
 			j := bm.Lowest()
 			l2 := layer2_load(&l1.l2s[j])
 
@@ -217,7 +217,7 @@ func (h *Histogram) Quantile(q float64) (v float32) {
 				continue
 			}
 
-			for k := uint32(0); k < l2Size; k++ {
+			for k := uint32(0); k < l2S; k++ {
 				count := layer2_loadCounter(l2, k)
 				if acc+count >= target {
 					if target-acc < (acc+count)-target {
@@ -241,23 +241,23 @@ func (h *Histogram) CDF(v float32) float64 {
 	obs := math.Float32bits(v)
 	obs ^= uint32(int32(obs)>>31) | (1 << 31)
 
-	obsTarget := obs & ((1<<(l0Bits+l1Bits) - 1) << (32 - l0Bits - l1Bits))
-	obsCounters := (obs >> l2Shift) % l2Size
+	obsTarget := obs & ((1<<(l0B+l1B) - 1) << (32 - l0B - l1B))
+	obsCounters := (obs >> l2Sh) % l2S
 
 	var sum, total uint64
 
-	for bm := h.l0.bm.Clone(); !bm.Empty(); bm.Next() {
+	for bm := h.l0.bm.AtomicClone(); !bm.Empty(); bm.Next() {
 		i := bm.Lowest()
 		l1 := layer1_load(&h.l0.l1s[i])
 
-		for bm := l1.bm.Clone(); !bm.Empty(); bm.Next() {
+		for bm := l1.bm.AtomicClone(); !bm.Empty(); bm.Next() {
 			j := bm.Lowest()
 			l2 := layer2_load(&l1.l2s[j])
 
 			bacc := sumLayer2(l2)
 			total += bacc
 
-			target := i<<l0Shift | j<<l1Shift
+			target := i<<l0Sh | j<<l1Sh
 			if target < obsTarget {
 				sum += bacc
 			} else if target == obsTarget {
@@ -280,15 +280,15 @@ func (h *Histogram) CDF(v float32) float64 {
 func (h *Histogram) Summary() (total, sum, avg, vari float64) {
 	var total2 float64
 
-	for bm := h.l0.bm.Clone(); !bm.Empty(); bm.Next() {
+	for bm := h.l0.bm.AtomicClone(); !bm.Empty(); bm.Next() {
 		i := bm.Lowest()
 		l1 := layer1_load(&h.l0.l1s[i])
 
-		for bm := l1.bm.Clone(); !bm.Empty(); bm.Next() {
+		for bm := l1.bm.AtomicClone(); !bm.Empty(); bm.Next() {
 			j := bm.Lowest()
 			l2 := layer2_load(&l1.l2s[j])
 
-			for k := uint32(0); k < l2Size; k++ {
+			for k := uint32(0); k < l2S; k++ {
 				count := float64(layer2_loadCounter(l2, k))
 				if count == 0 {
 					continue
@@ -324,15 +324,15 @@ func (h *Histogram) Summary() (total, sum, avg, vari float64) {
 func (h *Histogram) Distribution(cb func(value float32, count, total uint64)) {
 	acc, total := uint64(0), h.Total()
 
-	for bm := h.l0.bm.Clone(); !bm.Empty(); bm.Next() {
+	for bm := h.l0.bm.AtomicClone(); !bm.Empty(); bm.Next() {
 		i := bm.Lowest()
 		l1 := layer1_load(&h.l0.l1s[i])
 
-		for bm := l1.bm.Clone(); !bm.Empty(); bm.Next() {
+		for bm := l1.bm.AtomicClone(); !bm.Empty(); bm.Next() {
 			j := bm.Lowest()
 			l2 := layer2_load(&l1.l2s[j])
 
-			for k := uint32(0); k < l2Size; k++ {
+			for k := uint32(0); k < l2S; k++ {
 				count := layer2_loadCounter(l2, k)
 				if count == 0 {
 					continue

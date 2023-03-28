@@ -12,26 +12,26 @@ type (
 )
 
 const (
-	l0Bits = 4
-	l1Bits = 4
-	l2Bits = 6
+	l0B = 4
+	l1B = 4
+	l2B = 6
 
-	l0Bitmask = 1<<l0Bits - 1
-	l1Bitmask = 1<<l1Bits - 1
-	l2Bitmask = 1<<l2Bits - 1
+	l0BM = 1<<l0B - 1
+	l1BM = 1<<l1B - 1
+	l2BM = 1<<l2B - 1
 
-	l0Size = 1 << l0Bits
-	l1Size = 1 << l1Bits
-	l2Size = 1 << l2Bits
+	l0S = 1 << l0B
+	l1S = 1 << l1B
+	l2S = 1 << l2B
 
-	l0Mask = 1<<l0Size - 1
-	l1Mask = 1<<l1Size - 1
-	l2Mask = 1<<l2Size - 1
+	l0SM = 1<<l0S - 1
+	l1SM = 1<<l1S - 1
+	l2SM = 1<<l2S - 1
 
-	l0Shift   = 32 - l0Bits
-	l1Shift   = l0Shift - l1Bits
-	l2Shift   = l1Shift - l2Bits
-	halfShift = l2Shift - 1
+	l0Sh   = 32 - l0B
+	l1Sh   = l0Sh - l1B
+	l2Sh   = l1Sh - l2B
+	halfSh = l2Sh - 1
 )
 
 //
@@ -40,7 +40,7 @@ const (
 
 type layer0 struct {
 	bm  l0Bitmap
-	l1s [l0Size]*layer1
+	l1s [l0S]*layer1
 }
 
 //
@@ -49,7 +49,7 @@ type layer0 struct {
 
 type layer1 struct {
 	bm  l1Bitmap
-	l2s [l1Size]layer2
+	l2s [l1S]layer2
 }
 
 func layer1_load(addr **layer1) *layer1 { return (*layer1)(atomic.LoadPointer((*ptr)(ptr(addr)))) }
@@ -63,8 +63,8 @@ func layer1_cas(addr **layer1, b *layer1) bool {
 
 type (
 	layer2      = ptr // either layer2Small or layer2Large
-	layer2Small [l2Size]uint32
-	layer2Large [l2Size]uint64
+	layer2Small [l2S]uint32
+	layer2Large [l2S]uint64
 )
 
 func layer2_reset(l layer2) {
@@ -115,14 +115,14 @@ func layer2_canGrow(l layer2) bool { return uptr(l)&0b10 == 0b00 }
 
 func layer2_loadCounter(l layer2, i uint32) uint64 {
 	if layer2_isLarge(l) {
-		return atomic.LoadUint64(&layer2_asLarge(l)[i%l2Size])
+		return atomic.LoadUint64(&layer2_asLarge(l)[i%l2S])
 	} else {
-		return uint64(atomic.LoadUint32(&layer2_asSmall(l)[i%l2Size]))
+		return uint64(atomic.LoadUint32(&layer2_asSmall(l)[i%l2S]))
 	}
 }
 
 func layer2_unsafeSetCounter(l layer2, addr *layer2, i uint32, n uint64) bool {
-	i %= l2Size
+	i %= l2S
 
 	if n > growAt && layer2_canGrow(l) {
 		if !layer2_grow(l, addr, false) {
@@ -167,21 +167,21 @@ func layer2_grow(l layer2, addr *layer2, finalize bool) bool {
 	if finalize {
 		smc := new(layer2Small)
 
-		for i := uint32(0); i < l2Size; i++ {
+		for i := uint32(0); i < l2S; i++ {
 			v := atomic.LoadUint32(&sme[i])
 			lg[i] = uint64(v)
 			smc[i] = v
 		}
 
 		runtime.SetFinalizer(sme, func(sme *layer2Small) {
-			for i := uint32(0); i < l2Size; i++ {
+			for i := uint32(0); i < l2S; i++ {
 				if d := atomic.LoadUint32(&sme[i]) - smc[i]; d > 0 {
 					atomic.AddUint64(&lg[i], uint64(d))
 				}
 			}
 		})
 	} else {
-		for i := uint32(0); i < l2Size; i++ {
+		for i := uint32(0); i < l2S; i++ {
 			lg[i] = uint64(atomic.LoadUint32(&sme[i]))
 		}
 	}
