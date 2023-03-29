@@ -70,6 +70,6 @@ func (k Key) Timestamp() uint32 {
 	return binary.BigEndian.Uint32(k[timestampStart:timestampEnd])
 }
 
-func (k *Key) TimestampPtr() (ts *[TimestampSize]byte) {
-	return (*[TimestampSize]byte)(unsafe.Pointer(&k[timestampStart]))
+func (k *Key) TimestampPtr() (ts *uint32) {
+	return (*uint32)(unsafe.Pointer(&k[timestampStart]))
 }

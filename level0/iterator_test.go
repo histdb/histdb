@@ -15,7 +15,7 @@ func TestIterator(t *testing.T) {
 		fs, cleanup := testhelp.FS(t)
 		defer cleanup()
 
-		l0, entries, cleanup := Level0(t, fs, 4, 4)
+		l0, entries, cleanup := Level0(t, fs, -1, -1)
 		defer cleanup()
 
 		var it Iterator
@@ -35,7 +35,7 @@ func TestIterator(t *testing.T) {
 		fs, cleanup := testhelp.FS(t)
 		defer cleanup()
 
-		l0, entries, cleanup := Level0(t, fs, 0, 0)
+		l0, entries, cleanup := Level0(t, fs, -1, -1)
 		defer cleanup()
 
 		var it Iterator

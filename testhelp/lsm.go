@@ -36,6 +36,9 @@ func Timestamp() uint32 {
 }
 
 func Name(n int) []byte {
+	if n < 0 {
+		n = nameRng.Intn(20)
+	}
 	v := make([]byte, n)
 	for i := range v {
 		v[i] = byte(nameRng.Uint64())
@@ -44,6 +47,9 @@ func Name(n int) []byte {
 }
 
 func Value(n int) []byte {
+	if n < 0 {
+		n = valRng.Intn(20)
+	}
 	v := make([]byte, n)
 	for i := range v {
 		v[i] = byte(valRng.Uint64())

@@ -130,8 +130,8 @@ func (it *Iterator) readNameAndValue(offset int64) int64 {
 	ebuf := it.ebuf[b:e]
 
 	nhead := int64(l0EntryHeaderSize)
-	ntail := nhead + int64(binary.BigEndian.Uint32(it.ebuf[0:4]))
-	etail := ntail + int64(binary.BigEndian.Uint32(it.ebuf[4:8]))
+	ntail := nhead + int64(binary.BigEndian.Uint32(ebuf[0:4]))
+	etail := ntail + int64(binary.BigEndian.Uint32(ebuf[4:8]))
 	elen := etail + l0ChecksumSize
 
 	ebuf = it.read(offset, elen)

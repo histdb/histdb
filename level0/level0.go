@@ -3,6 +3,7 @@ package level0
 import (
 	"encoding/binary"
 	"io"
+	"sort"
 
 	"github.com/zeebo/errs/v2"
 
@@ -22,12 +23,16 @@ const (
 	L0Size = l0DataSize + l0IndexSize
 )
 
+type keyPos struct {
+	key histdb.Key
+	pos uint16
+}
+
 type T struct {
 	buf  []byte
 	fh   filesystem.Handle
 	len  uint32
-	keys keyHeap
-	pos  map[histdb.Key]idxBuf
+	keys []keyPos
 	err  error
 	done bool
 	ro   bool // readonly
@@ -42,16 +47,6 @@ func (t *T) reset(fh filesystem.Handle) error {
 		fh:   fh,
 		buf:  t.buf[:0],
 		keys: t.keys[:0],
-		pos:  t.pos,
-	}
-
-	if t.pos == nil {
-		t.pos = make(map[histdb.Key]idxBuf)
-	} else {
-		// compiles into a runtime map-clear call
-		for key := range t.pos {
-			delete(t.pos, key)
-		}
 	}
 
 	return nil
@@ -166,13 +161,10 @@ func (t *T) append(key histdb.Key, name, value []byte) (bool, error) {
 	t.buf = appendUint32(t.buf, checksum(t.buf[start:]))
 	t.buf = append(t.buf, make([]byte, padded-length)...)
 
-	ibuf, ok := t.pos[key]
-	if !ok {
-		t.keys = t.keys.Push(key)
-	}
-
-	ibuf.Append(uint16(t.len / l0EntryAlignment))
-	t.pos[key] = ibuf
+	t.keys = append(t.keys, keyPos{
+		key: key,
+		pos: uint16(t.len / l0EntryAlignment),
+	})
 
 	t.len += padded
 	return true, nil
@@ -203,23 +195,19 @@ func (t *T) finish() error {
 		return t.storeErr(err)
 	}
 
-	buf := t.buf[:0]
-	if cap(buf) < 4*len(t.keys)+4 {
-		buf = make([]byte, 0, 4*len(t.keys)+4)
+	if c := 4*len(t.keys) + 4; cap(t.buf) < c {
+		t.buf = make([]byte, 0, c)
 	}
+	buf := t.buf[:0]
 
-	var key histdb.Key
-	for len(t.keys) > 0 {
-		t.keys, key = t.keys.Pop()
-		ibuf := t.pos[key]
-		kp := binary.BigEndian.Uint16(key[0:2])
+	sort.Slice(t.keys, func(i, j int) bool {
+		return string(t.keys[i].key[:]) < string(t.keys[j].key[:])
+	})
 
+	for _, ent := range t.keys {
+		kp := binary.BigEndian.Uint16(ent.key[0:2])
 		buf = appendUint16(buf, kp)
-		buf = appendUint16(buf, ibuf.x)
-		for _, idx := range ibuf.b {
-			buf = appendUint16(buf, kp)
-			buf = appendUint16(buf, idx)
-		}
+		buf = appendUint16(buf, ent.pos)
 	}
 
 	buf = appendUint32(buf, checksum(buf))
@@ -243,19 +231,4 @@ func (t *T) InitIterator(it *Iterator) (err error) {
 		it.Init(t.fh)
 	}
 	return err
-}
-
-//////////////////////////////////////
-
-type idxBuf struct {
-	b []uint16
-	x uint16
-}
-
-func (i *idxBuf) Append(x uint16) {
-	if i.x == 0 {
-		i.x = x
-	} else {
-		i.b = append(i.b, x)
-	}
 }
