@@ -63,24 +63,27 @@ func log2(x uint64) uint64 { return uint64(bits.Len64(x)-1) % 64 }
 type slot[K, V any] struct {
 	k K
 	v V
-	m uint8
 }
 
 type slotIndex[K, V any] struct {
 	s *slot[K, V]
+	m *uint8
 	i uint64
 }
 
 func (si slotIndex[K, V]) slot() slot[K, V]     { return *si.s }
 func (si slotIndex[K, V]) setSlot(s slot[K, V]) { *si.s = s }
-func (si slotIndex[K, V]) meta() uint8          { return si.s.m }
-func (si slotIndex[K, V]) setMeta(m uint8)      { si.s.m = m }
-func (si slotIndex[K, V]) setJump(ji uint8)     { si.setMeta(si.meta()&^maskDistance | ji) }
-func (si slotIndex[K, V]) hasJump() bool        { return si.meta()&maskDistance != 0 }
-func (si slotIndex[K, V]) jump() uint8          { return si.meta() & maskDistance }
+
+func (si slotIndex[K, V]) meta() uint8     { return *si.m }
+func (si slotIndex[K, V]) setMeta(m uint8) { *si.m = m }
+
+func (si slotIndex[K, V]) setJump(ji uint8) { si.setMeta(si.meta()&^maskDistance | ji) }
+func (si slotIndex[K, V]) hasJump() bool    { return si.meta()&maskDistance != 0 }
+func (si slotIndex[K, V]) jump() uint8      { return si.meta() & maskDistance }
 
 type T[K Key, RWK rwutils.RW[K], V any, RWV rwutils.RW[V]] struct {
 	slots []slot[K, V]
+	metas []uint8
 	mask  uint64
 	shift uint64
 	eles  int
@@ -92,6 +95,7 @@ func (t *T[K, RWK, V, RWV]) Len() int { return t.eles }
 func (t *T[K, RWK, V, RWV]) Size() uint64 {
 	return 0 +
 		/* slots */ 24 + uint64(unsafe.Sizeof(slot[K, V]{}))*uint64(len(t.slots)) +
+		/* metas */ 24 + uint64(len(t.metas)) +
 		/* mask  */ 8 +
 		/* shift */ 8 +
 		/* eles  */ 8 +
@@ -106,6 +110,7 @@ func (t *T[K, RWK, V, RWV]) Load() float64 {
 func (t *T[K, RWK, V, RWV]) getSlotIndex(i uint64) slotIndex[K, V] {
 	return slotIndex[K, V]{
 		s: &t.slots[i],
+		m: &t.metas[i],
 		i: i,
 	}
 }
@@ -158,7 +163,8 @@ func (t *T[K, RWK, V, RWV]) Insert(k K, v V) (V, bool) {
 
 func (t *T[K, RWK, V, RWV]) insertDirectHit(si slotIndex[K, V], k K, v V) (V, bool) {
 	if si.meta() == flagsEmpty {
-		si.setSlot(slot[K, V]{k, v, flagsHit})
+		si.setSlot(slot[K, V]{k, v})
+		si.setMeta(flagsHit)
 		t.eles++
 		return v, false
 	}
@@ -172,6 +178,7 @@ func (t *T[K, RWK, V, RWV]) insertDirectHit(si slotIndex[K, V], k K, v V) (V, bo
 
 	for it := si; ; {
 		free.setSlot(it.slot())
+		free.setMeta(it.meta())
 		parent.setJump(ji)
 		free.setMeta(flagsList)
 
@@ -192,7 +199,8 @@ func (t *T[K, RWK, V, RWV]) insertDirectHit(si slotIndex[K, V], k K, v V) (V, bo
 		}
 	}
 
-	si.setSlot(slot[K, V]{k, v, flagsHit})
+	si.setSlot(slot[K, V]{k, v})
+	si.setMeta(flagsHit)
 	t.eles++
 	return v, false
 }
@@ -204,7 +212,8 @@ func (t *T[K, RWK, V, RWV]) insertNew(si slotIndex[K, V], k K, v V) (V, bool) {
 		return t.Insert(k, v)
 	}
 
-	free.setSlot(slot[K, V]{k, v, flagsList})
+	free.setSlot(slot[K, V]{k, v})
+	free.setMeta(flagsList)
 	si.setJump(ji)
 	t.eles++
 	return v, false
@@ -246,18 +255,22 @@ func (t *T[K, RWK, V, RWV]) grow() {
 	nslots = max(nslots, uint64(math.Ceil(float64(t.eles)/maxLoadFactor)))
 	nslots = np2(nslots)
 
-	slots := t.slots
+	slots, metas := t.slots, t.metas
+
 	t.shift = 64 - log2(nslots)
 	t.slots = make([]slot[K, V], nslots)
+	t.metas = make([]uint8, nslots)
 	t.mask = nslots - 1
 	t.eles = 0
 	t.full = int(float64(nslots) * maxLoadFactor)
 
-	for i := range slots {
-		s := &slots[i]
-		if m := s.m; m != flagsEmpty && m != flagsReserved {
-			t.Insert(s.k, s.v)
+	for i, m := range metas {
+		if m == flagsEmpty || m == flagsReserved {
+			continue
 		}
+
+		s := &slots[i]
+		t.Insert(s.k, s.v)
 	}
 }
 
@@ -270,11 +283,11 @@ func (t *T[K, RWK, V, RWV]) AppendTo(w *rwutils.W) {
 
 	for i := range t.slots {
 		s := &t.slots[i]
-
 		RWK(&s.k).AppendTo(w)
 		RWV(&s.v).AppendTo(w)
-		w.Uint32(uint32(s.m))
 	}
+
+	w.Bytes(t.metas)
 }
 
 func (t *T[K, RWK, V, RWV]) ReadFrom(r *rwutils.R) {
@@ -287,9 +300,9 @@ func (t *T[K, RWK, V, RWV]) ReadFrom(r *rwutils.R) {
 	t.slots = make([]slot[K, V], n)
 	for i := range t.slots {
 		s := &t.slots[i]
-
 		RWK(&s.k).ReadFrom(r)
 		RWV(&s.v).ReadFrom(r)
-		s.m = uint8(r.Uint32())
 	}
+
+	t.metas = r.Bytes(int(n))
 }
