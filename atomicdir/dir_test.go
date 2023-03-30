@@ -15,10 +15,12 @@ func TestDir(t *testing.T) {
 	var dir T
 	assert.NoError(t, dir.Init(fs))
 
-	tx, err := dir.NewTransaction(func(ops *Operations) {
-		ops.Allocate(File{}, 100)
+	var txn Txn
+	err := dir.InitTxn(&txn, func(ops Ops) Ops {
+		ops.Allocate(File{Generation: 0, Kind: 0}, 100)
+		return ops
 	})
 	assert.NoError(t, err)
 
-	t.Log(tx.Handles()[0].File)
+	t.Log(txn.Handles()[0].File)
 }

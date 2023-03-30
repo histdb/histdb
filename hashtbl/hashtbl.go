@@ -30,6 +30,12 @@ func (u U32) Digest() uint64         { return uint64(u) }
 func (u *U32) ReadFrom(r *rwutils.R) { *u = U32(r.Uint32()) }
 func (u U32) AppendTo(w *rwutils.W)  { w.Uint32(uint32(u)) }
 
+type U16 uint64
+
+func (u U16) Digest() uint64         { return uint64(u) }
+func (u *U16) ReadFrom(r *rwutils.R) { *u = U16(r.Uint16()) }
+func (u U16) AppendTo(w *rwutils.W)  { w.Uint16(uint16(u)) }
+
 const (
 	flagsEmpty    = 0b00000000
 	flagsReserved = 0b01111110

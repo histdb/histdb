@@ -16,7 +16,7 @@ func TestDuplicate(t *testing.T) {
 	defer cleanup()
 
 	var l0 T
-	assert.NoError(t, l0.InitNew(fh))
+	assert.NoError(t, l0.Init(fh, nil))
 
 	key := testhelp.Key()
 

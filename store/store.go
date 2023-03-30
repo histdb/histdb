@@ -17,23 +17,16 @@ const (
 	kindMemindex     = 3
 )
 
-type lev0 struct {
-	idx  memindex.T
-	data level0.T
-}
-
-type levN struct {
-	idx  memindex.T
-	data leveln.Reader
-}
-
 type T struct {
-	fs   *filesystem.T
-	adir *atomicdir.T
-	curr *atomicdir.Transaction
+	fs  *filesystem.T
+	dir atomicdir.T
+	txn atomicdir.Txn
 
-	head  lev0
-	tails []levN
+	l0  level0.T
+	l0m memindex.T
+
+	lns  []leveln.Reader
+	lnms []memindex.T
 }
 
 func (t *T) Init(fs *filesystem.T) (err error) {
@@ -41,19 +34,16 @@ func (t *T) Init(fs *filesystem.T) (err error) {
 		fs: fs,
 	}
 
-	if err := t.adir.Init(fs); err != nil {
+	if err := t.dir.Init(fs); err != nil {
 		return err
 	}
 
-	if t.curr, err = t.adir.OpenCurrent(); err != nil {
+	if ok, err := t.dir.InitCurrent(&t.txn); err != nil {
 		return err
-	}
-
-	new := t.curr == nil
-	if new {
-		t.curr, err = t.adir.NewTransaction(func(ops *atomicdir.Operations) {
-			ops.Allocate(atomicdir.File{Kind: kindLevel0}, level0.L0Size)
-			ops.Allocate(atomicdir.File{Kind: kindMemindex}, 0)
+	} else if !ok {
+		err := t.dir.InitTxn(&t.txn, func(ops atomicdir.Ops) atomicdir.Ops {
+			ops.Allocate(atomicdir.File{Generation: 0, Kind: kindLevel0}, level0.L0DataSize)
+			return ops
 		})
 		if err != nil {
 			return err
@@ -61,14 +51,9 @@ func (t *T) Init(fs *filesystem.T) (err error) {
 	}
 	defer func() {
 		if err != nil {
-			err = errs.Combine(err, t.curr.Close())
+			err = errs.Combine(err, t.txn.Close())
 		}
 	}()
-	if err != nil {
-		return err
-	}
-
-	handles := t.curr.Handles()
 
 	return nil
 }

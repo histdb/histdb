@@ -6,35 +6,29 @@ import (
 	"github.com/zeebo/errs/v2"
 
 	"github.com/histdb/histdb/filesystem"
-	"github.com/histdb/histdb/hashtbl"
 )
 
-type Transaction struct {
-	txn     uint16
-	gens    []uint32
-	genset  hashtbl.T[hashtbl.U32, *hashtbl.U32, hashtbl.E, *hashtbl.E]
-	handles []FileHandle
+type Txn struct {
+	tid     uint32
+	handles []FH
 }
 
-type FileHandle struct {
+type FH struct {
 	File   File
 	Handle filesystem.Handle
 }
 
-func (tx *Transaction) Handles() []FileHandle { return tx.handles }
-func (tx *Transaction) MaxGeneration() uint32 { return tx.gens[0] }
+func (tx *Txn) Handles() []FH         { return tx.handles }
+func (tx *Txn) MaxGeneration() uint32 { return tx.handles[0].File.Generation }
 
-func (tx *Transaction) include(f File, fh filesystem.Handle) {
-	if _, ok := tx.genset.Insert(hashtbl.U32(f.Generation), hashtbl.E{}); ok {
-		tx.gens = append(tx.gens, f.Generation)
-	}
-	tx.handles = append(tx.handles, FileHandle{
+func (tx *Txn) include(f File, fh filesystem.Handle) {
+	tx.handles = append(tx.handles, FH{
 		File:   f,
 		Handle: fh,
 	})
 }
 
-func (tx *Transaction) sort() {
+func (tx *Txn) sort() {
 	sort.Slice(tx.handles, func(i, j int) bool {
 		// newest data is in later generations and lower levels
 		// so we want to sort by largest generation first, then
@@ -54,10 +48,11 @@ func (tx *Transaction) sort() {
 	})
 }
 
-func (tx *Transaction) Close() error {
+func (tx *Txn) Close() error {
 	var eg errs.Group
-	for _, nh := range tx.handles {
-		eg.Add(nh.Handle.Close())
+	for _, fh := range tx.handles {
+		eg.Add(fh.Handle.Close())
 	}
+	tx.handles = nil
 	return eg.Err()
 }

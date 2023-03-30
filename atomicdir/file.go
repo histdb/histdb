@@ -33,28 +33,28 @@ func parseFile(name string) (f File, ok bool) {
 	return
 }
 
-func writeTransaction(buf *[4]byte, txn uint16) string {
-	*buf = [...]byte{'0', '0', '0', '0'}
-	be.PutUint32(buf[0:4], hexUint16(txn))
+func writeTransaction(buf *[8]byte, tid uint32) string {
+	*buf = [...]byte{'0', '0', '0', '0', '0', '0', '0', '0'}
+	be.PutUint64(buf[0:8], hexUint32(tid))
 	return string(buf[:])
 }
 
-func parseTransaction(name string) (txn uint16, ok bool) {
-	if len(name) == 4 {
-		txn = unhexUint16(readUint32(name[0:4]))
+func parseTransaction(name string) (tid uint32, ok bool) {
+	if len(name) == 8 {
+		tid = unhexUint32(readUint64(name[0:8]))
 		ok = true
 	}
 	return
 }
 
-func writeTransactionFile(buf *[16]byte, txn uint16, f File) {
+func writeTransactionFile(buf *[20]byte, tid uint32, f File) {
 	*buf = [...]byte{
-		'0', '0', '0', '0', filepath.Separator,
+		'0', '0', '0', '0', '0', '0', '0', '0', filepath.Separator,
 		'0', '0', '0', '0', '0', '0', '0', '0', '.', '0', '0',
 	}
-	be.PutUint32(buf[0:4], hexUint16(txn))
-	be.PutUint64(buf[5:13], hexUint32(f.Generation))
-	be.PutUint16(buf[14:16], hexUint8(f.Kind))
+	be.PutUint64(buf[0:8], hexUint32(tid))
+	be.PutUint64(buf[9:17], hexUint32(f.Generation))
+	be.PutUint16(buf[18:20], hexUint8(f.Kind))
 }
 
 //
@@ -75,17 +75,17 @@ func unhexUint32(x uint64) (v uint32) {
 	return uint32(x | x>>16)
 }
 
-func hexUint16(x uint16) (v uint32) {
-	v = uint32(uint8(x)) | uint32(x)<<8
-	v = (v & 0x000F000F) | ((v & 0x00F000F0) << 4)
-	return v + 0x30303030 + 7*((v+0x06060606)>>4&0x01010101)
-}
+// func hexUint16(x uint16) (v uint32) {
+// 	v = uint32(uint8(x)) | uint32(x)<<8
+// 	v = (v & 0x000F000F) | ((v & 0x00F000F0) << 4)
+// 	return v + 0x30303030 + 7*((v+0x06060606)>>4&0x01010101)
+// }
 
-func unhexUint16(x uint32) (v uint16) {
-	x = 9*(x&0x40404040>>6) + (x & 0x0f0f0f0f)
-	x = (x | x>>4) & 0x00FF00FF
-	return uint16(x | x>>8)
-}
+// func unhexUint16(x uint32) (v uint16) {
+// 	x = 9*(x&0x40404040>>6) + (x & 0x0f0f0f0f)
+// 	x = (x | x>>4) & 0x00FF00FF
+// 	return uint16(x | x>>8)
+// }
 
 func hexUint8(x uint8) (v uint16) {
 	v = uint16(x)
@@ -107,9 +107,9 @@ func readUint64(b string) uint64 {
 		uint64(b[3])<<32 | uint64(b[2])<<40 | uint64(b[1])<<48 | uint64(b[0])<<56
 }
 
-func readUint32(b string) uint32 {
-	return uint32(b[3]) | uint32(b[2])<<8 | uint32(b[1])<<16 | uint32(b[0])<<24
-}
+// func readUint32(b string) uint32 {
+// 	return uint32(b[3]) | uint32(b[2])<<8 | uint32(b[1])<<16 | uint32(b[0])<<24
+// }
 
 func readUint16(b string) uint16 {
 	return uint16(b[1]) | uint16(b[0])<<8

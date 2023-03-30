@@ -2,6 +2,7 @@ package level0
 
 import (
 	"encoding/binary"
+	"errors"
 	"io"
 	"sort"
 
@@ -16,11 +17,11 @@ const (
 	l0EntryAlignment     = 32
 	l0EntryAlignmentMask = l0EntryAlignment - 1
 	l0ChecksumSize       = 4
-	l0DataSize           = 2 << 20
-	l0IndexSize          = 256 << 10
 	l0BufferSize         = 64 << 10
 
-	L0Size = l0DataSize + l0IndexSize
+	L0DataSize  = 2 << 20
+	L0IndexSize = 256 << 10
+	L0Size      = L0DataSize + L0IndexSize
 )
 
 type keyPos struct {
@@ -29,13 +30,14 @@ type keyPos struct {
 }
 
 type T struct {
-	buf  []byte
-	fh   filesystem.Handle
-	len  uint32
-	keys []keyPos
-	err  error
-	done bool
-	ro   bool // readonly
+	buf   []byte
+	fh    filesystem.Handle
+	len   uint32
+	wrote int64
+	keys  []keyPos
+	err   error
+	done  bool
+	ro    bool // readonly
 }
 
 func (t *T) reset(fh filesystem.Handle) error {
@@ -63,19 +65,7 @@ func (t *T) InitFinished(fh filesystem.Handle) error {
 	return nil
 }
 
-func (t *T) InitNew(fh filesystem.Handle) error {
-	if err := fh.Fallocate(l0DataSize); err != nil {
-		return errs.Wrap(err)
-	}
-
-	if err := t.reset(fh); err != nil {
-		return errs.Wrap(err)
-	}
-
-	return nil
-}
-
-func (t *T) InitCurrent(fh filesystem.Handle) error {
+func (t *T) Init(fh filesystem.Handle, cb func(key histdb.Key, name, value []byte)) (err error) {
 	if err := t.reset(fh); err != nil {
 		return errs.Wrap(err)
 	}
@@ -85,18 +75,14 @@ func (t *T) InitCurrent(fh filesystem.Handle) error {
 	var it Iterator
 	it.Init(fh)
 
-	offset := int64(l0EntryAlignment)
-	for offset < l0DataSize {
+	for offset := int64(l0EntryAlignment); offset < L0DataSize; {
 		it.readEntryHeader(offset)
-		if it.err != nil {
-			return errs.Wrap(it.err)
-		} else if it.Key().Zero() {
-			break
-		}
-
 		offset += it.readNameAndValue(offset)
 		if it.err != nil {
-			return errs.Wrap(it.err)
+			if errors.Is(it.err, ioError) && !errors.Is(it.err, io.EOF) {
+				return it.err
+			}
+			break
 		}
 
 		ok, err := t.Append(it.Key(), it.Name(), it.Value())
@@ -105,6 +91,13 @@ func (t *T) InitCurrent(fh filesystem.Handle) error {
 		} else if err != nil {
 			return errs.Wrap(it.err)
 		}
+		if cb != nil {
+			cb(it.Key(), it.Name(), it.Value())
+		}
+	}
+
+	if _, err := t.fh.Seek(t.wrote, io.SeekStart); err != nil {
+		return errs.Wrap(err)
 	}
 
 	t.ro = false
@@ -114,6 +107,8 @@ func (t *T) InitCurrent(fh filesystem.Handle) error {
 func (t *T) File() filesystem.Handle {
 	return t.fh
 }
+
+func (t *T) Done() bool { return t.done }
 
 func (t *T) Append(key histdb.Key, name, value []byte) (bool, error) {
 	ok, err := t.append(key, name, value)
@@ -148,7 +143,7 @@ func (t *T) append(key histdb.Key, name, value []byte) (bool, error) {
 	length := l0EntryHeaderSize + uint32(len(name)) + uint32(len(value)) + l0ChecksumSize
 	padded := (length + l0EntryAlignmentMask) &^ l0EntryAlignmentMask
 
-	if t.len+padded > l0DataSize {
+	if t.len+padded > L0DataSize {
 		return false, nil
 	}
 
@@ -176,12 +171,12 @@ func (t *T) storeErr(err error) error {
 }
 
 func (t *T) flush() error {
-	if !t.ro {
+	if !t.ro && len(t.buf) > 0 {
 		if _, err := t.fh.Write(t.buf); err != nil {
 			return t.storeErr(err)
 		}
 	}
-
+	t.wrote += int64(len(t.buf))
 	t.buf = t.buf[:0]
 	return nil
 }
@@ -191,7 +186,13 @@ func (t *T) finish() error {
 		return t.err
 	}
 
-	if _, err := t.fh.Seek(l0DataSize, io.SeekStart); err != nil {
+	if !t.ro {
+		if err := t.fh.Truncate(L0DataSize); err != nil {
+			return t.storeErr(err)
+		}
+	}
+
+	if _, err := t.fh.Seek(L0DataSize, io.SeekStart); err != nil {
 		return t.storeErr(err)
 	}
 

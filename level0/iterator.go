@@ -10,6 +10,8 @@ import (
 	"github.com/histdb/histdb/filesystem"
 )
 
+const ioError errs.Tag = "io error"
+
 type Iterator struct {
 	eoff int64 // offset of ebuf
 	ebuf []byte
@@ -35,12 +37,12 @@ func (it *Iterator) Init(fh filesystem.Handle) {
 
 func (it *Iterator) readIndex() {
 	if it.ibuf == nil {
-		it.ibuf = make([]byte, l0IndexSize)
+		it.ibuf = make([]byte, L0IndexSize)
 	}
 
-	n, err := it.fh.ReadAt(it.ibuf[:], l0DataSize)
+	n, err := it.fh.ReadAt(it.ibuf[:], L0DataSize)
 	if err != nil && err != io.EOF {
-		it.err = errs.Wrap(err)
+		it.err = ioError.Wrap(err)
 		return
 	}
 
@@ -101,7 +103,7 @@ func (it *Iterator) read(offset, length int64) []byte {
 	}
 
 	if _, it.err = it.fh.ReadAt(it.ebuf, offset); it.err != nil {
-		it.err = errs.Wrap(it.err)
+		it.err = ioError.Wrap(it.err)
 		return nil
 	}
 	it.eoff = offset

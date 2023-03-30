@@ -4,7 +4,6 @@ import (
 	"errors"
 	"io"
 	"os"
-	"sync"
 
 	"github.com/zeebo/errs/v2"
 
@@ -12,16 +11,14 @@ import (
 )
 
 type T struct {
-	fs *filesystem.T
-
-	mu   sync.Mutex
-	txn  uint16
-	txns map[uint16]struct{}
+	fs  *filesystem.T
+	tid uint32
 }
 
 func (t *T) Init(fs *filesystem.T) error {
-	t.fs = fs
-	t.txns = make(map[uint16]struct{})
+	*t = T{
+		fs: fs,
+	}
 
 	fh, err := t.fs.OpenRead(".")
 	if err != nil {
@@ -32,12 +29,9 @@ func (t *T) Init(fs *filesystem.T) error {
 	for {
 		names, err := fh.Readdirnames(16)
 		for _, name := range names {
-			txn, ok := parseTransaction(name)
-			if ok {
-				t.txns[txn] = struct{}{}
-				if txn > t.txn {
-					t.txn = txn
-				}
+			tid, ok := parseTransaction(name)
+			if ok && tid > t.tid {
+				t.tid = tid
 			}
 		}
 		if errors.Is(err, io.EOF) {
@@ -59,19 +53,19 @@ func (t *T) Init(fs *filesystem.T) error {
 	return nil
 }
 
-func (t *T) OpenCurrent() (*Transaction, error) {
+func (t *T) InitCurrent(txn *Txn) (bool, error) {
 	current, err := t.fs.Readlink("current")
 	if errors.Is(err, os.ErrNotExist) {
-		return nil, nil
+		return false, nil
 	} else if err != nil {
-		return nil, errs.Wrap(err)
+		return false, errs.Wrap(err)
 	}
-	return t.openTxn(current)
+	return true, t.openTxn(txn, current)
 }
 
-func (t *T) SetCurrent(tx *Transaction) error {
-	var buf [4]byte
-	writeTransaction(&buf, tx.txn)
+func (t *T) SetCurrent(txn *Txn) error {
+	var buf [8]byte
+	writeTransaction(&buf, txn.tid)
 
 	if err := t.fs.Link("current", string(buf[:])); err != nil {
 		return errs.Wrap(err)
@@ -83,23 +77,22 @@ func (t *T) SetCurrent(tx *Transaction) error {
 	return nil
 }
 
-func (t *T) openTxn(name string) (_ *Transaction, err error) {
-	tx := new(Transaction)
+func (t *T) openTxn(txn *Txn, name string) (err error) {
 	defer func() {
 		if err != nil {
-			err = errs.Combine(err, tx.Close())
+			err = errs.Combine(err, txn.Close())
 		}
 	}()
 
-	txn, ok := parseTransaction(name)
+	tid, ok := parseTransaction(name)
 	if !ok {
-		return nil, errs.Errorf("invalid name: %q", name)
+		return errs.Errorf("invalid name: %q", name)
 	}
-	tx.txn = txn
+	txn.tid = tid
 
 	fh, err := t.fs.OpenRead(name)
 	if err != nil {
-		return nil, errs.Wrap(err)
+		return errs.Wrap(err)
 	}
 	defer fh.Close()
 
@@ -111,65 +104,53 @@ func (t *T) openTxn(name string) (_ *Transaction, err error) {
 				continue
 			}
 
-			var buf [16]byte
-			writeTransactionFile(&buf, txn, f)
+			var buf [20]byte
+			writeTransactionFile(&buf, tid, f)
 
 			fh, err := t.fs.OpenRead(string(buf[:]))
 			if err != nil {
-				return nil, errs.Wrap(err)
+				return errs.Wrap(err)
 			}
 
-			tx.include(f, fh)
+			txn.include(f, fh)
 		}
 
 		if errors.Is(err, io.EOF) {
 			break
 		} else if err != nil {
-			return nil, errs.Wrap(err)
+			return errs.Wrap(err)
 		}
 	}
 
-	tx.sort()
-
-	return tx, nil
-}
-
-func (t *T) nextTxn() (uint16, bool) {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-
-	for i := 0; i < 1<<16; i++ {
-		t.txn++
-		if _, ok := t.txns[t.txn]; !ok {
-			return t.txn, true
-		}
+	if len(txn.handles) == 0 {
+		return errs.Errorf("invalid txn: tid=%d has no handles", txn.tid)
 	}
 
-	return 0, false
+	txn.sort()
+
+	return nil
 }
 
-func (t *T) NewTransaction(fn func(*Operations)) (*Transaction, error) {
-	txn, ok := t.nextTxn()
-	if !ok {
-		return nil, errs.Errorf("no available transaction number")
-	}
+func (t *T) InitTxn(txn *Txn, fn func(Ops) Ops) error {
+	t.tid++
 
-	var buf [4]byte
-	writeTransaction(&buf, txn)
+	var buf [8]byte
+	writeTransaction(&buf, t.tid)
 	dir := string(buf[:])
 
 	if err := t.fs.Mkdir(dir); err != nil {
-		return nil, errs.Wrap(err)
+		return errs.Wrap(err)
 	}
 
-	ops := &Operations{fs: t.fs, txn: txn}
+	ops := fn(Ops{fs: t.fs, tid: t.tid})
 
-	fn(ops)
-
-	if err := ops.close(); err != nil {
-		_ = t.fs.RemoveAll(dir)
-		return nil, err
+	if err := ops.close(t.fs); err != nil {
+		return errs.Combine(
+			err,
+			txn.Close(),
+			t.fs.RemoveAll(dir),
+		)
 	}
 
-	return t.openTxn(dir)
+	return t.openTxn(txn, dir)
 }

@@ -1,11 +1,13 @@
 package level0
 
 import (
+	"math/rand"
 	"testing"
 	"time"
 
 	"github.com/zeebo/assert"
 
+	"github.com/histdb/histdb"
 	"github.com/histdb/histdb/testhelp"
 )
 
@@ -33,20 +35,23 @@ func TestLevel0(t *testing.T) {
 		defer cleanup()
 
 		var l0 T
-		l0.InitNew(fh)
+		assert.NoError(t, l0.Init(fh, nil))
 
-		const maxEntries = l0DataSize / l0EntryAlignment
+		const maxEntries = L0DataSize / l0EntryAlignment
 
-		for i := 0; i < maxEntries/2; i++ {
-			ok, err := l0.Append(testhelp.KeyFrom(0, 0, uint32(i+1)), nil, nil)
+		for i := uint32(0); i < maxEntries/2; i++ {
+			ok, err := l0.Append(testhelp.KeyFrom(0, 0, i+1), nil, nil)
 			assert.NoError(t, err)
 			assert.That(t, ok)
 		}
 
-		l0.InitCurrent(fh)
+		var ts uint32
+		assert.NoError(t, l0.Init(fh, func(key histdb.Key, name, value []byte) {
+			ts = key.Timestamp()
+		}))
 
-		for i := maxEntries / 2; i < maxEntries; i++ {
-			ok, err := l0.Append(testhelp.KeyFrom(0, 0, uint32(i+1)), nil, nil)
+		for i := ts; i < maxEntries-1; i++ {
+			ok, err := l0.Append(testhelp.KeyFrom(0, 0, i+1), nil, nil)
 			assert.NoError(t, err)
 			assert.That(t, ok)
 		}
@@ -54,6 +59,13 @@ func TestLevel0(t *testing.T) {
 		ok, err := l0.Append(testhelp.KeyFrom(0, 0, 1), nil, nil)
 		assert.NoError(t, err)
 		assert.That(t, !ok)
+
+		var it Iterator
+		l0.InitIterator(&it)
+		for i := uint32(0); it.Next(); i++ {
+			assert.Equal(t, it.Key().Timestamp(), i+1)
+		}
+		assert.NoError(t, it.Err())
 	})
 }
 
@@ -65,13 +77,19 @@ func BenchmarkLevel0(b *testing.B) {
 
 			l0, entries, cleanup := Level0(b, fs, nlen, vlen)
 			defer cleanup()
+			rand.Shuffle(len(entries), func(i, j int) {
+				entries[i], entries[j] = entries[j], entries[i]
+			})
 
 			now := time.Now()
 			b.ReportAllocs()
 			b.ResetTimer()
 
 			for i := 0; i < b.N; i++ {
-				assert.NoError(b, l0.InitNew(l0.fh))
+				assert.NoError(b, l0.fh.Truncate(0))
+				assert.NoError(b, l0.Init(l0.fh, func(key histdb.Key, name, value []byte) {
+					b.Fatal("got a key")
+				}))
 				for _, ent := range entries {
 					_, err := l0.Append(ent.Key, ent.Name, ent.Value)
 					assert.NoError(b, err)
@@ -89,24 +107,27 @@ func BenchmarkLevel0(b *testing.B) {
 			b.SetBytes(size)
 		})
 
-		b.Run("InitCurrent", func(b *testing.B) {
+		b.Run("Init", func(b *testing.B) {
 			fs, cleanup := testhelp.FS(b)
 			defer cleanup()
 
-			l0, entries, cleanup := Level0(b, fs, nlen, vlen)
+			l0, _, cleanup := Level0(b, fs, nlen, vlen)
 			defer cleanup()
 
+			keys := 0
 			now := time.Now()
 			b.ReportAllocs()
 			b.ResetTimer()
 
 			for i := 0; i < b.N; i++ {
-				assert.NoError(b, l0.InitCurrent(l0.fh))
+				assert.NoError(b, l0.Init(l0.fh, func(key histdb.Key, name, value []byte) {
+					keys++
+				}))
 			}
 
 			b.StopTimer()
-			b.ReportMetric(float64(len(entries)*b.N)/time.Since(now).Seconds(), "keys/sec")
-			b.ReportMetric(float64(time.Since(now).Nanoseconds())/float64(len(entries)*b.N), "ns/key")
+			b.ReportMetric(float64(keys)/time.Since(now).Seconds(), "keys/sec")
+			b.ReportMetric(float64(time.Since(now).Nanoseconds())/float64(keys), "ns/key")
 			size, err := l0.fh.Size()
 			assert.NoError(b, err)
 			b.SetBytes(size)
