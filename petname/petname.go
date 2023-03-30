@@ -4,6 +4,7 @@ import (
 	"unsafe"
 
 	"github.com/histdb/histdb/hashtbl"
+	"github.com/histdb/histdb/rwutils"
 )
 
 type span struct {
@@ -11,9 +12,9 @@ type span struct {
 	end   uint32
 }
 
-type T[K hashtbl.Key, RWK hashtbl.RWKey[K]] struct {
+type T[K hashtbl.Key, RWK rwutils.RW[K]] struct {
 	buf   []byte
-	idxs  hashtbl.T[K, RWK]
+	idxs  hashtbl.T[K, RWK, hashtbl.U32, *hashtbl.U32]
 	spans []span
 }
 
@@ -33,7 +34,7 @@ func (t *T[K, RWK]) Size() uint64 {
 }
 
 func (t *T[K, RWK]) Put(h K, v string) uint32 {
-	n, ok := t.idxs.Insert(h, uint32(t.idxs.Len()))
+	n, ok := t.idxs.Insert(h, hashtbl.U32(t.idxs.Len()))
 	if !ok && len(v) > 0 {
 		t.spans = append(t.spans, span{
 			begin: uint32(len(t.buf)),
@@ -41,11 +42,12 @@ func (t *T[K, RWK]) Put(h K, v string) uint32 {
 		})
 		t.buf = append(t.buf, v...)
 	}
-	return n
+	return uint32(n)
 }
 
 func (t *T[K, RWK]) Find(h K) (uint32, bool) {
-	return t.idxs.Find(h)
+	v, ok := t.idxs.Find(h)
+	return uint32(v), ok
 }
 
 func (t *T[K, RWK]) Get(n uint32) string {

@@ -13,16 +13,22 @@ type Key interface {
 	Digest() uint64
 }
 
-type RWKey[K Key] interface {
-	*K
-	rwutils.RW
-}
+type E struct{}
+
+func (E) ReadFrom(r *rwutils.R)  {}
+func (*E) AppendTo(w *rwutils.W) {}
 
 type U64 uint64
 
 func (u U64) Digest() uint64         { return uint64(u) }
 func (u *U64) ReadFrom(r *rwutils.R) { *u = U64(r.Uint64()) }
 func (u U64) AppendTo(w *rwutils.W)  { w.Uint64(uint64(u)) }
+
+type U32 uint64
+
+func (u U32) Digest() uint64         { return uint64(u) }
+func (u *U32) ReadFrom(r *rwutils.R) { *u = U32(r.Uint32()) }
+func (u U32) AppendTo(w *rwutils.W)  { w.Uint32(uint32(u)) }
 
 const (
 	flagsEmpty    = 0b00000000
@@ -33,7 +39,7 @@ const (
 	maskHit      = 0b10000000
 	maskDistance = 0b00111111
 
-	maxLoadFactor = 0.8
+	maxLoadFactor = 0.9
 )
 
 var jumpDistances = [64]uint16{
@@ -54,38 +60,38 @@ func max(x, y uint64) uint64 {
 func np2(x uint64) uint64  { return 1 << (uint(bits.Len64(x-1)) % 64) }
 func log2(x uint64) uint64 { return uint64(bits.Len64(x)-1) % 64 }
 
-type slot[K Key, RWK RWKey[K]] struct {
+type slot[K, V any] struct {
 	k K
-	v uint32
+	v V
 	m uint8
 }
 
-type slotIndex[K Key, RWK RWKey[K]] struct {
-	s *slot[K, RWK]
+type slotIndex[K, V any] struct {
+	s *slot[K, V]
 	i uint64
 }
 
-func (si slotIndex[K, RWK]) slot() slot[K, RWK]     { return *si.s }
-func (si slotIndex[K, RWK]) setSlot(s slot[K, RWK]) { *si.s = s }
-func (si slotIndex[K, RWK]) meta() uint8            { return si.s.m }
-func (si slotIndex[K, RWK]) setMeta(m uint8)        { si.s.m = m }
-func (si slotIndex[K, RWK]) setJump(ji uint8)       { si.setMeta(si.meta()&^maskDistance | ji) }
-func (si slotIndex[K, RWK]) hasJump() bool          { return si.meta()&maskDistance != 0 }
-func (si slotIndex[K, RWK]) jump() uint8            { return si.meta() & maskDistance }
+func (si slotIndex[K, V]) slot() slot[K, V]     { return *si.s }
+func (si slotIndex[K, V]) setSlot(s slot[K, V]) { *si.s = s }
+func (si slotIndex[K, V]) meta() uint8          { return si.s.m }
+func (si slotIndex[K, V]) setMeta(m uint8)      { si.s.m = m }
+func (si slotIndex[K, V]) setJump(ji uint8)     { si.setMeta(si.meta()&^maskDistance | ji) }
+func (si slotIndex[K, V]) hasJump() bool        { return si.meta()&maskDistance != 0 }
+func (si slotIndex[K, V]) jump() uint8          { return si.meta() & maskDistance }
 
-type T[K Key, RWK RWKey[K]] struct {
-	slots []slot[K, RWK]
+type T[K Key, RWK rwutils.RW[K], V any, RWV rwutils.RW[V]] struct {
+	slots []slot[K, V]
 	mask  uint64
 	shift uint64
 	eles  int
 	full  int
 }
 
-func (t *T[K, RWK]) Len() int { return t.eles }
+func (t *T[K, RWK, V, RWV]) Len() int { return t.eles }
 
-func (t *T[K, RWK]) Size() uint64 {
+func (t *T[K, RWK, V, RWV]) Size() uint64 {
 	return 0 +
-		/* slots */ 24 + uint64(unsafe.Sizeof(slot[K, RWK]{}))*uint64(len(t.slots)) +
+		/* slots */ 24 + uint64(unsafe.Sizeof(slot[K, V]{}))*uint64(len(t.slots)) +
 		/* mask  */ 8 +
 		/* shift */ 8 +
 		/* eles  */ 8 +
@@ -93,30 +99,30 @@ func (t *T[K, RWK]) Size() uint64 {
 		0
 }
 
-func (t *T[K, RWK]) Load() float64 {
+func (t *T[K, RWK, V, RWV]) Load() float64 {
 	return float64(t.eles) / float64(t.mask+1)
 }
 
-func (t *T[K, RWK]) getSlotIndex(i uint64) slotIndex[K, RWK] {
-	return slotIndex[K, RWK]{
+func (t *T[K, RWK, V, RWV]) getSlotIndex(i uint64) slotIndex[K, V] {
+	return slotIndex[K, V]{
 		s: &t.slots[i],
 		i: i,
 	}
 }
 
-func (t *T[K, RWK]) next(si slotIndex[K, RWK], ji uint8) slotIndex[K, RWK] {
+func (t *T[K, RWK, V, RWV]) next(si slotIndex[K, V], ji uint8) slotIndex[K, V] {
 	next := (si.i + uint64(jumpDistances[ji])) & t.mask
 	return t.getSlotIndex(next)
 }
 
-func (t *T[K, RWK]) index(k K) uint64 {
+func (t *T[K, RWK, V, RWV]) index(k K) uint64 {
 	return (11400714819323198485 * k.Digest()) >> (t.shift % 64)
 }
 
-func (t *T[K, RWK]) Find(k K) (uint32, bool) {
+func (t *T[K, RWK, V, RWV]) Find(k K) (v V, ok bool) {
 	si := t.getSlotIndex(t.index(k))
 	if si.meta()&maskHit != flagsHit {
-		return 0, false
+		return v, false
 	}
 	for {
 		if s := si.slot(); s.k == k {
@@ -124,13 +130,13 @@ func (t *T[K, RWK]) Find(k K) (uint32, bool) {
 		}
 		ji := si.jump()
 		if ji == 0 {
-			return 0, false
+			return v, false
 		}
 		si = t.next(si, ji)
 	}
 }
 
-func (t *T[K, RWK]) Insert(k K, v uint32) (uint32, bool) {
+func (t *T[K, RWK, V, RWV]) Insert(k K, v V) (V, bool) {
 	if t.isFull() {
 		t.grow()
 	}
@@ -150,9 +156,9 @@ func (t *T[K, RWK]) Insert(k K, v uint32) (uint32, bool) {
 	}
 }
 
-func (t *T[K, RWK]) insertDirectHit(si slotIndex[K, RWK], k K, v uint32) (uint32, bool) {
+func (t *T[K, RWK, V, RWV]) insertDirectHit(si slotIndex[K, V], k K, v V) (V, bool) {
 	if si.meta() == flagsEmpty {
-		si.setSlot(slot[K, RWK]{k, v, flagsHit})
+		si.setSlot(slot[K, V]{k, v, flagsHit})
 		t.eles++
 		return v, false
 	}
@@ -186,33 +192,33 @@ func (t *T[K, RWK]) insertDirectHit(si slotIndex[K, RWK], k K, v uint32) (uint32
 		}
 	}
 
-	si.setSlot(slot[K, RWK]{k, v, flagsHit})
+	si.setSlot(slot[K, V]{k, v, flagsHit})
 	t.eles++
 	return v, false
 }
 
-func (t *T[K, RWK]) insertNew(si slotIndex[K, RWK], k K, v uint32) (uint32, bool) {
+func (t *T[K, RWK, V, RWV]) insertNew(si slotIndex[K, V], k K, v V) (V, bool) {
 	free, ji := t.findFree(si)
 	if ji == 0 {
 		t.grow()
 		return t.Insert(k, v)
 	}
 
-	free.setSlot(slot[K, RWK]{k, v, flagsList})
+	free.setSlot(slot[K, V]{k, v, flagsList})
 	si.setJump(ji)
 	t.eles++
 	return v, false
 }
 
-func (t *T[K, RWK]) isFull() bool {
+func (t *T[K, RWK, V, RWV]) isFull() bool {
 	return t.eles >= t.full
 }
 
-func (t *T[K, RWK]) findDirectHit(si slotIndex[K, RWK]) slotIndex[K, RWK] {
+func (t *T[K, RWK, V, RWV]) findDirectHit(si slotIndex[K, V]) slotIndex[K, V] {
 	return t.getSlotIndex(t.index(si.slot().k))
 }
 
-func (t *T[K, RWK]) findParent(si slotIndex[K, RWK]) slotIndex[K, RWK] {
+func (t *T[K, RWK, V, RWV]) findParent(si slotIndex[K, V]) slotIndex[K, V] {
 	parent := t.findDirectHit(si)
 	for {
 		next := t.next(parent, parent.jump())
@@ -223,26 +229,26 @@ func (t *T[K, RWK]) findParent(si slotIndex[K, RWK]) slotIndex[K, RWK] {
 	}
 }
 
-func (t *T[K, RWK]) findFree(si slotIndex[K, RWK]) (slotIndex[K, RWK], uint8) {
+func (t *T[K, RWK, V, RWV]) findFree(si slotIndex[K, V]) (slotIndex[K, V], uint8) {
 	for ji := uint8(1); ji < uint8(len(jumpDistances)); ji++ {
 		if si := t.next(si, ji); si.meta() == flagsEmpty {
 			return si, ji
 		}
 	}
-	return slotIndex[K, RWK]{}, 0
+	return slotIndex[K, V]{}, 0
 }
 
 // TODO: maybe we can do background growth to avoid latency spikes
 // past the initial memory allocation.
 
-func (t *T[K, RWK]) grow() {
-	nslots := max(10, 2*t.mask)
+func (t *T[K, RWK, V, RWV]) grow() {
+	nslots := max(16, 2*t.mask)
 	nslots = max(nslots, uint64(math.Ceil(float64(t.eles)/maxLoadFactor)))
-	nslots = max(128, np2(nslots))
+	nslots = np2(nslots)
 
 	slots := t.slots
 	t.shift = 64 - log2(nslots)
-	t.slots = make([]slot[K, RWK], nslots)
+	t.slots = make([]slot[K, V], nslots)
 	t.mask = nslots - 1
 	t.eles = 0
 	t.full = int(float64(nslots) * maxLoadFactor)
@@ -255,7 +261,7 @@ func (t *T[K, RWK]) grow() {
 	}
 }
 
-func (t *T[K, RWK]) AppendTo(w *rwutils.W) {
+func (t *T[K, RWK, V, RWV]) AppendTo(w *rwutils.W) {
 	w.Uint64(uint64(len(t.slots)))
 	w.Uint64(t.mask)
 	w.Uint64(t.shift)
@@ -266,24 +272,24 @@ func (t *T[K, RWK]) AppendTo(w *rwutils.W) {
 		s := &t.slots[i]
 
 		RWK(&s.k).AppendTo(w)
-		w.Uint32(s.v)
+		RWV(&s.v).AppendTo(w)
 		w.Uint32(uint32(s.m))
 	}
 }
 
-func (t *T[K, RWK]) ReadFrom(r *rwutils.R) {
+func (t *T[K, RWK, V, RWV]) ReadFrom(r *rwutils.R) {
 	n := r.Uint64()
 	t.mask = r.Uint64()
 	t.shift = r.Uint64()
 	t.eles = int(r.Uint64())
 	t.full = int(r.Uint64())
 
-	t.slots = make([]slot[K, RWK], n)
+	t.slots = make([]slot[K, V], n)
 	for i := range t.slots {
 		s := &t.slots[i]
 
 		RWK(&s.k).ReadFrom(r)
-		s.v = r.Uint32()
+		RWV(&s.v).ReadFrom(r)
 		s.m = uint8(r.Uint32())
 	}
 }

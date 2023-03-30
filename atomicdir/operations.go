@@ -26,7 +26,7 @@ func (ops *Operations) close() error {
 }
 
 func (ops *Operations) getPath(tx uint16, f File) string {
-	var buf [22]byte
+	var buf [16]byte
 	writeTransactionFile(&buf, tx, f)
 	return string(buf[:])
 }

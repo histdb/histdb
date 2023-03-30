@@ -5,66 +5,56 @@ import (
 	"path/filepath"
 )
 
+var be = binary.BigEndian
+
 type File struct {
-	Level      uint8
-	Kind       uint8
 	Generation uint32
+	Kind       uint8
 }
 
 func (f File) String() string {
-	var buf [16]byte
+	var buf [11]byte
 	writeFile(&buf, f)
 	return string(buf[:])
 }
 
-func writeFile(buf *[16]byte, f File) {
-	*buf = [...]byte{
-		'L', '0', '0', '-',
-		'K', '0', '0', '-',
-		'0', '0', '0', '0', '0', '0', '0', '0',
-	}
-	binary.BigEndian.PutUint16(buf[1:3], hexUint8(f.Level))
-	binary.BigEndian.PutUint16(buf[5:7], hexUint8(f.Kind))
-	binary.BigEndian.PutUint64(buf[8:16], hexUint32(f.Generation))
+func writeFile(buf *[11]byte, f File) {
+	*buf = [...]byte{'0', '0', '0', '0', '0', '0', '0', '0', '.', '0', '0'}
+	be.PutUint64(buf[0:8], hexUint32(f.Generation))
+	be.PutUint16(buf[9:11], hexUint8(f.Kind))
 }
 
 func parseFile(name string) (f File, ok bool) {
-	if len(name) == 16 {
-		ok = name[0] == 'L' && name[3:5] == "-K" && name[7] == '-'
-		f.Level = unhexUint8(readUint16(name[1:3]))
-		f.Kind = unhexUint8(readUint16(name[5:7]))
-		f.Generation = unhexUint32(readUint64(name[8:16]))
+	if len(name) == 11 && name[8] == '.' {
+		f.Generation = unhexUint32(readUint64(name[0:8]))
+		f.Kind = unhexUint8(readUint16(name[9:11]))
+		ok = true
 	}
 	return
 }
 
-func writeTransaction(buf *[5]byte, txn uint16) string {
-	*buf = [...]byte{
-		'T', '0', '0', '0', '0',
-	}
-	binary.BigEndian.PutUint32(buf[1:5], hexUint16(txn))
+func writeTransaction(buf *[4]byte, txn uint16) string {
+	*buf = [...]byte{'0', '0', '0', '0'}
+	be.PutUint32(buf[0:4], hexUint16(txn))
 	return string(buf[:])
 }
 
 func parseTransaction(name string) (txn uint16, ok bool) {
-	if len(name) == 5 {
-		ok = name[0] == 'T'
-		txn = unhexUint16(readUint32(name[1:5]))
+	if len(name) == 4 {
+		txn = unhexUint16(readUint32(name[0:4]))
+		ok = true
 	}
 	return
 }
 
-func writeTransactionFile(buf *[22]byte, txn uint16, f File) {
+func writeTransactionFile(buf *[16]byte, txn uint16, f File) {
 	*buf = [...]byte{
-		'T', '0', '0', '0', '0', filepath.Separator,
-		'L', '0', '0', '-',
-		'K', '0', '0', '-',
-		'0', '0', '0', '0', '0', '0', '0', '0',
+		'0', '0', '0', '0', filepath.Separator,
+		'0', '0', '0', '0', '0', '0', '0', '0', '.', '0', '0',
 	}
-	binary.BigEndian.PutUint32(buf[1:5], hexUint16(txn))
-	binary.BigEndian.PutUint16(buf[7:9], hexUint8(f.Level))
-	binary.BigEndian.PutUint16(buf[11:13], hexUint8(f.Kind))
-	binary.BigEndian.PutUint64(buf[14:22], hexUint32(f.Generation))
+	be.PutUint32(buf[0:4], hexUint16(txn))
+	be.PutUint64(buf[5:13], hexUint32(f.Generation))
+	be.PutUint16(buf[14:16], hexUint8(f.Kind))
 }
 
 //

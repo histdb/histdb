@@ -3,14 +3,17 @@ package rwutils
 import (
 	"encoding/binary"
 
+	"github.com/zeebo/errs/v2"
+
 	"github.com/histdb/histdb/buffer"
 	"github.com/histdb/histdb/varint"
-	"github.com/zeebo/errs/v2"
 )
 
 var le = binary.LittleEndian
 
-type RW interface {
+type RW[T any] interface {
+	*T
+
 	AppendTo(w *W)
 	ReadFrom(r *R)
 }

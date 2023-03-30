@@ -70,7 +70,7 @@ func (t *T) OpenCurrent() (*Transaction, error) {
 }
 
 func (t *T) SetCurrent(tx *Transaction) error {
-	var buf [5]byte
+	var buf [4]byte
 	writeTransaction(&buf, tx.txn)
 
 	if err := t.fs.Link("current", string(buf[:])); err != nil {
@@ -111,7 +111,7 @@ func (t *T) openTxn(name string) (_ *Transaction, err error) {
 				continue
 			}
 
-			var buf [22]byte
+			var buf [16]byte
 			writeTransactionFile(&buf, txn, f)
 
 			fh, err := t.fs.OpenRead(string(buf[:]))
@@ -129,9 +129,7 @@ func (t *T) openTxn(name string) (_ *Transaction, err error) {
 		}
 	}
 
-	if err := tx.validate(); err != nil {
-		return nil, err
-	}
+	tx.sort()
 
 	return tx, nil
 }
@@ -156,7 +154,7 @@ func (t *T) NewTransaction(fn func(*Operations)) (*Transaction, error) {
 		return nil, errs.Errorf("no available transaction number")
 	}
 
-	var buf [5]byte
+	var buf [4]byte
 	writeTransaction(&buf, txn)
 	dir := string(buf[:])
 

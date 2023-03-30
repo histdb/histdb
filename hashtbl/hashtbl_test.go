@@ -4,19 +4,20 @@ import (
 	"testing"
 	"time"
 
-	"github.com/histdb/histdb/buffer"
-	"github.com/histdb/histdb/rwutils"
 	"github.com/zeebo/assert"
 	"github.com/zeebo/mwc"
+
+	"github.com/histdb/histdb/buffer"
+	"github.com/histdb/histdb/rwutils"
 )
 
 func TestTable(t *testing.T) {
-	var tb T[U64, *U64]
+	var tb T[U64, *U64, U32, *U32]
 	const iters = 1e6
 
 	rng := mwc.New(1, 1)
 	for i := 0; i < iters; i++ {
-		_, ok := tb.Insert(U64(rng.Uint64()), uint32(i))
+		_, ok := tb.Insert(U64(rng.Uint64()), U32(i))
 		assert.That(t, !ok)
 	}
 
@@ -29,7 +30,7 @@ func TestTable(t *testing.T) {
 
 	rng = mwc.New(1, 1)
 	for i := 0; i < iters; i++ {
-		n, ok := tb.Insert(U64(rng.Uint64()), uint32(i+1))
+		n, ok := tb.Insert(U64(rng.Uint64()), U32(i+1))
 		assert.That(t, ok)
 		assert.Equal(t, i, n)
 	}
@@ -43,10 +44,10 @@ func TestTable(t *testing.T) {
 }
 
 func TestTableSerialize(t *testing.T) {
-	var tb T[U64, *U64]
+	var tb T[U64, *U64, U32, *U32]
 
 	for i := uint64(0); i < 1000; i++ {
-		val, ok := tb.Insert(U64(i), uint32(i))
+		val, ok := tb.Insert(U64(i), U32(i))
 		assert.That(t, !ok)
 		assert.Equal(t, val, i)
 	}
@@ -60,7 +61,7 @@ func TestTableSerialize(t *testing.T) {
 	var r rwutils.R
 	r.Init(w.Done().Trim().Reset())
 
-	var tb2 T[U64, *U64]
+	var tb2 T[U64, *U64, U32, *U32]
 	tb2.ReadFrom(&r)
 
 	rem, err := r.Done()
@@ -68,7 +69,7 @@ func TestTableSerialize(t *testing.T) {
 	assert.Equal(t, rem.Suffix(), []byte{1, 2, 3})
 
 	for i := uint64(0); i < 1000; i++ {
-		val, ok := tb2.Insert(U64(i), ^uint32(0))
+		val, ok := tb2.Insert(U64(i), ^U32(0))
 		assert.That(t, ok)
 		assert.Equal(t, val, i)
 	}
@@ -82,18 +83,20 @@ func BenchmarkTable(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 
+		var tb T[U64, *U64, U32, *U32]
 		for i := 0; i < b.N; i++ {
-			var tb T[U64, *U64]
-
+			tb = T[U64, *U64, U32, *U32]{}
 			for j := 0; j < n; j++ {
-				tb.Insert(U64(rng.Uint64()), uint32(j))
+				tb.Insert(U64(rng.Uint64()), U32(0))
 			}
 		}
 
 		b.ReportMetric(float64(time.Since(now))/float64(n)/float64(b.N), "ns/key")
 		b.ReportMetric(float64(n)*float64(b.N)/time.Since(now).Seconds(), "keys/sec")
+		b.ReportMetric(float64(tb.Size()), "b/table")
 	}
 
+	b.Run("1e1", func(b *testing.B) { run(b, 1e1) })
 	b.Run("1e2", func(b *testing.B) { run(b, 1e2) })
 	b.Run("1e3", func(b *testing.B) { run(b, 1e3) })
 	b.Run("1e4", func(b *testing.B) { run(b, 1e4) })
@@ -122,6 +125,7 @@ func BenchmarkStdlib(b *testing.B) {
 		b.ReportMetric(float64(n)*float64(b.N)/time.Since(now).Seconds(), "keys/sec")
 	}
 
+	b.Run("1e1", func(b *testing.B) { run(b, 1e1) })
 	b.Run("1e2", func(b *testing.B) { run(b, 1e2) })
 	b.Run("1e3", func(b *testing.B) { run(b, 1e3) })
 	b.Run("1e4", func(b *testing.B) { run(b, 1e4) })
@@ -131,10 +135,10 @@ func BenchmarkStdlib(b *testing.B) {
 }
 
 func BenchmarkTableSerialize(b *testing.B) {
-	mk := func(n int) *T[U64, *U64] {
-		var tb T[U64, *U64]
+	mk := func(n int) *T[U64, *U64, U32, *U32] {
+		var tb T[U64, *U64, U32, *U32]
 		for i := 0; i < n; i++ {
-			tb.Insert(U64(i), uint32(i))
+			tb.Insert(U64(i), U32(i))
 		}
 		return &tb
 	}
@@ -161,6 +165,7 @@ func BenchmarkTableSerialize(b *testing.B) {
 			b.ReportMetric(float64(n)*float64(b.N)/time.Since(now).Seconds(), "keys/sec")
 		}
 
+		b.Run("1e1", func(b *testing.B) { run(b, 1e1) })
 		b.Run("1e2", func(b *testing.B) { run(b, 1e2) })
 		b.Run("1e3", func(b *testing.B) { run(b, 1e3) })
 		b.Run("1e4", func(b *testing.B) { run(b, 1e4) })
@@ -190,6 +195,7 @@ func BenchmarkTableSerialize(b *testing.B) {
 			b.ReportMetric(float64(n)*float64(b.N)/time.Since(now).Seconds(), "keys/sec")
 		}
 
+		b.Run("1e1", func(b *testing.B) { run(b, 1e1) })
 		b.Run("1e2", func(b *testing.B) { run(b, 1e2) })
 		b.Run("1e3", func(b *testing.B) { run(b, 1e3) })
 		b.Run("1e4", func(b *testing.B) { run(b, 1e4) })

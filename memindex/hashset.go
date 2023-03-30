@@ -10,7 +10,7 @@ import (
 )
 
 type hashSet struct {
-	set  hashtbl.T[histdb.Hash, *histdb.Hash]
+	set  hashtbl.T[histdb.Hash, *histdb.Hash, hashtbl.U32, *hashtbl.U32]
 	list []histdb.Hash
 }
 
@@ -46,16 +46,16 @@ func (hs *hashSet) Size() uint64 {
 }
 
 func (hs *hashSet) Fix() {
-	hs.set = hashtbl.T[histdb.Hash, *histdb.Hash]{}
+	hs.set = hashtbl.T[histdb.Hash, *histdb.Hash, hashtbl.U32, *hashtbl.U32]{}
 }
 
 func (hs *hashSet) Insert(hash histdb.Hash) (uint32, bool) {
-	idx, ok := hs.set.Insert(hash, uint32(hs.set.Len()))
+	idx, ok := hs.set.Insert(hash, hashtbl.U32(hs.set.Len()))
 	if ok {
-		return idx, ok
+		return uint32(idx), ok
 	}
 	hs.list = append(hs.list, hash)
-	return idx, false
+	return uint32(idx), false
 }
 
 func (hs *hashSet) Hash(idx uint32) (hash histdb.Hash) {
