@@ -27,6 +27,18 @@ func TestLevel0(t *testing.T) {
 		// TODO: some better checks
 	})
 
+	t.Run("ReopenLarge", func(t *testing.T) {
+		fs, cleanup := testhelp.FS(t)
+		defer cleanup()
+
+		l0, _, cleanup := Level0(t, fs, 32, 512)
+		defer cleanup()
+
+		for i := 0; i < 10; i++ {
+			assert.NoError(t, l0.Init(l0.fh, nil))
+		}
+	})
+
 	t.Run("Reopen", func(t *testing.T) {
 		fs, cleanup := testhelp.FS(t)
 		defer cleanup()
@@ -87,9 +99,7 @@ func BenchmarkLevel0(b *testing.B) {
 
 			for i := 0; i < b.N; i++ {
 				assert.NoError(b, l0.fh.Truncate(0))
-				assert.NoError(b, l0.Init(l0.fh, func(key histdb.Key, name, value []byte) {
-					b.Fatal("got a key")
-				}))
+				assert.NoError(b, l0.Init(l0.fh, nil))
 				for _, ent := range entries {
 					_, err := l0.Append(ent.Key, ent.Name, ent.Value)
 					assert.NoError(b, err)

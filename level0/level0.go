@@ -2,9 +2,9 @@ package level0
 
 import (
 	"encoding/binary"
-	"errors"
 	"io"
 	"sort"
+	"sync"
 
 	"github.com/zeebo/errs/v2"
 
@@ -29,12 +29,18 @@ type keyPos struct {
 	pos uint16
 }
 
+type keyPoss []keyPos
+
+func (k keyPoss) Len() int               { return len(k) }
+func (k keyPoss) Less(i int, j int) bool { return string(k[i].key[:]) < string(k[j].key[:]) }
+func (k keyPoss) Swap(i int, j int)      { k[i], k[j] = k[j], k[i] }
+
 type T struct {
 	buf   []byte
 	fh    filesystem.Handle
 	len   uint32
 	wrote int64
-	keys  []keyPos
+	keys  keyPoss
 	err   error
 	done  bool
 	ro    bool // readonly
@@ -65,6 +71,8 @@ func (t *T) InitFinished(fh filesystem.Handle) error {
 	return nil
 }
 
+var ebufPool = sync.Pool{New: func() any { return new([1024]byte) }}
+
 func (t *T) Init(fh filesystem.Handle, cb func(key histdb.Key, name, value []byte)) (err error) {
 	if err := t.reset(fh); err != nil {
 		return errs.Wrap(err)
@@ -75,15 +83,25 @@ func (t *T) Init(fh filesystem.Handle, cb func(key histdb.Key, name, value []byt
 	var it Iterator
 	it.Init(fh)
 
+	// since we control the lifetime of the iterator we can use a pool of
+	// fixed size buffers for the common allocation that happens.
+	ebuf, _ := ebufPool.Get().(*[1024]byte)
+	defer ebufPool.Put(ebuf)
+	it.ebuf = ebuf[:0]
+
 	for offset := int64(l0EntryAlignment); offset < L0DataSize; {
-		it.readEntryHeader(offset)
-		offset += it.readNameAndValue(offset)
+		ok := it.readEntryHeader(offset)
 		if it.err != nil {
-			if errors.Is(it.err, ioError) && !errors.Is(it.err, io.EOF) {
-				return it.err
-			}
+			return it.err
+		} else if !ok {
 			break
 		}
+
+		doffset := it.readNameAndValue(offset)
+		if it.err != nil || doffset == 0 {
+			break
+		}
+		offset += doffset
 
 		ok, err := t.Append(it.Key(), it.Name(), it.Value())
 		if !ok {
@@ -185,11 +203,14 @@ func (t *T) finish() error {
 	if len(t.buf) > 0 && t.flush() != nil {
 		return t.err
 	}
+	t.done = true
 
-	if !t.ro {
-		if err := t.fh.Truncate(L0DataSize); err != nil {
-			return t.storeErr(err)
-		}
+	if t.ro {
+		return nil
+	}
+
+	if err := t.fh.Truncate(L0DataSize); err != nil {
+		return t.storeErr(err)
 	}
 
 	if _, err := t.fh.Seek(L0DataSize, io.SeekStart); err != nil {
@@ -201,9 +222,7 @@ func (t *T) finish() error {
 	}
 	buf := t.buf[:0]
 
-	sort.Slice(t.keys, func(i, j int) bool {
-		return string(t.keys[i].key[:]) < string(t.keys[j].key[:])
-	})
+	sort.Sort(&t.keys)
 
 	for _, ent := range t.keys {
 		kp := binary.BigEndian.Uint16(ent.key[0:2])
@@ -213,13 +232,10 @@ func (t *T) finish() error {
 
 	buf = appendUint32(buf, checksum(buf))
 
-	if !t.ro {
-		if _, err := t.fh.Write(buf); err != nil {
-			return t.storeErr(err)
-		}
+	if _, err := t.fh.Write(buf); err != nil {
+		return t.storeErr(err)
 	}
 
-	t.done = true
 	return nil
 }
 

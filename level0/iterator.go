@@ -10,8 +10,6 @@ import (
 	"github.com/histdb/histdb/filesystem"
 )
 
-const ioError errs.Tag = "io error"
-
 type Iterator struct {
 	eoff int64 // offset of ebuf
 	ebuf []byte
@@ -42,7 +40,7 @@ func (it *Iterator) readIndex() {
 
 	n, err := it.fh.ReadAt(it.ibuf[:], L0DataSize)
 	if err != nil && err != io.EOF {
-		it.err = ioError.Wrap(err)
+		it.err = errs.Wrap(err)
 		return
 	}
 
@@ -99,24 +97,34 @@ func (it *Iterator) read(offset, length int64) []byte {
 
 	alloc := (length + 1023) &^ 1023
 	if int64(len(it.ebuf)) < alloc {
-		it.ebuf = make([]byte, alloc)
+		if int64(cap(it.ebuf)) >= alloc {
+			it.ebuf = it.ebuf[:alloc]
+		} else {
+			it.ebuf = make([]byte, alloc)
+		}
 	}
 
-	if _, it.err = it.fh.ReadAt(it.ebuf, offset); it.err != nil {
-		it.err = ioError.Wrap(it.err)
+	n, err := it.fh.ReadAt(it.ebuf, offset)
+	if err != nil && err != io.EOF {
+		it.err = errs.Wrap(err)
 		return nil
 	}
 	it.eoff = offset
 
+	if int64(n) < length {
+		length = int64(n)
+	}
+
 	return it.ebuf[:length]
 }
 
-func (it *Iterator) readEntryHeader(offset int64) {
+func (it *Iterator) readEntryHeader(offset int64) bool {
 	ebuf := it.read(offset, l0EntryHeaderSize)
-	if ebuf == nil {
-		return
+	if len(ebuf)+8 < len(it.keyb) {
+		return false
 	}
 	copy(it.keyb[:], ebuf[8:])
+	return true
 }
 
 func (it *Iterator) readNameAndValue(offset int64) int64 {
@@ -137,13 +145,17 @@ func (it *Iterator) readNameAndValue(offset int64) int64 {
 	elen := etail + l0ChecksumSize
 
 	ebuf = it.read(offset, elen)
-	if ebuf == nil {
+	if int64(len(ebuf)) != elen {
+		it.err = errs.Errorf("unable to read full entry buffer")
 		return 0
 	}
 
 	exp, got := checksum(ebuf[:etail]), binary.BigEndian.Uint32(ebuf[etail:elen])
 	if exp != got {
-		it.err = errs.Errorf("invalid entry checksum: %08x != %08x", exp, got)
+		// if we have an empty record, ignore the checksum failure
+		if it.keyb != (histdb.Key{}) && got != 0 {
+			it.err = errs.Errorf("invalid entry checksum: %08x != %08x", exp, got)
+		}
 		return 0
 	}
 
@@ -203,8 +215,9 @@ func (it *Iterator) Seek(key histdb.Key) bool {
 		}
 
 		// have to read the whole entry
-		it.readEntryHeader(offset)
-		if it.err != nil {
+		if !it.readEntryHeader(offset) {
+			return false
+		} else if it.err != nil {
 			return false
 		}
 
