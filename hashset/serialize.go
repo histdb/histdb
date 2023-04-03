@@ -7,6 +7,11 @@ import (
 	"github.com/histdb/histdb/rwutils"
 )
 
+type RW[K Key] T[K]
+
+func (rw *RW[K]) AppendTo(w *rwutils.W) { AppendTo((*T[K])(rw), w) }
+func (rw *RW[K]) ReadFrom(r *rwutils.R) { ReadFrom((*T[K])(rw), r) }
+
 func AppendTo[K Key](t *T[K], w *rwutils.W) {
 	w.Varint(uint64(len(t.list)))
 

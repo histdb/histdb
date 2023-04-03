@@ -5,6 +5,11 @@ import (
 	"github.com/histdb/histdb/rwutils"
 )
 
+type RW[K hashtbl.Key, RWK rwutils.RW[K]] T[K]
+
+func (rw *RW[K, RWK]) AppendTo(w *rwutils.W) { AppendTo[K, RWK]((*T[K])(rw), w) }
+func (rw *RW[K, RWK]) ReadFrom(r *rwutils.R) { ReadFrom[K, RWK]((*T[K])(rw), r) }
+
 func AppendTo[K hashtbl.Key, RWK rwutils.RW[K]](t *T[K], w *rwutils.W) {
 	w.Varint(uint64(len(t.buf)))
 	w.Bytes(t.buf)

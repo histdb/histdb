@@ -2,7 +2,12 @@ package hashtbl
 
 import "github.com/histdb/histdb/rwutils"
 
-func AppendTo[K Key, RWK rwutils.RW[K], V any, RWV rwutils.RW[V]](t *T[K, V], w *rwutils.W) {
+type RW[K Key, RWK rwutils.RW[K], V any, RWV rwutils.RW[V]] T[K, V]
+
+func (rw *RW[K, RWK, V, RWV]) AppendTo(w *rwutils.W) { AppendTo[K, RWK, V, RWV]((*T[K, V])(rw), w) }
+func (rw *RW[K, RWK, V, RWV]) ReadFrom(r *rwutils.R) { ReadFrom[K, RWK, V, RWV]((*T[K, V])(rw), r) }
+
+func AppendTo[K Key, KRW rwutils.RW[K], V any, VRW rwutils.RW[V]](t *T[K, V], w *rwutils.W) {
 	w.Uint64(uint64(len(t.slots)))
 	w.Uint64(t.mask)
 	w.Uint64(t.shift)
@@ -11,14 +16,14 @@ func AppendTo[K Key, RWK rwutils.RW[K], V any, RWV rwutils.RW[V]](t *T[K, V], w 
 
 	for i := range t.slots {
 		s := &t.slots[i]
-		RWK(&s.k).AppendTo(w)
-		RWV(&s.v).AppendTo(w)
+		KRW(&s.k).AppendTo(w)
+		VRW(&s.v).AppendTo(w)
 	}
 
 	w.Bytes(t.metas)
 }
 
-func ReadFrom[K Key, RWK rwutils.RW[K], V any, RWV rwutils.RW[V]](t *T[K, V], r *rwutils.R) {
+func ReadFrom[K Key, KRW rwutils.RW[K], V any, VRW rwutils.RW[V]](t *T[K, V], r *rwutils.R) {
 	n := r.Uint64()
 	t.mask = r.Uint64()
 	t.shift = r.Uint64()
@@ -28,8 +33,8 @@ func ReadFrom[K Key, RWK rwutils.RW[K], V any, RWV rwutils.RW[V]](t *T[K, V], r 
 	t.slots = make([]slot[K, V], n)
 	for i := range t.slots {
 		s := &t.slots[i]
-		RWK(&s.k).ReadFrom(r)
-		RWV(&s.v).ReadFrom(r)
+		(KRW)(&s.k).ReadFrom(r)
+		(VRW)(&s.v).ReadFrom(r)
 	}
 
 	t.metas = r.Bytes(int(n))

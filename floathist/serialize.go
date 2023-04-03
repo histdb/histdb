@@ -33,6 +33,11 @@ const (
 	_ uint = (l2B - 6) * (6 - l2B) // assumption: l2 is 2^6 bits
 )
 
+type RW T
+
+func (rw *RW) AppendTo(w *rwutils.W) { AppendTo((*T)(rw), w) }
+func (rw *RW) ReadFrom(r *rwutils.R) { ReadFrom((*T)(rw), r) }
+
 // AppendTo implements rwutils.RW and is not safe to call with concurrent mutations.
 func AppendTo(t *T, w *rwutils.W) {
 	bm := t.l0.bm.AtomicClone()

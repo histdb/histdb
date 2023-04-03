@@ -10,6 +10,11 @@ import (
 	"github.com/histdb/histdb/rwutils"
 )
 
+type RW T
+
+func (rw *RW) AppendTo(w *rwutils.W) { AppendTo((*T)(rw), w) }
+func (rw *RW) ReadFrom(r *rwutils.R) { ReadFrom((*T)(rw), r) }
+
 func AppendTo(t *T, w *rwutils.W) {
 	w.Uint64(0) // version
 
