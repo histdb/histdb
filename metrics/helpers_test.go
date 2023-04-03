@@ -9,11 +9,11 @@ import (
 func TestPopTags(t *testing.T) {
 	check := func(tags string, tkey, tag string, iskey bool, rest string) {
 		t.Helper()
-		gtkey, gtag, giskey, grest := PopTag(tags)
-		assert.Equal(t, tkey, gtkey)
-		assert.Equal(t, tag, gtag)
+		gtkey, gtag, giskey, grest := PopTag([]byte(tags))
+		assert.Equal(t, tkey, string(gtkey))
+		assert.Equal(t, tag, string(gtag))
 		assert.Equal(t, iskey, giskey)
-		assert.Equal(t, rest, grest)
+		assert.Equal(t, rest, string(grest))
 	}
 
 	check("foo=bar,foo=bar", "foo", "foo=bar", false, "foo=bar")

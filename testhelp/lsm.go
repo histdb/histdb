@@ -41,7 +41,7 @@ func Name(n int) []byte {
 	}
 	v := make([]byte, n)
 	for i := range v {
-		v[i] = byte(nameRng.Uint64())
+		v[i] = 'a' + byte(nameRng.Uint64n(26))
 	}
 	return v
 }

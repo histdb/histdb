@@ -110,7 +110,7 @@ func (r *R) Varint() (x uint64) {
 		r.buf = r.buf.Advance(n)
 	} else {
 		var ok bool
-		x, r.buf, ok = varint.SafeConsume(r.buf)
+		x, r.buf, ok = varint.Consume(r.buf)
 		if !ok {
 			r.Invalid(errs.Errorf("short buffer: varint truncated"))
 		}

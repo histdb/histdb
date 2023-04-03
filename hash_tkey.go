@@ -1,8 +1,9 @@
 package histdb
 
 import (
-	"github.com/histdb/histdb/rwutils"
 	"github.com/zeebo/xxh3"
+
+	"github.com/histdb/histdb/rwutils"
 )
 
 type TagKeyHash [TagKeyHashSize]byte
@@ -13,8 +14,8 @@ func (h TagKeyHash) Digest() uint64 {
 		0
 }
 
-func NewTagKeyHash(tkey string) (th TagKeyHash) {
-	le.PutUint32(th[:], uint32(xxh3.HashString(tkey)))
+func NewTagKeyHash(tkey []byte) (th TagKeyHash) {
+	le.PutUint32(th[:], uint32(xxh3.Hash(tkey)))
 	return th
 }
 

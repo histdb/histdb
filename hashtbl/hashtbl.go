@@ -131,6 +131,9 @@ func (t *T[K, RWK, V, RWV]) index(k K) uint64 {
 }
 
 func (t *T[K, RWK, V, RWV]) Find(k K) (v V, ok bool) {
+	if t.eles == 0 {
+		return v, false
+	}
 	si := t.getSlotIndex(t.index(k))
 	if si.meta()&maskHit != flagsHit {
 		return v, false
@@ -184,9 +187,8 @@ func (t *T[K, RWK, V, RWV]) insertDirectHit(si slotIndex[K, V], k K, v V) (V, bo
 
 	for it := si; ; {
 		free.setSlot(it.slot())
-		free.setMeta(it.meta())
+		free.setMeta(it.meta() | flagsList)
 		parent.setJump(ji)
-		free.setMeta(flagsList)
 
 		if !it.hasJump() {
 			it.setMeta(flagsEmpty)
@@ -219,7 +221,7 @@ func (t *T[K, RWK, V, RWV]) insertNew(si slotIndex[K, V], k K, v V) (V, bool) {
 	}
 
 	free.setSlot(slot[K, V]{k, v})
-	free.setMeta(flagsList)
+	free.setMeta(flagsHit | flagsList)
 	si.setJump(ji)
 	t.eles++
 	return v, false
@@ -271,12 +273,10 @@ func (t *T[K, RWK, V, RWV]) grow() {
 	t.full = int(float64(nslots) * maxLoadFactor)
 
 	for i, m := range metas {
-		if m == flagsEmpty || m == flagsReserved {
-			continue
+		if m != flagsEmpty && m != flagsReserved {
+			s := &slots[i]
+			t.Insert(s.k, s.v)
 		}
-
-		s := &slots[i]
-		t.Insert(s.k, s.v)
 	}
 }
 

@@ -13,7 +13,10 @@ import (
 
 func TestTable(t *testing.T) {
 	var tb T[U64, *U64, U32, *U32]
-	const iters = 1e6
+	const iters = 1e5
+
+	_, ok := tb.Find(0)
+	assert.That(t, !ok)
 
 	rng := mwc.New(1, 1)
 	for i := 0; i < iters; i++ {

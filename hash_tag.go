@@ -1,14 +1,15 @@
 package histdb
 
 import (
-	"github.com/histdb/histdb/rwutils"
 	"github.com/zeebo/xxh3"
+
+	"github.com/histdb/histdb/rwutils"
 )
 
 type TagHash [TagHashSize]byte
 
-func NewTagHash(tag string) (mh TagHash) {
-	h := xxh3.HashString128(tag)
+func NewTagHash(tag []byte) (mh TagHash) {
+	h := xxh3.Hash128(tag)
 	le.PutUint64(mh[0:8], h.Lo)
 	le.PutUint32(mh[8:12], uint32(h.Hi))
 	return mh

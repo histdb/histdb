@@ -1,8 +1,8 @@
 package memindex
 
 import (
+	"bytes"
 	"fmt"
-	"strings"
 	"sync"
 
 	"github.com/RoaringBitmap/roaring"
@@ -131,7 +131,7 @@ func getBitmap(bmsp *[]*roaring.Bitmap, n uint32) (bm *roaring.Bitmap) {
 	return bm
 }
 
-func (t *T) Add(metric string) (histdb.Hash, bool) {
+func (t *T) Add(metric []byte) (histdb.Hash, bool) {
 	tkeyis := make([]uint32, 0, 8)
 	tagis := make([]uint32, 0, 8)
 	var tkeyus map[uint32]struct{}
@@ -141,7 +141,7 @@ func (t *T) Add(metric string) (histdb.Hash, bool) {
 	thp := hash.TagKeyHashPtr()
 
 	for rest := metric; len(rest) > 0; {
-		var tkey, tag string
+		var tkey, tag []byte
 		tkey, tag, _, rest = metrics.PopTag(rest)
 		if len(tag) == 0 {
 			continue
@@ -199,13 +199,15 @@ func (t *T) MetricHashes(metrics *roaring.Bitmap, cb func(histdb.Hash) bool) {
 	})
 }
 
-func (t *T) Metrics(query string, cb func(*roaring.Bitmap, []string) bool) {
-	tags := make([]string, 0, strings.Count(query, ",")+1)
+var comma = []byte(",")
+
+func (t *T) Metrics(query []byte, cb func(*roaring.Bitmap, [][]byte) bool) {
+	tags := make([][]byte, 0, bytes.Count(query, comma)+1)
 	t.metricsHelper(nil, query, tags, cb)
 }
 
-func (t *T) metricsHelper(mbm *roaring.Bitmap, query string, tags []string, cb func(*roaring.Bitmap, []string) bool) bool {
-	if query == "" {
+func (t *T) metricsHelper(mbm *roaring.Bitmap, query []byte, tags [][]byte, cb func(*roaring.Bitmap, [][]byte) bool) bool {
+	if len(query) == 0 {
 		if mbm == nil || mbm.IsEmpty() {
 			return true
 		}
@@ -266,7 +268,7 @@ func (t *T) metricsHelper(mbm *roaring.Bitmap, query string, tags []string, cb f
 	}
 }
 
-func (t *T) TagKeys(input string, cb func(result string) bool) {
+func (t *T) TagKeys(input []byte, cb func(result []byte) bool) {
 	tkbm := acquireBitmap()
 	defer replaceBitmap(tkbm)
 
@@ -275,7 +277,7 @@ func (t *T) TagKeys(input string, cb func(result string) bool) {
 
 	for rest := input; len(rest) > 0; {
 		var (
-			tag, tkey   string
+			tag, tkey   []byte
 			isKey       bool
 			ltkbm, lmbm *roaring.Bitmap
 		)
@@ -335,7 +337,7 @@ func (t *T) TagKeys(input string, cb func(result string) bool) {
 	})
 }
 
-func (t *T) TagValues(input, tkey string, cb func(result string) bool) {
+func (t *T) TagValues(input, tkey []byte, cb func(result []byte) bool) {
 	name, ok := t.tkey_names.Find(histdb.NewTagKeyHash(tkey))
 	if !ok {
 		return
@@ -348,7 +350,7 @@ func (t *T) TagValues(input, tkey string, cb func(result string) bool) {
 	defer replaceBitmap(mbm)
 
 	for rest := input; len(rest) > 0; {
-		var tag, tkey string
+		var tag, tkey []byte
 		var isKey bool
 		var ltbm, lmbm *roaring.Bitmap
 

@@ -18,6 +18,8 @@ type T[K hashtbl.Key, RWK rwutils.RW[K]] struct {
 	spans []span
 }
 
+func (t *T[K, RWK]) Buf() []byte { return t.buf }
+
 func (t *T[K, RWK]) Len() int {
 	if t == nil {
 		return 0
@@ -33,8 +35,8 @@ func (t *T[K, RWK]) Size() uint64 {
 		0
 }
 
-func (t *T[K, RWK]) Put(h K, v string) uint32 {
-	n, ok := t.idxs.Insert(h, hashtbl.U32(t.idxs.Len()))
+func (t *T[K, RWK]) Put(h K, v []byte) uint32 {
+	n, ok := t.idxs.Insert(h, hashtbl.U32(len(t.spans)))
 	if !ok && len(v) > 0 {
 		t.spans = append(t.spans, span{
 			begin: uint32(len(t.buf)),
@@ -50,14 +52,13 @@ func (t *T[K, RWK]) Find(h K) (uint32, bool) {
 	return uint32(v), ok
 }
 
-func (t *T[K, RWK]) Get(n uint32) string {
+func (t *T[K, RWK]) Get(n uint32) []byte {
 	if uint64(n) < uint64(len(t.spans)) {
 		s := t.spans[n]
 		b, e := uint64(s.begin), uint64(s.end)
 		if b < uint64(len(t.buf)) && e <= uint64(len(t.buf)) && b <= e {
-			v := t.buf[b:e]
-			return *(*string)(unsafe.Pointer(&v))
+			return t.buf[b:e]
 		}
 	}
-	return ""
+	return nil
 }

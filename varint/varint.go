@@ -2,14 +2,12 @@ package varint
 
 import (
 	"encoding/binary"
-	"fmt"
 	"math/bits"
-	"unsafe"
 
 	"github.com/histdb/histdb/buffer"
 )
 
-type ptr = unsafe.Pointer
+var le = binary.LittleEndian
 
 //
 // varint support
@@ -20,12 +18,12 @@ func Append(dst *[9]byte, val uint64) (nbytes uintptr) {
 
 	if nbytes < 9 {
 		enc := val<<nbytes + 1<<((nbytes-1)&63) - 1
-		*(*uint64)(ptr(&dst[0])) = enc // annoying
+		le.PutUint64(dst[:], enc)
 		return
 	}
 
 	dst[0] = 0xff
-	*(*uint64)(ptr(&dst[1])) = val // annoying
+	le.PutUint64(dst[1:], val)
 	return
 }
 
@@ -33,18 +31,16 @@ func FastConsume(src *[9]byte) (nbytes uintptr, dec uint64) {
 	nbytes = uintptr(bits.TrailingZeros8(^src[0])) + 1
 
 	if nbytes < 9 {
-		dec = *(*uint64)(ptr(&src[0])) >> nbytes // annoying
+		dec = le.Uint64(src[:]) >> nbytes
 		dec &= 1<<((8*nbytes-nbytes)&63) - 1
 		return
 	}
 
-	dec = *(*uint64)(ptr(&src[1])) // annoying
+	dec = le.Uint64(src[1:])
 	return
 }
 
-func SafeConsume(buf buffer.T) (uint64, buffer.T, bool) {
-	le := binary.LittleEndian
-
+func Consume(buf buffer.T) (uint64, buffer.T, bool) {
 	rem := buf.Remaining()
 	if rem == 0 {
 		return 0, buf, false
@@ -83,24 +79,4 @@ func SafeConsume(buf buffer.T) (uint64, buffer.T, bool) {
 	}
 
 	return out, buf.Advance(uintptr(nbytes)), true
-}
-
-// we use direct uint64 writes because the inliner hates binary.LittleEndian :(
-// so let's at least make sure that they work the same way at startup so we
-// don't silently corrupt data.
-//
-// additionally, because we're using direct writes, they may be unaligned and
-// so let's make sure those work as well.
-//
-// this is all very sad.
-func init() {
-	var b1, b2 [9]byte
-	binary.LittleEndian.PutUint64(b1[1:9], 0x0102030405060708)
-	*(*uint64)(ptr(&b2[1])) = 0x0102030405060708
-	if b1 != b2 {
-		panic(fmt.Sprintf("not on little-endian machine: %x != %x", b1, b2))
-	}
-	if v := *(*uint64)(ptr(&b2[1])); v != 0x0102030405060708 {
-		panic(fmt.Sprintf("unaligned reads problem: %x", v))
-	}
 }

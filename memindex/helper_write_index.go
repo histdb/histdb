@@ -1,19 +1,23 @@
-//go:build ignore
-
 package memindex
 
 import (
 	"bufio"
+	"bytes"
 	"compress/gzip"
 	"fmt"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/histdb/histdb/rwutils"
 )
 
+var reload = false
+
 func init() {
+	if !reload {
+		return
+	}
+
 	var idx T
 
 	fh, err := os.Open("metrics.txt")
@@ -67,7 +71,7 @@ func init() {
 
 	scanner := bufio.NewScanner(gzfh)
 	for scanner.Scan() {
-		idx.Add(strings.TrimSpace(scanner.Text()))
+		idx.Add(bytes.TrimSpace(scanner.Bytes()))
 		count++
 		if count%statEvery == 0 {
 			stats()

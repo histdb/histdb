@@ -2,14 +2,36 @@ package floathist
 
 import (
 	"encoding/hex"
+	"runtime"
 	"testing"
 
-	"github.com/histdb/histdb/rwutils"
 	"github.com/zeebo/assert"
 	"github.com/zeebo/mwc"
+
+	"github.com/histdb/histdb/rwutils"
 )
 
 func TestSerialize(t *testing.T) {
+	t.Run("WriteSingle", func(t *testing.T) {
+		rng := mwc.Rand()
+		var buf [13]byte
+		var w rwutils.W
+
+		for i := 0; i < 10000; i++ {
+			v := rng.Float32()
+
+			var h Histogram
+			h.Observe(v)
+
+			WriteSingle(&buf, v)
+
+			w.Init(w.Done().Reset())
+			h.AppendTo(&w)
+
+			assert.Equal(t, buf[:], w.Done().Prefix())
+		}
+	})
+
 	t.Run("Write", func(t *testing.T) {
 		rng := mwc.Rand()
 
@@ -56,6 +78,16 @@ func TestSerialize(t *testing.T) {
 }
 
 func BenchmarkSerialize(b *testing.B) {
+	b.Run("WriteSingle", func(b *testing.B) {
+		rng := mwc.Rand()
+		var buf [13]byte
+
+		for i := 0; i < b.N; i++ {
+			WriteSingle(&buf, rng.Float32())
+		}
+		runtime.KeepAlive(&buf)
+	})
+
 	b.Run("AppendTo", func(b *testing.B) {
 		rng := mwc.Rand()
 

@@ -67,7 +67,10 @@ func (t *T) SetCurrent(txn *Txn) error {
 	var buf [8]byte
 	writeTransaction(&buf, txn.tid)
 
-	if err := t.fs.Link("current", string(buf[:])); err != nil {
+	if err := t.fs.Symlink(string(buf[:]), "current-next"); err != nil {
+		return errs.Wrap(err)
+	}
+	if err := t.fs.Rename("current-next", "current"); err != nil {
 		return errs.Wrap(err)
 	}
 
@@ -107,7 +110,7 @@ func (t *T) openTxn(txn *Txn, name string) (err error) {
 			var buf [20]byte
 			writeTransactionFile(&buf, tid, f)
 
-			fh, err := t.fs.OpenRead(string(buf[:]))
+			fh, err := t.fs.OpenWrite(string(buf[:]))
 			if err != nil {
 				return errs.Wrap(err)
 			}
@@ -122,11 +125,9 @@ func (t *T) openTxn(txn *Txn, name string) (err error) {
 		}
 	}
 
-	if len(txn.handles) == 0 {
-		return errs.Errorf("invalid txn: tid=%d has no handles", txn.tid)
+	if err := txn.validate(); err != nil {
+		return err
 	}
-
-	txn.sort()
 
 	return nil
 }

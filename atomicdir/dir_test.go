@@ -22,5 +22,5 @@ func TestDir(t *testing.T) {
 	})
 	assert.NoError(t, err)
 
-	t.Log(txn.Handles()[0].File)
+	t.Log(txn.L0s()[0].File)
 }

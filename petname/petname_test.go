@@ -3,19 +3,20 @@ package petname
 import (
 	"testing"
 
-	"github.com/histdb/histdb/hashtbl"
 	"github.com/zeebo/assert"
+
+	"github.com/histdb/histdb/hashtbl"
 )
 
 func TestPetname(t *testing.T) {
 	var pn T[hashtbl.U64, *hashtbl.U64]
 
 	assert.Equal(t, pn.Len(), 0)
-	assert.Equal(t, pn.Size(), 0x68)
+	assert.Equal(t, pn.Size(), 0x80)
 
-	i0 := pn.Put(1, "value1")
-	i1 := pn.Put(2, "value2")
-	i2 := pn.Put(1, "value3")
+	i0 := pn.Put(1, []byte("value1"))
+	i1 := pn.Put(2, []byte("value2"))
+	i2 := pn.Put(1, []byte("value3"))
 	assert.Equal(t, i0, i2)
 
 	f0, ok := pn.Find(1)
@@ -29,12 +30,12 @@ func TestPetname(t *testing.T) {
 	_, ok = pn.Find(3)
 	assert.That(t, !ok)
 
-	assert.Equal(t, pn.Get(i0), "value1")
-	assert.Equal(t, pn.Get(i1), "value2")
+	assert.Equal(t, pn.Get(i0), []byte("value1"))
+	assert.Equal(t, pn.Get(i1), []byte("value2"))
 
-	var out string
+	var out []byte
 	assert.Equal(t, testing.AllocsPerRun(100, func() {
 		out = pn.Get(i0)
 	}), 0.0)
-	assert.Equal(t, out, "value1")
+	assert.Equal(t, out, []byte("value1"))
 }

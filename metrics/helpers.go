@@ -1,11 +1,13 @@
 package metrics
 
-import "strings"
+import (
+	"bytes"
+)
 
-func PopTag(tags string) (tkey, tag string, isKey bool, rest string) {
+func PopTag(tags []byte) (tkey, tag []byte, isKey bool, rest []byte) {
 	// find the first unescaped ','
 	for j := uint(0); j < uint(len(tags)); {
-		i := strings.IndexByte(tags[j:], ',')
+		i := bytes.IndexByte(tags[j:], ',')
 		if i < 0 {
 			break
 		}
@@ -32,7 +34,7 @@ func PopTag(tags string) (tkey, tag string, isKey bool, rest string) {
 
 	// find the first unescaped '='
 	for j := uint(0); j < uint(len(tkey)); {
-		i := strings.IndexByte(tkey[j:], '=')
+		i := bytes.IndexByte(tkey[j:], '=')
 		if i < 0 {
 			break
 		}

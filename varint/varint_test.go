@@ -19,7 +19,7 @@ func TestVarint(t *testing.T) {
 			nbytes := Append(buf.Front9(), 1<<i-1)
 			assert.That(t, nbytes <= 9)
 			buf = buf.Advance(nbytes)
-			dec, _, ok := SafeConsume(buf.Reset())
+			dec, _, ok := Consume(buf.Reset())
 
 			t.Logf("%-2d %064b %08b\n", i, dec, buf.Prefix())
 
@@ -80,7 +80,7 @@ func TestVarint(t *testing.T) {
 				nbytes := Append(buf.Front9(), exp)
 				assert.That(t, nbytes <= 9)
 				buf = buf.Advance(nbytes)
-				dec, _, ok := SafeConsume(buf.Reset())
+				dec, _, ok := Consume(buf.Reset())
 
 				t.Logf("%-2d %064b %08b\n", i, dec, buf.Prefix())
 
@@ -163,7 +163,7 @@ func BenchmarkVarint(b *testing.B) {
 				buf = buf.Advance(nbytes)
 
 				for i := 0; i < b.N; i++ {
-					SafeConsume(buf)
+					Consume(buf)
 				}
 			})
 		}
@@ -174,7 +174,7 @@ func BenchmarkVarint(b *testing.B) {
 				if buf.Remaining() == 0 {
 					buf = buf.Reset()
 				}
-				_, buf, _ = SafeConsume(buf)
+				_, buf, _ = Consume(buf)
 			}
 		})
 	})

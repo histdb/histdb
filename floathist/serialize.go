@@ -2,6 +2,7 @@ package floathist
 
 import (
 	"encoding/binary"
+	"math"
 
 	"github.com/zeebo/errs/v2"
 
@@ -17,17 +18,32 @@ import (
 //      make a l2 at least 80 bytes.
 //   3. maybe some other l2 serialization options?
 
+func WriteSingle(buf *[13]byte, v float32) {
+	bits := math.Float32bits(v)
+	bits ^= uint32(int32(bits)>>31) | (1 << 31)
+	binary.LittleEndian.PutUint16(buf[0:2], 1<<((bits>>l0Sh)%l0S))
+	binary.LittleEndian.PutUint16(buf[2:4], 1<<((bits>>l1Sh)%l1S))
+	binary.LittleEndian.PutUint64(buf[4:12], 1<<((bits>>l2Sh)%l2S))
+	buf[12] = 2 // varint encoding of 1
+}
+
+const (
+	_ uint = (l0B - 4) * (4 - l0B) // assumption: l0 is 2^4 bits
+	_ uint = (l1B - 4) * (4 - l1B) // assumption: l1 is 2^4 bits
+	_ uint = (l2B - 6) * (6 - l2B) // assumption: l2 is 2^6 bits
+)
+
 // AppendTo implements rwutils.RW and is not safe to call with concurrent mutations.
 func (h *Histogram) AppendTo(w *rwutils.W) {
 	bm := h.l0.bm.AtomicClone()
-	w.Varint(bm.Uint64())
+	w.Uint16(uint16(bm.Uint64()))
 
 	for ; !bm.Empty(); bm.Next() {
 		i := bm.Lowest()
 		l1 := layer1_load(&h.l0.l1s[i])
 
 		bm := l1.bm.AtomicClone()
-		w.Varint(bm.Uint64())
+		w.Uint16(uint16(bm.Uint64()))
 
 		for ; !bm.Empty(); bm.Next() {
 			i := bm.Lowest()
@@ -50,7 +66,7 @@ func (h *Histogram) AppendTo(w *rwutils.W) {
 
 // ReadFrom implements rwutils.RW and is not safe to call with concurrent mutations.
 func (h *Histogram) ReadFrom(r *rwutils.R) {
-	bm := newL0Bitmap(r.Varint())
+	bm := newL0Bitmap(uint64(r.Uint16()))
 	for ; !bm.Empty(); bm.Next() {
 		l1i := bm.Lowest()
 		l1 := h.l0.l1s[l1i]
@@ -61,7 +77,7 @@ func (h *Histogram) ReadFrom(r *rwutils.R) {
 			h.l0.bm.unsafeSetIdx(l1i)
 		}
 
-		bm := newL1Bitmap(r.Varint())
+		bm := newL1Bitmap(uint64(r.Uint16()))
 		for ; !bm.Empty(); bm.Next() {
 			l2i := bm.Lowest()
 			l2 := l1.l2s[l2i]

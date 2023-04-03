@@ -50,7 +50,7 @@ func (hs *hashSet) Fix() {
 }
 
 func (hs *hashSet) Insert(hash histdb.Hash) (uint32, bool) {
-	idx, ok := hs.set.Insert(hash, hashtbl.U32(hs.set.Len()))
+	idx, ok := hs.set.Insert(hash, hashtbl.U32(len(hs.list)))
 	if ok {
 		return uint32(idx), ok
 	}
