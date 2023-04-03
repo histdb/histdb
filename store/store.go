@@ -93,7 +93,7 @@ func (t *T) Init(fs *filesystem.T) (err error) {
 
 		var r rwutils.R
 		r.Init(buffer.OfLen(data))
-		t.lnms[i].ReadFrom(&r)
+		memindex.ReadFrom(&t.lnms[i], &r)
 		if _, err := r.Done(); err != nil {
 			return errs.Wrap(err)
 		}

@@ -34,13 +34,13 @@ const (
 )
 
 // AppendTo implements rwutils.RW and is not safe to call with concurrent mutations.
-func (h *Histogram) AppendTo(w *rwutils.W) {
-	bm := h.l0.bm.AtomicClone()
+func AppendTo(t *T, w *rwutils.W) {
+	bm := t.l0.bm.AtomicClone()
 	w.Uint16(uint16(bm.Uint64()))
 
 	for ; !bm.Empty(); bm.Next() {
 		i := bm.Lowest()
-		l1 := layer1_load(&h.l0.l1s[i])
+		l1 := layer1_load(&t.l0.l1s[i])
 
 		bm := l1.bm.AtomicClone()
 		w.Uint16(uint16(bm.Uint64()))
@@ -65,16 +65,16 @@ func (h *Histogram) AppendTo(w *rwutils.W) {
 }
 
 // ReadFrom implements rwutils.RW and is not safe to call with concurrent mutations.
-func (h *Histogram) ReadFrom(r *rwutils.R) {
+func ReadFrom(t *T, r *rwutils.R) {
 	bm := newL0Bitmap(uint64(r.Uint16()))
 	for ; !bm.Empty(); bm.Next() {
 		l1i := bm.Lowest()
-		l1 := h.l0.l1s[l1i]
+		l1 := t.l0.l1s[l1i]
 
 		if l1 == nil {
 			l1 = new(layer1)
-			h.l0.l1s[l1i] = l1
-			h.l0.bm.unsafeSetIdx(l1i)
+			t.l0.l1s[l1i] = l1
+			t.l0.bm.unsafeSetIdx(l1i)
 		}
 
 		bm := newL1Bitmap(uint64(r.Uint16()))

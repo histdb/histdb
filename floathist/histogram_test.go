@@ -11,7 +11,7 @@ import (
 
 func TestHistogram(t *testing.T) {
 	t.Run("Reset", func(t *testing.T) {
-		h := new(Histogram)
+		var h T
 		for i := float32(0); i < 1000; i++ {
 			h.Observe(i)
 		}
@@ -24,7 +24,7 @@ func TestHistogram(t *testing.T) {
 	})
 
 	t.Run("MinMax", func(t *testing.T) {
-		h := new(Histogram)
+		var h T
 		for i := float32(0); i < 1000; i++ {
 			h.Observe(i)
 		}
@@ -34,7 +34,7 @@ func TestHistogram(t *testing.T) {
 	})
 
 	t.Run("Total", func(t *testing.T) {
-		h := new(Histogram)
+		var h T
 		for i := float32(0); i < 1000; i++ {
 			h.Observe(i)
 		}
@@ -43,7 +43,7 @@ func TestHistogram(t *testing.T) {
 	})
 
 	t.Run("Quantile", func(t *testing.T) {
-		h := new(Histogram)
+		var h T
 		for i := float32(0); i < 1000; i++ {
 			h.Observe(i)
 		}
@@ -56,7 +56,7 @@ func TestHistogram(t *testing.T) {
 	})
 
 	t.Run("CDF", func(t *testing.T) {
-		h := new(Histogram)
+		var h T
 		for i := float32(0); i < 1000; i++ {
 			h.Observe(i)
 		}
@@ -69,7 +69,7 @@ func TestHistogram(t *testing.T) {
 	})
 
 	t.Run("Summary", func(t *testing.T) {
-		h := new(Histogram)
+		var h T
 		for i := float32(0); i < 1000; i++ {
 			h.Observe(i)
 		}
@@ -83,7 +83,7 @@ func TestHistogram(t *testing.T) {
 	})
 
 	t.Run("Merge", func(t *testing.T) {
-		h := new(Histogram)
+		var h T
 		for i := float32(0); i < 1000; i++ {
 			h.Observe(i)
 		}
@@ -91,7 +91,7 @@ func TestHistogram(t *testing.T) {
 		const doublings = 54
 
 		for i := 0; i < doublings; i++ {
-			assert.NoError(t, h.Merge(h))
+			assert.NoError(t, h.Merge(&h))
 		}
 
 		total, _, avg, _ := h.Summary()
@@ -106,7 +106,7 @@ func BenchmarkHistogram(b *testing.B) {
 	b.Run("Observe", func(b *testing.B) {
 		b.ReportAllocs()
 
-		his := new(Histogram)
+		his := new(T)
 
 		for i := 0; i < b.N; i++ {
 			his.Observe(1)
@@ -116,7 +116,7 @@ func BenchmarkHistogram(b *testing.B) {
 	b.Run("Observe_Parallel", func(b *testing.B) {
 		b.ReportAllocs()
 
-		his := new(Histogram)
+		his := new(T)
 		n := int64(0)
 		b.RunParallel(func(pb *testing.PB) {
 			i := float32(uint64(1024) << uint64(atomic.AddInt64(&n, 1)))
@@ -129,7 +129,7 @@ func BenchmarkHistogram(b *testing.B) {
 	b.Run("Min", func(b *testing.B) {
 		rng := mwc.Rand()
 
-		his := new(Histogram)
+		his := new(T)
 		for i := 0; i < 1000000; i++ {
 			his.Observe(math.Float32frombits(rng.Uint32() &^ ((1<<10 - 1) << 22)))
 		}
@@ -144,7 +144,7 @@ func BenchmarkHistogram(b *testing.B) {
 	b.Run("Max", func(b *testing.B) {
 		rng := mwc.Rand()
 
-		his := new(Histogram)
+		his := new(T)
 		for i := 0; i < 1000000; i++ {
 			his.Observe(math.Float32frombits(rng.Uint32() &^ ((1<<10 - 1) << 22)))
 		}
@@ -159,7 +159,7 @@ func BenchmarkHistogram(b *testing.B) {
 	b.Run("Total", func(b *testing.B) {
 		rng := mwc.Rand()
 
-		his := new(Histogram)
+		his := new(T)
 		for i := 0; i < 1000000; i++ {
 			his.Observe(rng.Float32())
 		}
@@ -174,7 +174,7 @@ func BenchmarkHistogram(b *testing.B) {
 	b.Run("Total_Easy", func(b *testing.B) {
 		rng := mwc.Rand()
 
-		his := new(Histogram)
+		his := new(T)
 		for i := 0; i < 1000000; i++ {
 			his.Observe(math.Float32frombits(rng.Uint32() &^ ((1<<10 - 1) << 22)))
 		}
@@ -190,7 +190,7 @@ func BenchmarkHistogram(b *testing.B) {
 	b.Run("Quantile", func(b *testing.B) {
 		rng := mwc.Rand()
 
-		his := new(Histogram)
+		his := new(T)
 		for i := 0; i < 1000000; i++ {
 			his.Observe(rng.Float32())
 		}
@@ -206,7 +206,7 @@ func BenchmarkHistogram(b *testing.B) {
 	b.Run("Quantile_Easy", func(b *testing.B) {
 		rng := mwc.Rand()
 
-		his := new(Histogram)
+		his := new(T)
 		for i := 0; i < 1000000; i++ {
 			his.Observe(math.Float32frombits(rng.Uint32() &^ ((1<<10 - 1) << 22)))
 		}
@@ -222,7 +222,7 @@ func BenchmarkHistogram(b *testing.B) {
 	b.Run("CDF", func(b *testing.B) {
 		rng := mwc.Rand()
 
-		his := new(Histogram)
+		his := new(T)
 		for i := 0; i < 1000000; i++ {
 			his.Observe(rng.Float32())
 		}
@@ -238,7 +238,7 @@ func BenchmarkHistogram(b *testing.B) {
 	b.Run("CDF_Easy", func(b *testing.B) {
 		rng := mwc.Rand()
 
-		his := new(Histogram)
+		his := new(T)
 		for i := 0; i < 1000000; i++ {
 			his.Observe(math.Float32frombits(rng.Uint32() &^ ((1<<10 - 1) << 22)))
 		}
@@ -254,7 +254,7 @@ func BenchmarkHistogram(b *testing.B) {
 	b.Run("Summary", func(b *testing.B) {
 		rng := mwc.Rand()
 
-		his := new(Histogram)
+		his := new(T)
 		for i := 0; i < 1000; i++ {
 			his.Observe(rng.Float32())
 		}

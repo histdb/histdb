@@ -20,13 +20,13 @@ func TestSerialize(t *testing.T) {
 		for i := 0; i < 10000; i++ {
 			v := rng.Float32()
 
-			var h Histogram
+			var h T
 			h.Observe(v)
 
 			WriteSingle(&buf, v)
 
 			w.Init(w.Done().Reset())
-			h.AppendTo(&w)
+			AppendTo(&h, &w)
 
 			assert.Equal(t, buf[:], w.Done().Prefix())
 		}
@@ -35,14 +35,14 @@ func TestSerialize(t *testing.T) {
 	t.Run("Write", func(t *testing.T) {
 		rng := mwc.Rand()
 
-		h := new(Histogram)
+		var h T
 		for i := int64(0); i < 10000; i++ {
 			r := float32(rng.Uint32n(1000) + 500)
 			h.Observe(r)
 		}
 
 		var w rwutils.W
-		h.AppendTo(&w)
+		AppendTo(&h, &w)
 		data := w.Done().Prefix()
 		t.Logf("%d\n%s", len(data), hex.Dump(data))
 	})
@@ -50,8 +50,8 @@ func TestSerialize(t *testing.T) {
 	t.Run("Load", func(t *testing.T) {
 		rng := mwc.Rand()
 
-		h1 := new(Histogram)
-		h2 := new(Histogram)
+		var h1 T
+		var h2 T
 
 		for i := int64(0); i < 10000; i++ {
 			r := float32(rng.Uint32n(1000) + 500)
@@ -60,11 +60,11 @@ func TestSerialize(t *testing.T) {
 
 		var w rwutils.W
 		var r rwutils.R
-		h1.AppendTo(&w)
+		AppendTo(&h1, &w)
 
 		for i := float64(1); i < 10; i++ {
 			r.Init(w.Done().Reset())
-			h2.ReadFrom(&r)
+			ReadFrom(&h2, &r)
 			_, err := r.Done()
 			assert.NoError(t, err)
 
@@ -91,13 +91,13 @@ func BenchmarkSerialize(b *testing.B) {
 	b.Run("AppendTo", func(b *testing.B) {
 		rng := mwc.Rand()
 
-		h := new(Histogram)
+		var h T
 		for i := int64(0); i < 100000; i++ {
 			h.Observe(rng.Float32())
 		}
 
 		var w rwutils.W
-		h.AppendTo(&w)
+		AppendTo(&h, &w)
 
 		b.SetBytes(int64(w.Done().Pos()))
 		b.ReportMetric(float64(w.Done().Pos()), "bytes")
@@ -107,20 +107,20 @@ func BenchmarkSerialize(b *testing.B) {
 
 		for i := 0; i < b.N; i++ {
 			w.Init(w.Done().Reset())
-			h.AppendTo(&w)
+			AppendTo(&h, &w)
 		}
 	})
 
 	b.Run("ReadFrom", func(b *testing.B) {
 		rng := mwc.Rand()
 
-		h := new(Histogram)
+		var h T
 		for i := int64(0); i < 100000; i++ {
 			h.Observe(rng.Float32())
 		}
 
 		var w rwutils.W
-		h.AppendTo(&w)
+		AppendTo(&h, &w)
 
 		b.SetBytes(int64(w.Done().Pos()))
 		b.ReportMetric(float64(w.Done().Pos()), "bytes")
@@ -132,8 +132,8 @@ func BenchmarkSerialize(b *testing.B) {
 			var r rwutils.R
 			r.Init(w.Done().Reset())
 
-			var h Histogram
-			h.ReadFrom(&r)
+			var h T
+			ReadFrom(&h, &r)
 		}
 	})
 }

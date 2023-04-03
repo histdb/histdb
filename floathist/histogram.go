@@ -19,16 +19,16 @@ func upperValue(i, j, k uint32) float32 {
 	return math.Float32frombits(obs)
 }
 
-type Histogram struct {
+type T struct {
 	l0 layer0
 }
 
 // Reset clears the histogram without freeing the memory it is using. It is
 // not safe to call with concurrent reads or writes to h.
-func (h *Histogram) Reset() {
-	for bm := h.l0.bm.AtomicClone(); !bm.Empty(); bm.Next() {
+func (t *T) Reset() {
+	for bm := t.l0.bm.AtomicClone(); !bm.Empty(); bm.Next() {
 		i := bm.Lowest()
-		l1 := layer1_load(&h.l0.l1s[i])
+		l1 := layer1_load(&t.l0.l1s[i])
 
 		for bm := l1.bm.AtomicClone(); !bm.Empty(); bm.Next() {
 			j := bm.Lowest()
@@ -41,16 +41,16 @@ func (h *Histogram) Reset() {
 
 // Merge adds all of the values from g into h. It is not safe to call with
 // concurrent mutations to g or h.
-func (h *Histogram) Merge(g *Histogram) error {
+func (t *T) Merge(g *T) error {
 	for bm := g.l0.bm.AtomicClone(); !bm.Empty(); bm.Next() {
 		l1idx := bm.Lowest()
 		l1g := g.l0.l1s[l1idx]
-		l1h := h.l0.l1s[l1idx]
+		l1h := t.l0.l1s[l1idx]
 
 		if l1h == nil {
 			l1h = new(layer1)
-			h.l0.l1s[l1idx] = l1h
-			h.l0.bm.AtomicSetIdx(l1idx)
+			t.l0.l1s[l1idx] = l1h
+			t.l0.bm.AtomicSetIdx(l1idx)
 		}
 
 		for bm := l1g.bm.AtomicClone(); !bm.Empty(); bm.Next() {
@@ -85,7 +85,7 @@ func (h *Histogram) Merge(g *Histogram) error {
 // Observe adds the value to the histogram.
 //
 // It is safe to be called concurrently.
-func (h *Histogram) Observe(v float32) {
+func (t *T) Observe(v float32) {
 	if v != v || v > math.MaxFloat32 || v < -math.MaxFloat32 {
 		return
 	}
@@ -97,14 +97,14 @@ func (h *Histogram) Observe(v float32) {
 	l2idx := (bits >> l1Sh) % l1S
 	idx := (bits >> l2Sh) % l2S
 
-	l1_addr := &h.l0.l1s[l1idx]
+	l1_addr := &t.l0.l1s[l1idx]
 	l1 := layer1_load(l1_addr)
 	if l1 == nil {
 		l1 = new(layer1)
 		if !layer1_cas(l1_addr, l1) {
 			l1 = layer1_load(l1_addr)
 		} else {
-			h.l0.bm.AtomicSetIdx(l1idx)
+			t.l0.bm.AtomicSetIdx(l1idx)
 		}
 	}
 
@@ -141,10 +141,10 @@ func (h *Histogram) Observe(v float32) {
 // Min returns an approximation of the smallest value stored in the histogram.
 //
 // It is safe to be called concurrently.
-func (h *Histogram) Min() float32 {
-	bm0 := h.l0.bm.AtomicClone()
+func (t *T) Min() float32 {
+	bm0 := t.l0.bm.AtomicClone()
 	i := bm0.Lowest()
-	l1 := layer1_load(&h.l0.l1s[i])
+	l1 := layer1_load(&t.l0.l1s[i])
 
 	bm1 := l1.bm.AtomicClone()
 	j := bm1.Lowest()
@@ -161,10 +161,10 @@ func (h *Histogram) Min() float32 {
 // Max returns an approximation of the largest value stored in the histogram.
 //
 // It is safe to be called concurrently.
-func (h *Histogram) Max() float32 {
-	bm0 := h.l0.bm.AtomicClone()
+func (t *T) Max() float32 {
+	bm0 := t.l0.bm.AtomicClone()
 	i := bm0.Highest()
-	l1 := layer1_load(&h.l0.l1s[i])
+	l1 := layer1_load(&t.l0.l1s[i])
 
 	bm1 := l1.bm.AtomicClone()
 	j := bm1.Highest()
@@ -181,10 +181,10 @@ func (h *Histogram) Max() float32 {
 // Total returns the number of observations that have been recorded.
 //
 // It is safe to be called concurrently.
-func (h *Histogram) Total() (total uint64) {
-	for bm := h.l0.bm.AtomicClone(); !bm.Empty(); bm.Next() {
+func (t *T) Total() (total uint64) {
+	for bm := t.l0.bm.AtomicClone(); !bm.Empty(); bm.Next() {
 		i := bm.Lowest()
-		l1 := layer1_load(&h.l0.l1s[i])
+		l1 := layer1_load(&t.l0.l1s[i])
 
 		for bm := l1.bm.AtomicClone(); !bm.Empty(); bm.Next() {
 			j := bm.Lowest()
@@ -201,12 +201,12 @@ func (h *Histogram) Total() (total uint64) {
 // fraction of values observed specified by q are smaller than it.
 //
 // It is safe to be called concurrently.
-func (h *Histogram) Quantile(q float64) (v float32) {
-	target, acc := uint64(q*float64(h.Total())+0.5), uint64(0)
+func (t *T) Quantile(q float64) (v float32) {
+	target, acc := uint64(q*float64(t.Total())+0.5), uint64(0)
 
-	for bm := h.l0.bm.AtomicClone(); !bm.Empty(); bm.Next() {
+	for bm := t.l0.bm.AtomicClone(); !bm.Empty(); bm.Next() {
 		i := bm.Lowest()
-		l1 := layer1_load(&h.l0.l1s[i])
+		l1 := layer1_load(&t.l0.l1s[i])
 
 		for bm := l1.bm.AtomicClone(); !bm.Empty(); bm.Next() {
 			j := bm.Lowest()
@@ -230,14 +230,14 @@ func (h *Histogram) Quantile(q float64) (v float32) {
 		}
 	}
 
-	return h.Max()
+	return t.Max()
 }
 
 // CDF returns an estimate of the fraction of values that are smaller than
 // the requested value.
 //
 // It is safe to be called concurrently.
-func (h *Histogram) CDF(v float32) float64 {
+func (t *T) CDF(v float32) float64 {
 	obs := math.Float32bits(v)
 	obs ^= uint32(int32(obs)>>31) | (1 << 31)
 
@@ -246,9 +246,9 @@ func (h *Histogram) CDF(v float32) float64 {
 
 	var sum, total uint64
 
-	for bm := h.l0.bm.AtomicClone(); !bm.Empty(); bm.Next() {
+	for bm := t.l0.bm.AtomicClone(); !bm.Empty(); bm.Next() {
 		i := bm.Lowest()
-		l1 := layer1_load(&h.l0.l1s[i])
+		l1 := layer1_load(&t.l0.l1s[i])
 
 		for bm := l1.bm.AtomicClone(); !bm.Empty(); bm.Next() {
 			j := bm.Lowest()
@@ -277,12 +277,12 @@ func (h *Histogram) CDF(v float32) float64 {
 // the values.
 //
 // It is safe to be called concurrently.
-func (h *Histogram) Summary() (total, sum, avg, vari float64) {
+func (t *T) Summary() (total, sum, avg, vari float64) {
 	var total2 float64
 
-	for bm := h.l0.bm.AtomicClone(); !bm.Empty(); bm.Next() {
+	for bm := t.l0.bm.AtomicClone(); !bm.Empty(); bm.Next() {
 		i := bm.Lowest()
-		l1 := layer1_load(&h.l0.l1s[i])
+		l1 := layer1_load(&t.l0.l1s[i])
 
 		for bm := l1.bm.AtomicClone(); !bm.Empty(); bm.Next() {
 			j := bm.Lowest()
@@ -321,12 +321,12 @@ func (h *Histogram) Summary() (total, sum, avg, vari float64) {
 // be at least as big as the count.
 //
 // It is safe to be called concurrently.
-func (h *Histogram) Distribution(cb func(value float32, count, total uint64)) {
-	acc, total := uint64(0), h.Total()
+func (t *T) Distribution(cb func(value float32, count, total uint64)) {
+	acc, total := uint64(0), t.Total()
 
-	for bm := h.l0.bm.AtomicClone(); !bm.Empty(); bm.Next() {
+	for bm := t.l0.bm.AtomicClone(); !bm.Empty(); bm.Next() {
 		i := bm.Lowest()
-		l1 := layer1_load(&h.l0.l1s[i])
+		l1 := layer1_load(&t.l0.l1s[i])
 
 		for bm := l1.bm.AtomicClone(); !bm.Empty(); bm.Next() {
 			j := bm.Lowest()
@@ -341,7 +341,7 @@ func (h *Histogram) Distribution(cb func(value float32, count, total uint64)) {
 
 				acc += count
 				if acc > total {
-					total = h.Total()
+					total = t.Total()
 					if acc > total {
 						total = acc
 					}

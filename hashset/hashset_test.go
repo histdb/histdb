@@ -1,15 +1,16 @@
-package memindex
+package hashset
 
 import (
 	"testing"
 
+	"github.com/zeebo/assert"
+
 	"github.com/histdb/histdb"
 	"github.com/histdb/histdb/rwutils"
-	"github.com/zeebo/assert"
 )
 
 func TestHashSet(t *testing.T) {
-	var hs hashSet
+	var hs T[histdb.Hash]
 
 	hs.Insert(histdb.Hash{1})
 	hs.Insert(histdb.Hash{2})
@@ -20,13 +21,13 @@ func TestHashSet(t *testing.T) {
 	assert.Equal(t, hs.Hash(2), histdb.Hash{3})
 
 	var w rwutils.W
-	hs.AppendTo(&w)
+	AppendTo(&hs, &w)
 
 	var r rwutils.R
 	r.Init(w.Done().Reset())
 
-	var ms2 hashSet
-	ms2.ReadFrom(&r)
+	var ms2 T[histdb.Hash]
+	ReadFrom(&ms2, &r)
 
 	assert.Equal(t, ms2.Hash(0), histdb.Hash{1})
 	assert.Equal(t, ms2.Hash(1), histdb.Hash{2})

@@ -8,6 +8,7 @@ import (
 	"github.com/RoaringBitmap/roaring"
 
 	"github.com/histdb/histdb"
+	"github.com/histdb/histdb/hashset"
 	"github.com/histdb/histdb/metrics"
 	"github.com/histdb/histdb/petname"
 )
@@ -62,9 +63,9 @@ type T struct {
 	fixed bool
 	card  int
 
-	metrics    hashSet
-	tag_names  petname.T[histdb.TagHash, *histdb.TagHash]
-	tkey_names petname.T[histdb.TagKeyHash, *histdb.TagKeyHash]
+	metrics    hashset.T[histdb.Hash]
+	tag_names  petname.T[histdb.TagHash]
+	tkey_names petname.T[histdb.TagKeyHash]
 
 	tag_to_metrics  []*roaring.Bitmap // what metrics include this tag
 	tag_to_tkeys    []*roaring.Bitmap // what tag keys exist in any metric with tag

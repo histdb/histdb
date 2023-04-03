@@ -85,7 +85,7 @@ func init() {
 	stats()
 
 	var w rwutils.W
-	idx.AppendTo(&w)
+	AppendTo(&idx, &w)
 
 	wfh, _ := os.Create("metrics.idx")
 	defer wfh.Close()

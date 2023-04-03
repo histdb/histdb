@@ -9,7 +9,7 @@ import (
 )
 
 func TestPetname(t *testing.T) {
-	var pn T[hashtbl.U64, *hashtbl.U64]
+	var pn T[hashtbl.U64]
 
 	assert.Equal(t, pn.Len(), 0)
 	assert.Equal(t, pn.Size(), 0x80)

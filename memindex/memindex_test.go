@@ -152,13 +152,13 @@ func TestMemindex(t *testing.T) {
 		loadRandom(&idx)
 
 		var w rwutils.W
-		idx.AppendTo(&w)
+		AppendTo(&idx, &w)
 
 		var r rwutils.R
 		r.Init(w.Done().Trim().Reset())
 
 		var idx2 T
-		idx2.ReadFrom(&r)
+		ReadFrom(&idx2, &r)
 		_, err := r.Done()
 		assert.NoError(t, err)
 
@@ -191,7 +191,7 @@ func BenchmarkMemindex(b *testing.B) {
 	r.Init(buffer.OfLen(data))
 
 	var idx T
-	idx.ReadFrom(&r)
+	ReadFrom(&idx, &r)
 	_, err := r.Done()
 	assert.NoError(b, err)
 
@@ -284,14 +284,14 @@ func BenchmarkMemindex(b *testing.B) {
 
 	b.Run("AppendTo", func(b *testing.B) {
 		var w rwutils.W
-		idx.AppendTo(&w)
+		AppendTo(&idx, &w)
 
 		b.ReportAllocs()
 		b.ResetTimer()
 
 		for i := 0; i < b.N; i++ {
 			w.Init(w.Done().Reset())
-			idx.AppendTo(&w)
+			AppendTo(&idx, &w)
 		}
 	})
 
@@ -304,7 +304,7 @@ func BenchmarkMemindex(b *testing.B) {
 			r.Init(buffer.OfLen(data))
 
 			var idx T
-			idx.ReadFrom(&r)
+			ReadFrom(&idx, &r)
 		}
 	})
 }

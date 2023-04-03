@@ -12,7 +12,7 @@ import (
 )
 
 func TestTable(t *testing.T) {
-	var tb T[U64, *U64, U32, *U32]
+	var tb T[U64, U32]
 	const iters = 1e5
 
 	_, ok := tb.Find(0)
@@ -47,7 +47,7 @@ func TestTable(t *testing.T) {
 }
 
 func TestTableSerialize(t *testing.T) {
-	var tb T[U64, *U64, U32, *U32]
+	var tb T[U64, U32]
 
 	for i := uint64(0); i < 1000; i++ {
 		val, ok := tb.Insert(U64(i), U32(i))
@@ -56,7 +56,7 @@ func TestTableSerialize(t *testing.T) {
 	}
 
 	var w rwutils.W
-	tb.AppendTo(&w)
+	AppendTo(&tb, &w)
 	w.Uint8(1)
 	w.Uint8(2)
 	w.Uint8(3)
@@ -64,8 +64,8 @@ func TestTableSerialize(t *testing.T) {
 	var r rwutils.R
 	r.Init(w.Done().Trim().Reset())
 
-	var tb2 T[U64, *U64, U32, *U32]
-	tb2.ReadFrom(&r)
+	var tb2 T[U64, U32]
+	ReadFrom(&tb2, &r)
 
 	rem, err := r.Done()
 	assert.NoError(t, err)
@@ -86,9 +86,9 @@ func BenchmarkTable(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 
-		var tb T[U64, *U64, U32, *U32]
+		var tb T[U64, U32]
 		for i := 0; i < b.N; i++ {
-			tb = T[U64, *U64, U32, *U32]{}
+			tb = T[U64, U32]{}
 			for j := 0; j < n; j++ {
 				tb.Insert(U64(rng.Uint64()), U32(0))
 			}
@@ -138,8 +138,8 @@ func BenchmarkStdlib(b *testing.B) {
 }
 
 func BenchmarkTableSerialize(b *testing.B) {
-	mk := func(n int) *T[U64, *U64, U32, *U32] {
-		var tb T[U64, *U64, U32, *U32]
+	mk := func(n int) *T[U64, U32] {
+		var tb T[U64, U32]
 		for i := 0; i < n; i++ {
 			tb.Insert(U64(i), U32(i))
 		}
@@ -153,7 +153,7 @@ func BenchmarkTableSerialize(b *testing.B) {
 
 			var w rwutils.W
 			w.Init(buffer.OfCap(tmp))
-			tb.AppendTo(&w)
+			AppendTo(tb, &w)
 
 			now := time.Now()
 			b.ReportAllocs()
@@ -161,7 +161,7 @@ func BenchmarkTableSerialize(b *testing.B) {
 
 			for i := 0; i < b.N; i++ {
 				w.Init(w.Done())
-				tb.AppendTo(&w)
+				AppendTo(tb, &w)
 			}
 
 			b.ReportMetric(float64(time.Since(now))/float64(n)/float64(b.N), "ns/key")
@@ -181,9 +181,9 @@ func BenchmarkTableSerialize(b *testing.B) {
 		run := func(b *testing.B, n int) {
 			tb := mk(n)
 
-			var w rwutils.W
 			var r rwutils.R
-			tb.AppendTo(&w)
+			var w rwutils.W
+			AppendTo(tb, &w)
 
 			now := time.Now()
 			b.ReportAllocs()
@@ -191,7 +191,7 @@ func BenchmarkTableSerialize(b *testing.B) {
 
 			for i := 0; i < b.N; i++ {
 				r.Init(w.Done().Reset())
-				tb.ReadFrom(&r)
+				ReadFrom(tb, &r)
 			}
 
 			b.ReportMetric(float64(time.Since(now))/float64(n)/float64(b.N), "ns/key")
