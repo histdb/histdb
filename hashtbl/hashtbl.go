@@ -3,9 +3,9 @@ package hashtbl
 import (
 	"math"
 	"math/bits"
-	"unsafe"
 
 	"github.com/histdb/histdb/rwutils"
+	"github.com/histdb/histdb/sizeof"
 )
 
 type Key interface {
@@ -100,8 +100,8 @@ func (t *T[K, V]) Len() int { return t.eles }
 
 func (t *T[K, V]) Size() uint64 {
 	return 0 +
-		/* slots */ 24 + uint64(unsafe.Sizeof(slot[K, V]{}))*uint64(len(t.slots)) +
-		/* metas */ 24 + uint64(len(t.metas)) +
+		/* slots */ sizeof.Slice(t.slots) +
+		/* metas */ sizeof.Slice(t.metas) +
 		/* mask  */ 8 +
 		/* shift */ 8 +
 		/* eles  */ 8 +

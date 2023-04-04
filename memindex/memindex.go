@@ -11,6 +11,7 @@ import (
 	"github.com/histdb/histdb/hashset"
 	"github.com/histdb/histdb/metrics"
 	"github.com/histdb/histdb/petname"
+	"github.com/histdb/histdb/sizeof"
 )
 
 // TODO: we can have an LRU cache of common bitmaps based on tag hashes. for example
@@ -80,7 +81,7 @@ func sliceSize(m []*roaring.Bitmap) (n uint64) {
 	for _, bm := range m {
 		n += bm.GetSizeInBytes()
 	}
-	return 24 + n + 8*uint64(len(m))
+	return sizeof.Slice(m) + n
 }
 
 func (t *T) Size() uint64 {

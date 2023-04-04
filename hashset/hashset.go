@@ -1,9 +1,9 @@
 package hashset
 
 import (
-	"github.com/histdb/histdb"
 	"github.com/histdb/histdb/hashtbl"
 	"github.com/histdb/histdb/rwutils"
+	"github.com/histdb/histdb/sizeof"
 )
 
 type Key interface {
@@ -20,8 +20,8 @@ func (t *T[K]) Len() int { return len(t.list) }
 
 func (t *T[K]) Size() uint64 {
 	return 0 +
-		t.set.Size() +
-		24 + histdb.HashSize*uint64(len(t.list)) +
+		/* set  */ t.set.Size() +
+		/* list */ sizeof.Slice(t.list) +
 		0
 }
 

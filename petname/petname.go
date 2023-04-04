@@ -1,9 +1,8 @@
 package petname
 
 import (
-	"unsafe"
-
 	"github.com/histdb/histdb/hashtbl"
+	"github.com/histdb/histdb/sizeof"
 )
 
 type span struct {
@@ -25,12 +24,11 @@ func (t *T[K]) Len() int {
 	}
 	return t.idxs.Len()
 }
-
 func (t *T[K]) Size() uint64 {
 	return 0 +
-		/* buf   */ 24 + 1*uint64(len(t.buf)) +
+		/* buf   */ sizeof.Slice(t.buf) +
 		/* idxs  */ t.idxs.Size() +
-		/* spans */ 24 + uint64(unsafe.Sizeof(span{}))*uint64(len(t.spans)) +
+		/* spans */ sizeof.Slice(t.spans) +
 		0
 }
 
