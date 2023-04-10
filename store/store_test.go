@@ -2,6 +2,7 @@ package store
 
 import (
 	"testing"
+	"time"
 
 	"github.com/zeebo/assert"
 
@@ -24,9 +25,12 @@ func BenchmarkStore(b *testing.B) {
 
 	b.SetBytes(600)
 	b.ReportAllocs()
+
+	now := time.Now()
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
 		assert.NoError(b, s.Write(uint32(i), names[i], values[i]))
 	}
+	b.ReportMetric(float64(b.N)/time.Since(now).Seconds(), "keys/sec")
 }

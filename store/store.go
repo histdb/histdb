@@ -118,12 +118,6 @@ func (t *T) Write(ts uint32, name, value []byte) (err error) {
 		}
 
 		var txn atomicdir.Txn
-		defer func() {
-			if err != nil {
-				err = errs.Combine(err, txn.Close())
-			}
-		}()
-
 		if err := t.dir.InitTxn(&txn, func(ops atomicdir.Ops) atomicdir.Ops {
 			for _, fh := range t.txn.FHs() {
 				ops.Include(&t.txn, fh.File)
@@ -134,20 +128,21 @@ func (t *T) Write(ts uint32, name, value []byte) (err error) {
 			}, level0.L0DataSize)
 			return ops
 		}); err != nil {
-			return err
+			return errs.Combine(err, txn.Close())
 		}
 
 		if err := t.dir.SetCurrent(&txn); err != nil {
-			return err
+			return errs.Combine(err, txn.Close())
 		}
 
-		var l0 level0.T
+		// safety: l0.Init can't cause any mutations to t.l0
+		l0 := t.l0
 		if err := l0.Init(txn.L0s()[0].Handle, nil); err != nil {
-			return err
+			return errs.Combine(err, txn.Close())
 		}
 
 		if err := t.txn.Close(); err != nil {
-			return err
+			return errs.Combine(err, txn.Close())
 		}
 
 		t.txn = txn
