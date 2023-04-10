@@ -46,38 +46,24 @@ type T struct {
 	ro    bool // readonly
 }
 
-func (t *T) reset(fh filesystem.Handle) error {
-	if _, err := fh.Seek(0, io.SeekStart); err != nil {
-		return errs.Wrap(err)
-	}
-
+func (t *T) reset(fh filesystem.Handle) {
 	*t = T{
 		fh:   fh,
 		buf:  t.buf[:0],
 		keys: t.keys[:0],
 	}
-
-	return nil
 }
 
-func (t *T) InitFinished(fh filesystem.Handle) error {
-	if err := t.reset(fh); err != nil {
-		return errs.Wrap(err)
-	}
-
+func (t *T) InitFinished(fh filesystem.Handle) {
+	t.reset(fh)
 	t.ro = true
 	t.done = true
-
-	return nil
 }
 
 var ebufPool = sync.Pool{New: func() any { return new([1024]byte) }}
 
 func (t *T) Init(fh filesystem.Handle, cb func(key histdb.Key, name, value []byte)) (err error) {
-	if err := t.reset(fh); err != nil {
-		return errs.Wrap(err)
-	}
-
+	t.reset(fh)
 	t.ro = true
 
 	var it Iterator
