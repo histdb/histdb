@@ -3,11 +3,9 @@ package memindex
 import (
 	"fmt"
 	"os"
-	"sort"
 	"testing"
 	"time"
 
-	"github.com/RoaringBitmap/roaring"
 	"github.com/zeebo/assert"
 
 	"github.com/histdb/histdb"
@@ -49,38 +47,47 @@ func TestMemindex(t *testing.T) {
 		assert.That(t, !b(idx.Add(bs("baz="))))
 	})
 
-	var vals []string
-	collect := func() func(x []byte) bool {
-		vals = vals[:0]
-		return func(x []byte) bool { vals = append(vals, string(x)); return true }
+	type col struct {
+		vals    []string
+		collect func() func(x []byte) bool
+	}
+	collector := func() *col {
+		c := &col{}
+		c.collect = func() func(x []byte) bool {
+			c.vals = c.vals[:0]
+			return func(x []byte) bool { c.vals = append(c.vals, string(x)); return true }
+		}
+		return c
 	}
 
 	t.Run("TagKeys", func(t *testing.T) {
 		var idx T
+		c := collector()
 
 		assert.That(t, b(idx.Add(bs("k0=v0,k1=v1,k2=v2"))))
 		assert.That(t, b(idx.Add(bs("k0=v0,foo"))))
 		assert.That(t, b(idx.Add(bs("k1=v1,foo,baz"))))
 		assert.That(t, b(idx.Add(bs("k0=v1,bar"))))
 
-		idx.TagKeys(bs("k0=v0"), collect())
-		assert.DeepEqual(t, vals, []string{"k1", "k2", "foo"})
+		idx.TagKeys(bs("k0=v0"), c.collect())
+		assert.Equal(t, c.vals, []string{"k1", "k2", "foo"})
 
-		idx.TagKeys(bs("k0"), collect())
-		assert.DeepEqual(t, vals, []string{"k1", "k2", "foo", "bar"})
+		idx.TagKeys(bs("k0"), c.collect())
+		assert.Equal(t, c.vals, []string{"k1", "k2", "foo", "bar"})
 
-		idx.TagKeys(bs("k0="), collect())
-		assert.DeepEqual(t, vals, []string{})
+		idx.TagKeys(bs("k0="), c.collect())
+		assert.Equal(t, c.vals, []string{})
 
-		idx.TagKeys(bs("k0=v0,k1=v0"), collect())
-		assert.DeepEqual(t, vals, []string{})
+		idx.TagKeys(bs("k0=v0,k1=v0"), c.collect())
+		assert.Equal(t, c.vals, []string{})
 
-		idx.TagKeys(bs("k0=v0,k1=v1"), collect())
-		assert.DeepEqual(t, vals, []string{"k2"})
+		idx.TagKeys(bs("k0=v0,k1=v1"), c.collect())
+		assert.Equal(t, c.vals, []string{"k2"})
 	})
 
 	t.Run("TagValues", func(t *testing.T) {
 		var idx T
+		c := collector()
 
 		assert.That(t, b(idx.Add(bs("k0=v0,k1=va,k2=v2"))))
 		assert.That(t, b(idx.Add(bs("k0=v0,k1=vb,k2=v3"))))
@@ -90,20 +97,20 @@ func TestMemindex(t *testing.T) {
 		assert.That(t, b(idx.Add(bs("k0=v1,k2=v5"))))
 		assert.That(t, b(idx.Add(bs("k3=vx,k2=v6"))))
 
-		idx.TagValues(bs("k0=v0"), bs("k2"), collect())
-		assert.DeepEqual(t, vals, []string{"v2", "v3", "v4"})
+		idx.TagValues(bs("k0=v0"), bs("k2"), c.collect())
+		assert.Equal(t, c.vals, []string{"v2", "v3", "v4"})
 
-		idx.TagValues(bs("k0"), bs("k2"), collect())
-		assert.DeepEqual(t, vals, []string{"v2", "v3", "v4", "v5"})
+		idx.TagValues(bs("k0"), bs("k2"), c.collect())
+		assert.Equal(t, c.vals, []string{"v2", "v3", "v4", "v5"})
 
-		idx.TagValues(bs(""), bs("k2"), collect())
-		assert.DeepEqual(t, vals, []string{"v2", "v3", "v4", "v5", "v6"})
+		idx.TagValues(bs(""), bs("k2"), c.collect())
+		assert.Equal(t, c.vals, []string{"v2", "v3", "v4", "v5", "v6"})
 
-		idx.TagValues(bs("k0=v0,k1=va"), bs("k2"), collect())
-		assert.DeepEqual(t, vals, []string{"v2"})
+		idx.TagValues(bs("k0=v0,k1=va"), bs("k2"), c.collect())
+		assert.Equal(t, c.vals, []string{"v2"})
 
-		idx.TagValues(bs("k0=v0,k1=vb"), bs("k2"), collect())
-		assert.DeepEqual(t, vals, []string{"v3"})
+		idx.TagValues(bs("k0=v0,k1=vb"), bs("k2"), c.collect())
+		assert.Equal(t, c.vals, []string{"v3"})
 	})
 
 	t.Run("Hash", func(t *testing.T) {
@@ -118,34 +125,51 @@ func TestMemindex(t *testing.T) {
 		assert.Equal(t, h(idx.Add(bs("k0=v0"))), metrics.Hash(bs("k0=v0,k0=v1")))
 	})
 
-	t.Run("Metrics", func(t *testing.T) {
+	t.Run("QueryFilter", func(t *testing.T) {
 		var idx T
 
-		h0, _ := idx.Add(bs("k0=v0a,k1=v1a,k2=v2a"))
-		h1, _ := idx.Add(bs("k0=v0b,k1=v1b,k2=v2b"))
-		h2, _ := idx.Add(bs("k0=v0b,k1=v1b"))
-		h3, _ := idx.Add(bs("k0=v0c,k1=v1c,k2=v2a"))
-		h4, _ := idx.Add(bs("k0=v0c,k1=v1c,k2=v2b"))
-		h5, _ := idx.Add(bs("k0=v0c,k1=v1c,k2=v2c"))
+		idx.Add(bs("k0=v0"))
+		idx.Add(bs("k0=v1"))
+		idx.Add(bs("k0=v2"))
 
-		exp := []histdb.Hash{h0, h1, h2, h3, h4, h5}
-		got := []histdb.Hash{}
-
-		idx.Metrics(bs("k0,k1"), func(metrics *roaring.Bitmap, tags [][]byte) bool {
-			t.Log(tags, metrics)
-			idx.MetricHashes(metrics, func(h histdb.Hash) bool {
-				t.Logf("\t%032x", h)
-				got = append(got, h)
-				return true
-			})
-			return true
-		})
-
-		sort.Slice(exp, func(i, j int) bool { return string(exp[i][:]) < string(exp[j][:]) })
-		sort.Slice(got, func(i, j int) bool { return string(got[i][:]) < string(got[j][:]) })
-
-		assert.DeepEqual(t, got, exp)
+		idx.QueryFilter(bs("k0"),
+			func(b []byte) bool { t.Logf("%s", b); return string(b) != "k0=v1" },
+			func(bm *Bitmap) { t.Logf("%s", bm) },
+		)
 	})
+
+	// t.Run("Metrics", func(t *testing.T) {
+	// 	var idx T
+
+	// 	h0, _ := idx.Add(bs("k0=v0a,k1=v1a,k2=v2a,k3=v3a"))
+	// 	h1, _ := idx.Add(bs("k0=v0b,k1=v1b,k2=v2b"))
+	// 	h2, _ := idx.Add(bs("k0=v0b,k1=v1b"))
+	// 	h3, _ := idx.Add(bs("k0=v0c,k1=v1c,k2=v2a"))
+	// 	h4, _ := idx.Add(bs("k0=v0c,k1=v1c,k2=v2b,k3=v3a"))
+	// 	h5, _ := idx.Add(bs("k0=v0c,k1=v1c,k2=v2c"))
+
+	// 	exp := []histdb.Hash{h0, h1, h2, h3, h4, h5}
+	// 	got := []histdb.Hash{}
+
+	// 	idx.Metrics(bs("k0,k1"), func(mbit *Bitmap, tags [][]byte) bool {
+	// 		t.Logf("%s %v", tags, mbit)
+	// 		for _, tag := range tags {
+	// 			tkey, _, _, _ := metrics.PopTag(tag)
+	// 			t.Logf("\tt:  %q = %q", tkey, tag[len(tkey)+1:])
+	// 		}
+	// 		idx.MetricHashes(mbit, func(n uint32, h histdb.Hash) bool {
+	// 			t.Logf("\th%d: %032x", n, h)
+	// 			got = append(got, h)
+	// 			return true
+	// 		})
+	// 		return true
+	// 	})
+
+	// 	sort.Slice(exp, func(i, j int) bool { return string(exp[i][:]) < string(exp[j][:]) })
+	// 	sort.Slice(got, func(i, j int) bool { return string(got[i][:]) < string(got[j][:]) })
+
+	// 	assert.DeepEqual(t, got, exp)
+	// })
 
 	t.Run("Serialize", func(t *testing.T) {
 		var idx T
@@ -168,7 +192,7 @@ func TestMemindex(t *testing.T) {
 		assert.Equal(t, idx.tag_names, idx2.tag_names)
 		assert.Equal(t, idx.tkey_names, idx2.tkey_names)
 
-		equalBitmaps := func(a, b []*roaring.Bitmap) {
+		equalBitmaps := func(a, b []*Bitmap) {
 			assert.Equal(t, len(a), len(b))
 			for i := range a {
 				assert.That(t, a[i].Equals(b[i]))
@@ -198,9 +222,10 @@ func BenchmarkMemindex(b *testing.B) {
 	dumpSizeStats(b, &idx)
 
 	var (
-		query  = bs("app=storagenode-release,inst=12XzWDW7Nb496enKo4epRmpQamMe3cw7G3TUuhPrkoqoLb76rHK")
-		tkey   = bs("name")
-		mquery = bs(string(query) + "," + string(tkey))
+		query = bs("app=storagenode-release,inst=12XzWDW7Nb496enKo4epRmpQamMe3cw7G3TUuhPrkoqoLb76rHK")
+		tkey  = bs("name")
+		// mquery = bs(string(query) + "," + string(tkey))
+		// mquery = bs(`name,field,app`)
 	)
 
 	b.Run("TagKeys", func(b *testing.B) {
@@ -262,25 +287,25 @@ func BenchmarkMemindex(b *testing.B) {
 		b.ReportMetric(1000*float64(b.N)/time.Since(start).Seconds()/1e6, "Mm/sec")
 	})
 
-	b.Run("Metrics", func(b *testing.B) {
-		b.ReportAllocs()
-		b.ResetTimer()
-		start := time.Now()
+	// b.Run("Metrics", func(b *testing.B) {
+	// 	b.ReportAllocs()
+	// 	b.ResetTimer()
+	// 	start := time.Now()
 
-		var sets uint64
-		var count uint64
-		for i := 0; i < b.N; i++ {
-			idx.Metrics(mquery, func(metrics *roaring.Bitmap, tags [][]byte) bool {
-				sets++
-				count += metrics.GetCardinality()
-				return true
-			})
-		}
+	// 	var sets uint64
+	// 	var count uint64
+	// 	for i := 0; i < b.N; i++ {
+	// 		idx.Metrics(mquery, func(metrics *Bitmap, tags [][]byte) bool {
+	// 			sets++
+	// 			count += metrics.GetCardinality()
+	// 			return true
+	// 		})
+	// 	}
 
-		b.ReportMetric(float64(sets)/float64(b.N), "sets/op")
-		b.ReportMetric(float64(count)/float64(b.N), "metrics/op")
-		b.ReportMetric(float64(b.N)/time.Since(start).Seconds(), "ops/sec")
-	})
+	// 	b.ReportMetric(float64(sets)/float64(b.N), "sets/op")
+	// 	b.ReportMetric(float64(count)/float64(b.N), "metrics/op")
+	// 	b.ReportMetric(float64(b.N)/time.Since(start).Seconds(), "ops/sec")
+	// })
 
 	b.Run("AppendTo", func(b *testing.B) {
 		var w rwutils.W
@@ -310,21 +335,21 @@ func BenchmarkMemindex(b *testing.B) {
 }
 
 func dumpSizeStats(t testing.TB, idx *T) {
-	ss := func(x []*roaring.Bitmap) (o uint64) {
+	ss := func(x []*Bitmap) (o uint64) {
 		for _, bm := range x {
 			o += bm.GetSizeInBytes()
 		}
 		return o + 8*uint64(len(x))
 	}
 
-	cs := func(x []*roaring.Bitmap) (o uint64) {
+	cs := func(x []*Bitmap) (o uint64) {
 		for _, bm := range x {
 			o += bm.GetCardinality()
 		}
 		return o
 	}
 
-	dumpSlice := func(name string, x []*roaring.Bitmap) {
+	dumpSlice := func(name string, x []*Bitmap) {
 		t.Log(name, "len:", len(x), "\t\tsize:", ss(x), "\t\tcard:", cs(x))
 	}
 

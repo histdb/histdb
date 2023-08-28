@@ -86,10 +86,18 @@ type node[K comparable, V any] struct {
 
 func (n *node[K, V]) getNextRef() *ptr { return &n.next }
 
+// Insert inserts a key-value pair into the map.
 //
-// insert
+// If the key already exists in the map, the associated value is returned.
 //
-
+// Parameters:
+//
+//	k: The key to insert.
+//	h: The hash of the key.
+//	vf: A function that evaluates to the value to insert. The function is only
+//	    evaluated if the key is not already present.
+//
+// Returns the value associated with the key.
 func (t *T[K, V]) Insert(k K, h uint64, vf func() V) V {
 	return t.insert(k, h, lazyValue[V]{fn: vf}).value
 }

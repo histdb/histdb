@@ -9,9 +9,20 @@ import (
 type TagHash [TagHashSize]byte
 
 func NewTagHash(tag []byte) (mh TagHash) {
-	h := xxh3.Hash128(tag)
-	le.PutUint64(mh[0:8], h.Lo)
-	le.PutUint32(mh[8:12], uint32(h.Hi))
+	s := xxh3.Hash128(tag)
+	le.PutUint64(mh[0:8], s.Lo)
+	le.PutUint32(mh[8:12], uint32(s.Hi))
+	return mh
+}
+
+func NewTagHashParts(tkey, value []byte) (mh TagHash) {
+	var h xxh3.Hasher
+	h.Write(tkey)
+	h.WriteString("=")
+	h.Write(value)
+	s := h.Sum128()
+	le.PutUint64(mh[0:8], s.Lo)
+	le.PutUint32(mh[8:12], uint32(s.Hi))
 	return mh
 }
 

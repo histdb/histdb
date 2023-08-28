@@ -1,6 +1,10 @@
 package hashtbl
 
-import "github.com/histdb/histdb/rwutils"
+import (
+	"github.com/zeebo/errs/v2"
+
+	"github.com/histdb/histdb/rwutils"
+)
 
 type RW[K Key, RWK rwutils.RW[K], V any, RWV rwutils.RW[V]] T[K, V]
 
@@ -29,6 +33,13 @@ func ReadFrom[K Key, KRW rwutils.RW[K], V any, VRW rwutils.RW[V]](t *T[K, V], r 
 	t.shift = r.Uint64()
 	t.eles = int(r.Uint64())
 	t.full = int(r.Uint64())
+
+	if n > uint64(r.Remaining()) {
+		r.Invalid(errs.Errorf("hash table has too many slots: %d", n))
+		t.slots = nil
+		t.metas = nil
+		return
+	}
 
 	t.slots = make([]slot[K, V], n)
 	for i := range t.slots {

@@ -59,6 +59,12 @@ func (w *W) Bytes4(x [4]byte) {
 	w.buf = w.buf.Advance(4)
 }
 
+func (w *W) Bytes8(x [8]byte) {
+	w.buf = w.buf.Grow(8)
+	*w.buf.Front8() = x
+	w.buf = w.buf.Advance(8)
+}
+
 func (w *W) Bytes12(x [12]byte) {
 	w.buf = w.buf.Grow(12)
 	*w.buf.Front12() = x
@@ -69,6 +75,12 @@ func (w *W) Bytes16(x [16]byte) {
 	w.buf = w.buf.Grow(16)
 	*w.buf.Front16() = x
 	w.buf = w.buf.Advance(16)
+}
+
+func (w *W) Bytes20(x [20]byte) {
+	w.buf = w.buf.Grow(20)
+	*w.buf.Front20() = x
+	w.buf = w.buf.Advance(20)
 }
 
 func (w *W) Uint64(x uint64) {
@@ -112,6 +124,10 @@ func (r *R) Init(buf buffer.T) {
 
 func (r *R) Done() (buffer.T, error) {
 	return r.buf, r.err
+}
+
+func (r *R) Remaining() uintptr {
+	return r.buf.Remaining()
 }
 
 func (r *R) Varint() (x uint64) {
@@ -179,6 +195,16 @@ func (r *R) Bytes4() (x [4]byte) {
 	return
 }
 
+func (r *R) Bytes8() (x [8]byte) {
+	if r.buf.Remaining() >= 8 {
+		x = *r.buf.Front8()
+		r.buf = r.buf.Advance(8)
+	} else {
+		r.Invalid(errs.Errorf("short buffer: needed 8 bytes"))
+	}
+	return
+}
+
 func (r *R) Bytes12() (x [12]byte) {
 	if r.buf.Remaining() >= 12 {
 		x = *r.buf.Front12()
@@ -195,6 +221,16 @@ func (r *R) Bytes16() (x [16]byte) {
 		r.buf = r.buf.Advance(16)
 	} else {
 		r.Invalid(errs.Errorf("short buffer: needed 16 bytes"))
+	}
+	return
+}
+
+func (r *R) Bytes20() (x [20]byte) {
+	if r.buf.Remaining() >= 20 {
+		x = *r.buf.Front20()
+		r.buf = r.buf.Advance(20)
+	} else {
+		r.Invalid(errs.Errorf("short buffer: needed 20 bytes"))
 	}
 	return
 }

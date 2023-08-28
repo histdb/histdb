@@ -120,10 +120,10 @@ func (it *Iterator) read(offset, length int64) []byte {
 
 func (it *Iterator) readEntryHeader(offset int64) bool {
 	ebuf := it.read(offset, l0EntryHeaderSize)
-	if len(ebuf)+8 < len(it.keyb) {
+	if len(ebuf)+2+2 < len(it.keyb) {
 		return false
 	}
-	copy(it.keyb[:], ebuf[8:])
+	copy(it.keyb[:], ebuf[2+2:])
 	return true
 }
 
@@ -140,8 +140,8 @@ func (it *Iterator) readNameAndValue(offset int64) int64 {
 	ebuf := it.ebuf[b:e]
 
 	nhead := int64(l0EntryHeaderSize)
-	ntail := nhead + int64(binary.BigEndian.Uint32(ebuf[0:4]))
-	etail := ntail + int64(binary.BigEndian.Uint32(ebuf[4:8]))
+	ntail := nhead + int64(binary.BigEndian.Uint16(ebuf[0:2]))
+	etail := ntail + int64(binary.BigEndian.Uint16(ebuf[2:4]))
 	elen := etail + l0ChecksumSize
 
 	ebuf = it.read(offset, elen)

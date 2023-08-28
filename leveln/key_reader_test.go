@@ -1,7 +1,6 @@
 package leveln
 
 import (
-	"encoding/binary"
 	"testing"
 
 	"github.com/zeebo/assert"
@@ -25,7 +24,7 @@ func TestKeyReader(t *testing.T) {
 
 	for i := 0; i < count; i++ {
 		var key histdb.Key
-		binary.BigEndian.PutUint32(key[16:20], uint32(i*2+1))
+		key.SetTimestamp(uint32(i*2 + 1))
 		var ent kwEntry
 		ent.Set(key, uint32(i), 1)
 		kw.Append(ent)
@@ -46,9 +45,9 @@ func TestKeyReader(t *testing.T) {
 
 	for i := 0; i < count; i++ {
 		var key histdb.Key
-		binary.BigEndian.PutUint32(key[16:20], uint32(i*2+1))
+		key.SetTimestamp(uint32(i*2 + 1))
 		check(i, key)(kr.Search(&key))
-		binary.BigEndian.PutUint32(key[16:20], uint32(i*2+2))
+		key.SetTimestamp(uint32(i*2 + 2))
 		check(i, key)(kr.Search(&key))
 	}
 

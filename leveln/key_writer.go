@@ -28,56 +28,76 @@ const (
 	// The memory usage is because we keep a page per depth in both the reader and writer.
 	kwPageSize   = 4096 * 4
 	kwEntrySize  = histdb.KeySize + 4 + 1
-	kwHeaderSize = 34 // 11 used
+	kwHeaderSize = 28 // 11 used
 	kwEntries    = (kwPageSize - kwHeaderSize) / kwEntrySize
 
 	_ uintptr = (kwHeaderSize + kwEntries*kwEntrySize) - kwPageSize
 	_ uintptr = kwPageSize - (kwHeaderSize + kwEntries*kwEntrySize)
+
+	offsetStart = histdb.KeySize
+	offsetEnd   = offsetStart + 4
+
+	lengthStart = offsetEnd
+	lengthEnd   = lengthStart + 1
+
+	nextStart = 0
+	nextEnd   = nextStart + 4
+
+	prevStart = nextEnd
+	prevEnd   = prevStart + 4
+
+	countStart = prevEnd
+	countEnd   = countStart + 2
+
+	leafStart = countEnd
+	leafEnd   = leafStart + 1
+)
+
+var (
+	le = binary.LittleEndian
+	be = binary.BigEndian
 )
 
 // kwEntry is the byte representation of an entry in the index.
 type kwEntry [kwEntrySize]byte
 
-func (k *kwEntry) Child() uint32        { return binary.LittleEndian.Uint32(k[20:24]) }
-func (k *kwEntry) SetChild(next uint32) { binary.LittleEndian.PutUint32(k[20:24], next) }
+func (k *kwEntry) Child() uint32        { return le.Uint32(k[offsetStart:offsetEnd]) }
+func (k *kwEntry) SetChild(next uint32) { le.PutUint32(k[offsetStart:offsetEnd], next) }
 
 // Key returns a pointer to the key portion of the entry.
 func (k *kwEntry) Key() *histdb.Key { return (*histdb.Key)(unsafe.Pointer(k)) }
 
 // Offset returns the offset encoded into the entry.
-func (k *kwEntry) Offset() uint32 { return binary.LittleEndian.Uint32(k[20:24]) }
+func (k *kwEntry) Offset() uint32 { return le.Uint32(k[offsetStart:offsetEnd]) }
 
 // Length returns the length encoded into the entry.
-func (k *kwEntry) Length() uint8 { return k[24] }
+func (k *kwEntry) Length() uint8 { return k[lengthStart] }
 
 // Set sets all of the fields of the entry.
 func (k *kwEntry) Set(key histdb.Key, offset uint32, length uint8) {
-	copy(k[0:20], key[0:20])
-	k[20] = byte(offset)
-	k[21] = byte(offset >> 8)
-	k[22] = byte(offset >> 16)
-	k[23] = byte(offset >> 24)
-	k[24] = byte(length)
+	copy(k[0:histdb.KeySize], key[0:histdb.KeySize])
+	le.PutUint32(k[offsetStart:offsetEnd], offset)
+	k[lengthStart] = length
 }
 
 // kwPageHeader is the header starting every page.
 type kwPageHeader [kwHeaderSize]byte
 
-func (k *kwPageHeader) Next() uint32        { return binary.BigEndian.Uint32(k[0:4]) }
-func (k *kwPageHeader) SetNext(next uint32) { binary.BigEndian.PutUint32(k[0:4], next) }
+func (k *kwPageHeader) Next() uint32        { return be.Uint32(k[nextStart:nextEnd]) }
+func (k *kwPageHeader) SetNext(next uint32) { be.PutUint32(k[nextStart:nextEnd], next) }
 
-func (k *kwPageHeader) Prev() uint32        { return binary.BigEndian.Uint32(k[4:8]) }
-func (k *kwPageHeader) SetPrev(prev uint32) { binary.BigEndian.PutUint32(k[4:8], prev) }
+func (k *kwPageHeader) Prev() uint32        { return be.Uint32(k[prevStart:prevEnd]) }
+func (k *kwPageHeader) SetPrev(prev uint32) { be.PutUint32(k[prevStart:prevEnd], prev) }
 
-func (k *kwPageHeader) Count() uint16         { return binary.BigEndian.Uint16(k[8:10]) }
-func (k *kwPageHeader) SetCount(count uint16) { binary.BigEndian.PutUint16(k[8:10], count) }
+func (k *kwPageHeader) Count() uint16         { return be.Uint16(k[countStart:countEnd]) }
+func (k *kwPageHeader) SetCount(count uint16) { be.PutUint16(k[countStart:countEnd], count) }
 
-func (k *kwPageHeader) Leaf() bool { return k[10] > 0 }
+func (k *kwPageHeader) Leaf() bool { return k[leafStart] > 0 }
 func (k *kwPageHeader) SetLeaf(leaf bool) {
 	if leaf {
-		k[10] = 1
+		k[leafStart] = 1
 	} else {
-		k[10] = 0
+		k[leafStart] = 0
 	}
 }
 

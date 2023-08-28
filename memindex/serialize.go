@@ -2,8 +2,10 @@ package memindex
 
 import (
 	"bytes"
+	"math/bits"
 
 	"github.com/RoaringBitmap/roaring"
+	"github.com/zeebo/errs/v2"
 
 	"github.com/histdb/histdb/hashset"
 	"github.com/histdb/histdb/petname"
@@ -25,7 +27,7 @@ func AppendTo(t *T, w *rwutils.W) {
 	petname.AppendTo(&t.tkey_names, w)
 
 	var buf bytes.Buffer
-	appendBitmaps := func(bms []*roaring.Bitmap) {
+	appendBitmaps := func(bms []*Bitmap) {
 		w.Varint(uint64(len(bms)))
 		for _, bm := range bms {
 			buf.Reset()
@@ -45,7 +47,11 @@ func AppendTo(t *T, w *rwutils.W) {
 }
 
 func ReadFrom(t *T, r *rwutils.R) {
-	_ = r.Uint64() // version
+	// version
+	if r.Uint64() != 0 {
+		r.Invalid(errs.Errorf("memindex has unknown version"))
+		return
+	}
 
 	t.card = int(r.Uint64())
 
@@ -53,8 +59,14 @@ func ReadFrom(t *T, r *rwutils.R) {
 	petname.ReadFrom(&t.tag_names, r)
 	petname.ReadFrom(&t.tkey_names, r)
 
-	readBitmaps := func() []*roaring.Bitmap {
-		bms := make([]*roaring.Bitmap, r.Varint())
+	readBitmaps := func() []*Bitmap {
+		n := r.Varint()
+		if hi, lo := bits.Mul64(n, 8); hi > 0 || lo > uint64(r.Remaining()) {
+			r.Invalid(errs.Errorf("memindex has too many bitmaps: %d", n))
+			return nil
+		}
+
+		bms := make([]*Bitmap, n)
 		for i := range bms {
 			bm := roaring.New()
 			_, err := bm.FromBuffer(r.Bytes(int(r.Varint())))
@@ -62,6 +74,8 @@ func ReadFrom(t *T, r *rwutils.R) {
 				r.Invalid(err)
 				break
 			}
+			// TODO: do we need to make a copy?
+			bm.CloneCopyOnWriteContainers()
 			bms[i] = bm
 		}
 		return bms

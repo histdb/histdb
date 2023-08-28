@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	l0EntryHeaderSize    = 28
+	l0EntryHeaderSize    = histdb.KeySize + 2 + 2
 	l0EntryAlignment     = 32
 	l0EntryAlignmentMask = l0EntryAlignment - 1
 	l0ChecksumSize       = 4
@@ -136,6 +136,10 @@ func (t *T) append(key histdb.Key, name, value []byte) (bool, error) {
 		return false, errs.Errorf("attempt to append to done l0 file")
 	} else if key.Zero() {
 		return false, errs.Errorf("cannot append zero key")
+	} else if len(name) > 1<<16 {
+		return false, errs.Errorf("name too large")
+	} else if len(value) > 1<<16 {
+		return false, errs.Errorf("value too large")
 	}
 
 	// reserved header
@@ -152,8 +156,8 @@ func (t *T) append(key histdb.Key, name, value []byte) (bool, error) {
 	}
 
 	start := len(t.buf)
-	t.buf = appendUint32(t.buf, uint32(len(name)))
-	t.buf = appendUint32(t.buf, uint32(len(value)))
+	t.buf = appendUint16(t.buf, uint16(len(name)))
+	t.buf = appendUint16(t.buf, uint16(len(value)))
 	t.buf = append(t.buf, key[:]...)
 	t.buf = append(t.buf, name...)
 	t.buf = append(t.buf, value...)

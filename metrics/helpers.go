@@ -13,14 +13,14 @@ func PopTag(tags []byte) (tkey, tag []byte, isKey bool, rest []byte) {
 		}
 
 		// walk backwards counting the number of \
-		ui := uint(i)
+		ui := uint(i) + j
 		for ui-1 < uint(len(tags)) && tags[ui-1] == '\\' {
 			ui--
 		}
 
 		// an odd number of \ means it is escaped
-		if (uint(i)-ui)%2 == 1 {
-			j = uint(i) + 1
+		if (uint(i)+j-ui)%2 == 1 {
+			j += uint(i) + 1
 			continue
 		}
 
@@ -40,14 +40,14 @@ func PopTag(tags []byte) (tkey, tag []byte, isKey bool, rest []byte) {
 		}
 
 		// walk backwards counting the number of \
-		ui := uint(i)
+		ui := uint(i) + j
 		for ui-1 < uint(len(tkey)) && tkey[ui-1] == '\\' {
 			ui--
 		}
 
 		// an odd number of \ means it is escaped
-		if (uint(i)-ui)%2 == 1 {
-			j = uint(i) + 1
+		if (uint(i)+j-ui)%2 == 1 {
+			j += uint(i) + 1
 			continue
 		}
 

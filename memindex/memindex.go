@@ -3,6 +3,8 @@ package memindex
 import (
 	"bytes"
 	"fmt"
+	"sort"
+	"strings"
 	"sync"
 
 	"github.com/RoaringBitmap/roaring"
@@ -14,6 +16,8 @@ import (
 	"github.com/histdb/histdb/sizeof"
 )
 
+type Bitmap = roaring.Bitmap
+
 // TODO: we can have an LRU cache of common bitmaps based on tag hashes. for example
 // we always compute the tag_to_metrics intersection bitmap. if we do it smart, we can
 // keep track of the "path" along the way. this would make subsequent queries that
@@ -21,12 +25,12 @@ import (
 
 var queryPool = sync.Pool{New: func() interface{} { return roaring.New() }}
 
-func replaceBitmap(m *roaring.Bitmap) {
+func replaceBitmap(m *Bitmap) {
 	queryPool.Put(m)
 }
 
-func acquireBitmap() *roaring.Bitmap {
-	bm := queryPool.Get().(*roaring.Bitmap)
+func acquireBitmap() *Bitmap {
+	bm := queryPool.Get().(*Bitmap)
 	if !bm.IsEmpty() {
 		bm.Clear()
 	}
@@ -68,16 +72,16 @@ type T struct {
 	tag_names  petname.T[histdb.TagHash]
 	tkey_names petname.T[histdb.TagKeyHash]
 
-	tag_to_metrics  []*roaring.Bitmap // what metrics include this tag
-	tag_to_tkeys    []*roaring.Bitmap // what tag keys exist in any metric with tag
-	tag_to_tags     []*roaring.Bitmap // what tags exist in any metric with tag
-	tkey_to_metrics []*roaring.Bitmap // what metrics include this tag key
-	tkey_to_tkeys   []*roaring.Bitmap // what tag keys exist in any metric with tag key
-	tkey_to_tags    []*roaring.Bitmap // what tags exist in any metric with tag key
-	tkey_to_tvals   []*roaring.Bitmap // what tags exist for the specific tag key in any metric with tag key
+	tag_to_metrics  []*Bitmap // what metrics include this tag
+	tag_to_tkeys    []*Bitmap // what tag keys exist in any metric with tag
+	tag_to_tags     []*Bitmap // what tags exist in any metric with tag
+	tkey_to_metrics []*Bitmap // what metrics include this tag key
+	tkey_to_tkeys   []*Bitmap // what tag keys exist in any metric with tag key
+	tkey_to_tags    []*Bitmap // what tags exist in any metric with tag key
+	tkey_to_tvals   []*Bitmap // what tags exist for the specific tag key in any metric with tag key
 }
 
-func sliceSize(m []*roaring.Bitmap) (n uint64) {
+func sliceSize(m []*Bitmap) (n uint64) {
 	for _, bm := range m {
 		n += bm.GetSizeInBytes()
 	}
@@ -102,7 +106,7 @@ func (t *T) Size() uint64 {
 }
 
 func (t *T) Fix() {
-	fix := func(bms []*roaring.Bitmap) {
+	fix := func(bms []*Bitmap) {
 		for _, bm := range bms {
 			bm.RunOptimize()
 		}
@@ -121,7 +125,7 @@ func (t *T) Fix() {
 	t.fixed = true
 }
 
-func getBitmap(bmsp *[]*roaring.Bitmap, n uint32) (bm *roaring.Bitmap) {
+func getBitmap(bmsp *[]*Bitmap, n uint32) (bm *Bitmap) {
 	if bms := *bmsp; n < uint32(len(bms)) {
 		bm = bms[n]
 	} else if n == uint32(len(bms)) {
@@ -195,79 +199,115 @@ func (t *T) Add(metric []byte) (histdb.Hash, bool) {
 
 func (t *T) Cardinality() int { return t.card }
 
-func (t *T) MetricHashes(metrics *roaring.Bitmap, cb func(histdb.Hash) bool) {
+func (t *T) SlowReverseMetricName(n uint32) string {
+	var out []string
+	for tkeyn, tkeybm := range t.tkey_to_metrics {
+		if !tkeybm.Contains(n) {
+			continue
+		}
+		t.tkey_to_tvals[tkeyn].Iterate(func(tagn uint32) bool {
+			if t.tag_to_metrics[tagn].Contains(n) {
+				out = append(out, string(t.tag_names.Get(uint32(tagn))))
+			}
+			return true
+		})
+	}
+	sort.Strings(out)
+	return strings.Join(out, ",")
+}
+
+func (t *T) MetricHashes(metrics *Bitmap, cb func(uint32, histdb.Hash) bool) {
 	metrics.Iterate(func(metricn uint32) bool {
-		return cb(t.metrics.Hash(metricn))
+		return cb(metricn, t.metrics.Hash(metricn))
 	})
 }
 
-var comma = []byte(",")
-
-func (t *T) Metrics(query []byte, cb func(*roaring.Bitmap, [][]byte) bool) {
-	tags := make([][]byte, 0, bytes.Count(query, comma)+1)
-	t.metricsHelper(nil, query, tags, cb)
-}
-
-func (t *T) metricsHelper(mbm *roaring.Bitmap, query []byte, tags [][]byte, cb func(*roaring.Bitmap, [][]byte) bool) bool {
-	if len(query) == 0 {
-		if mbm == nil || mbm.IsEmpty() {
-			return true
+func (t *T) QueryTrue(tkeys []byte, cb func(*Bitmap)) {
+	if bytes.IndexByte(tkeys, ',') == -1 {
+		tkeyn, ok := t.tkey_names.Find(histdb.NewTagKeyHash(tkeys))
+		if !ok {
+			cb(new(Bitmap))
+			return
 		}
-		return cb(mbm, tags)
+		cb(t.tkey_to_metrics[tkeyn])
+		return
 	}
 
-	tkey, tag, isKey, query := metrics.PopTag(query)
-	if len(tag) == 0 {
-		return true
-	}
+	m := acquireBitmap()
+	defer replaceBitmap(m)
 
-	mbmc := acquireBitmap()
-	defer replaceBitmap(mbmc)
+	for len(tkeys) > 0 {
+		var tkey []byte
+		tkey, _, _, tkeys = metrics.PopTag(tkeys)
 
-	emit := func(tagn uint32) bool {
-		tmbm := t.tag_to_metrics[tagn]
-		mbmc.Clear()
-		if mbm != nil {
-			mbmc.Or(mbm)
-			mbmc.And(tmbm)
-		} else {
-			mbmc.Or(tmbm)
-		}
-
-		if mbmc.IsEmpty() {
-			return true
-		}
-
-		tags = append(tags, t.tag_names.Get(tagn))
-		res := t.metricsHelper(mbmc, query, tags, cb)
-		tags = tags[:len(tags)-1]
-
-		return res
-	}
-
-	if isKey {
 		tkeyn, ok := t.tkey_names.Find(histdb.NewTagKeyHash(tkey))
 		if !ok {
-			return false
+			cb(new(Bitmap))
+			return
 		}
 
-		tvals := t.tkey_to_tvals[tkeyn]
-
-		// TODO: check if keeping track of an over approximation of the
-		// set of available tags to intersect with tvals here is worth
-		// doing.
-
-		var cont bool
-		tvals.Iterate(func(tagn uint32) bool {
-			cont = emit(tagn)
-			return cont
-		})
-		return cont
-
-	} else {
-		tagn, ok := t.tag_names.Find(histdb.NewTagHash(tag))
-		return ok && emit(tagn)
+		lmbm := t.tkey_to_metrics[tkeyn]
+		if m.IsEmpty() {
+			m.Or(lmbm)
+		} else {
+			m.And(lmbm)
+		}
 	}
+
+	cb(m)
+}
+
+func (t *T) QueryEqual(tag []byte, cb func(*Bitmap)) {
+	tagn, ok := t.tag_names.Find(histdb.NewTagHash(tag))
+	if !ok {
+		cb(new(Bitmap))
+		return
+	}
+	cb(t.tag_to_metrics[tagn])
+}
+
+func (t *T) QueryNotEqual(tag []byte, cb func(*Bitmap)) {
+	tkey, _, _, _ := metrics.PopTag(tag)
+
+	tkeyn, ok := t.tkey_names.Find(histdb.NewTagKeyHash(tkey))
+	if !ok {
+		cb(new(Bitmap))
+		return
+	}
+
+	tagn, ok := t.tag_names.Find(histdb.NewTagHash(tag))
+	if !ok {
+		cb(new(Bitmap))
+		return
+	}
+
+	m := acquireBitmap()
+	defer replaceBitmap(m)
+
+	m.Or(t.tkey_to_metrics[tkeyn])
+	m.AndNot(t.tag_to_metrics[tagn])
+
+	cb(m)
+}
+
+func (t *T) QueryFilter(tkey []byte, fn func([]byte) bool, cb func(*Bitmap)) {
+	tkeyn, ok := t.tkey_names.Find(histdb.NewTagKeyHash(tkey))
+	if !ok {
+		cb(new(Bitmap))
+		return
+	}
+
+	m := acquireBitmap()
+	defer replaceBitmap(m)
+
+	t.tkey_to_tvals[tkeyn].Iterate(func(tagn uint32) bool {
+		if fn(t.tag_names.Get(tagn)[len(tkey)+1:]) {
+			m.Or(t.tag_to_metrics[tagn])
+		}
+		return true
+	})
+
+	cb(m)
 }
 
 func (t *T) TagKeys(input []byte, cb func(result []byte) bool) {
@@ -281,7 +321,7 @@ func (t *T) TagKeys(input []byte, cb func(result []byte) bool) {
 		var (
 			tag, tkey   []byte
 			isKey       bool
-			ltkbm, lmbm *roaring.Bitmap
+			ltkbm, lmbm *Bitmap
 		)
 
 		tkey, tag, isKey, rest = metrics.PopTag(rest)
@@ -354,7 +394,7 @@ func (t *T) TagValues(input, tkey []byte, cb func(result []byte) bool) {
 	for rest := input; len(rest) > 0; {
 		var tag, tkey []byte
 		var isKey bool
-		var ltbm, lmbm *roaring.Bitmap
+		var ltbm, lmbm *Bitmap
 
 		tkey, tag, isKey, rest = metrics.PopTag(rest)
 		if len(tag) == 0 {

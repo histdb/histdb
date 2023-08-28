@@ -103,6 +103,10 @@ func (buf T) Front16() *[16]byte {
 	return (*[16]byte)(ptr(uptr(buf.base) + buf.pos))
 }
 
+func (buf T) Front20() *[20]byte {
+	return (*[20]byte)(ptr(uptr(buf.base) + buf.pos))
+}
+
 func (buf T) FrontN(n int) (x []byte) {
 	xh := (*reflect.SliceHeader)(ptr(&x))
 	xh.Data = uptr(buf.At(0))

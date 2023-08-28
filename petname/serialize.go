@@ -1,6 +1,10 @@
 package petname
 
 import (
+	"math/bits"
+
+	"github.com/zeebo/errs/v2"
+
 	"github.com/histdb/histdb/hashtbl"
 	"github.com/histdb/histdb/rwutils"
 )
@@ -24,7 +28,15 @@ func AppendTo[K hashtbl.Key, RWK rwutils.RW[K]](t *T[K], w *rwutils.W) {
 func ReadFrom[K hashtbl.Key, RWK rwutils.RW[K]](t *T[K], r *rwutils.R) {
 	t.buf = r.Bytes(int(r.Varint()))
 	hashtbl.ReadFrom[K, RWK](&t.idxs, r)
-	t.spans = make([]span, r.Varint())
+
+	n := r.Varint()
+	if hi, lo := bits.Mul64(n, 8); hi > 0 || lo > uint64(r.Remaining()) {
+		r.Invalid(errs.Errorf("petname has too many spans: %d", n))
+		t.spans = nil
+		return
+	}
+
+	t.spans = make([]span, n)
 	for i := range t.spans {
 		begin := r.Uint32()
 		end := r.Uint32()

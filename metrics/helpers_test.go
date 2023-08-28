@@ -30,4 +30,6 @@ func TestPopTags(t *testing.T) {
 	check(`foo=bar\\,baz,bar=bif`, `foo`, `foo=bar\\`, false, "baz,bar=bif")
 	check(`foo=bar\\\,baz,bar=bif`, `foo`, `foo=bar\\\,baz`, false, "bar=bif")
 	check(`foo=bar\\\\,baz,bar=bif`, `foo`, `foo=bar\\\\`, false, "baz,bar=bif")
+
+	check(`0\=0\=0,00,0`, `0\=0\=0`, `0\=0\=0`, true, "00,0")
 }
