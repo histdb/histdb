@@ -1,7 +1,11 @@
 package query
 
-func b(x string) []byte { return []byte(x) }
-func s(x []byte) string { return string(x) }
+func appendTag(buf, tkey []byte, tval string) []byte {
+	buf = append(buf, tkey...)
+	buf = append(buf, '=')
+	buf = append(buf, tval...)
+	return buf
+}
 
 type bytesSet struct {
 	set  map[string]int64
@@ -54,16 +58,16 @@ func (s *bytesSet) add(x []byte) (n int64) {
 	return n
 }
 
-type valueSet struct {
-	set  map[value]int64
-	list []value
+type anySet[T comparable] struct {
+	set  map[T]int64
+	list []T
 }
 
-func newValueSet(cap int) valueSet {
-	return valueSet{list: make([]value, 0, cap)}
+func newAnySet[T comparable](cap int) anySet[T] {
+	return anySet[T]{list: make([]T, 0, cap)}
 }
 
-func (s *valueSet) add(x value) (n int64) {
+func (s *anySet[T]) add(x T) (n int64) {
 	if s.set != nil {
 		if n, ok := s.set[x]; ok {
 			return n
@@ -83,7 +87,7 @@ func (s *valueSet) add(x value) (n int64) {
 	n = int64(len(s.list))
 	s.list = append(s.list, x)
 	if len(s.list) == cap(s.list) {
-		s.set = make(map[value]int64)
+		s.set = make(map[T]int64)
 		for n, u := range s.list {
 			s.set[u] = int64(n)
 		}
@@ -91,3 +95,7 @@ func (s *valueSet) add(x value) (n int64) {
 
 	return n
 }
+
+type valueSet = anySet[value]
+
+func newValueSet(cap int) valueSet { return newAnySet[value](cap) }

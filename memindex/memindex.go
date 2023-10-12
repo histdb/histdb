@@ -2,10 +2,8 @@ package memindex
 
 import (
 	"bytes"
-	"fmt"
 	"sort"
 	"strings"
-	"sync"
 
 	"github.com/RoaringBitmap/roaring"
 
@@ -13,56 +11,12 @@ import (
 	"github.com/histdb/histdb/hashset"
 	"github.com/histdb/histdb/metrics"
 	"github.com/histdb/histdb/petname"
-	"github.com/histdb/histdb/sizeof"
 )
-
-type Bitmap = roaring.Bitmap
 
 // TODO: we can have an LRU cache of common bitmaps based on tag hashes. for example
 // we always compute the tag_to_metrics intersection bitmap. if we do it smart, we can
 // keep track of the "path" along the way. this would make subsequent queries that
 // have the same prefix faster.
-
-var queryPool = sync.Pool{New: func() interface{} { return roaring.New() }}
-
-func replaceBitmap(m *Bitmap) {
-	queryPool.Put(m)
-}
-
-func acquireBitmap() *Bitmap {
-	bm := queryPool.Get().(*Bitmap)
-	if !bm.IsEmpty() {
-		bm.Clear()
-	}
-	return bm
-}
-
-func addSet[T comparable](l []T, s map[T]struct{}, v T) ([]T, map[T]struct{}, bool) {
-	if s != nil {
-		if _, ok := s[v]; ok {
-			return l, s, false
-		}
-		l = append(l, v)
-		s[v] = struct{}{}
-		return l, s, true
-	}
-
-	for _, u := range l {
-		if u == v {
-			return l, s, false
-		}
-	}
-
-	l = append(l, v)
-	if len(l) == cap(l) {
-		s = make(map[T]struct{})
-		for _, u := range l {
-			s[u] = struct{}{}
-		}
-	}
-
-	return l, s, true
-}
 
 type T struct {
 	fixed bool
@@ -79,13 +33,6 @@ type T struct {
 	tkey_to_tkeys   []*Bitmap // what tag keys exist in any metric with tag key
 	tkey_to_tags    []*Bitmap // what tags exist in any metric with tag key
 	tkey_to_tvals   []*Bitmap // what tags exist for the specific tag key in any metric with tag key
-}
-
-func sliceSize(m []*Bitmap) (n uint64) {
-	for _, bm := range m {
-		n += bm.GetSizeInBytes()
-	}
-	return sizeof.Slice(m) + n
 }
 
 func (t *T) Size() uint64 {
@@ -123,18 +70,6 @@ func (t *T) Fix() {
 	t.metrics.Fix()
 
 	t.fixed = true
-}
-
-func getBitmap(bmsp *[]*Bitmap, n uint32) (bm *Bitmap) {
-	if bms := *bmsp; n < uint32(len(bms)) {
-		bm = bms[n]
-	} else if n == uint32(len(bms)) {
-		bm = roaring.New()
-		*bmsp = append(bms, bm)
-	} else {
-		panic(fmt.Sprintf("petname non-monotonic: req=%d len=%d", n, len(bms)))
-	}
-	return bm
 }
 
 func (t *T) Add(metric []byte) (histdb.Hash, bool) {
@@ -233,8 +168,7 @@ func (t *T) QueryTrue(tkeys []byte, cb func(*Bitmap)) {
 		return
 	}
 
-	m := acquireBitmap()
-	defer replaceBitmap(m)
+	var bms []*Bitmap
 
 	for len(tkeys) > 0 {
 		var tkey []byte
@@ -246,15 +180,10 @@ func (t *T) QueryTrue(tkeys []byte, cb func(*Bitmap)) {
 			return
 		}
 
-		lmbm := t.tkey_to_metrics[tkeyn]
-		if m.IsEmpty() {
-			m.Or(lmbm)
-		} else {
-			m.And(lmbm)
-		}
+		bms = append(bms, t.tkey_to_metrics[tkeyn])
 	}
 
-	cb(m)
+	cb(roaring.ParOr(orParallelism, bms...))
 }
 
 func (t *T) QueryEqual(tag []byte, cb func(*Bitmap)) {
@@ -266,9 +195,7 @@ func (t *T) QueryEqual(tag []byte, cb func(*Bitmap)) {
 	cb(t.tag_to_metrics[tagn])
 }
 
-func (t *T) QueryNotEqual(tag []byte, cb func(*Bitmap)) {
-	tkey, _, _, _ := metrics.PopTag(tag)
-
+func (t *T) QueryNotEqual(tkey, tag []byte, cb func(*Bitmap)) {
 	tkeyn, ok := t.tkey_names.Find(histdb.NewTagKeyHash(tkey))
 	if !ok {
 		cb(new(Bitmap))
@@ -290,6 +217,13 @@ func (t *T) QueryNotEqual(tag []byte, cb func(*Bitmap)) {
 	cb(m)
 }
 
+func tagValue(tkey, tag []byte) []byte {
+	if len(tag) > len(tkey) {
+		return tag[len(tkey)+1:]
+	}
+	return nil
+}
+
 func (t *T) QueryFilter(tkey []byte, fn func([]byte) bool, cb func(*Bitmap)) {
 	tkeyn, ok := t.tkey_names.Find(histdb.NewTagKeyHash(tkey))
 	if !ok {
@@ -297,20 +231,40 @@ func (t *T) QueryFilter(tkey []byte, fn func([]byte) bool, cb func(*Bitmap)) {
 		return
 	}
 
-	m := acquireBitmap()
-	defer replaceBitmap(m)
+	var bms []*Bitmap
 
 	t.tkey_to_tvals[tkeyn].Iterate(func(tagn uint32) bool {
-		if fn(t.tag_names.Get(tagn)[len(tkey)+1:]) {
-			m.Or(t.tag_to_metrics[tagn])
+		if fn(tagValue(tkey, t.tag_names.Get(tagn))) {
+			bms = append(bms, t.tag_to_metrics[tagn])
 		}
 		return true
 	})
 
-	cb(m)
+	cb(roaring.ParOr(orParallelism, bms...))
+}
+
+func (t *T) QueryFilterNot(tkey []byte, fn func([]byte) bool, cb func(*Bitmap)) {
+	tkeyn, ok := t.tkey_names.Find(histdb.NewTagKeyHash(tkey))
+	if !ok {
+		cb(new(Bitmap))
+		return
+	}
+
+	var bms []*Bitmap
+
+	t.tkey_to_tvals[tkeyn].Iterate(func(tagn uint32) bool {
+		if !fn(tagValue(tkey, t.tag_names.Get(tagn))) {
+			bms = append(bms, t.tag_to_metrics[tagn])
+		}
+		return true
+	})
+
+	cb(roaring.ParOr(orParallelism, bms...))
 }
 
 func (t *T) TagKeys(input []byte, cb func(result []byte) bool) {
+	// TODO: look at using ParOr
+
 	tkbm := acquireBitmap()
 	defer replaceBitmap(tkbm)
 
@@ -380,6 +334,8 @@ func (t *T) TagKeys(input []byte, cb func(result []byte) bool) {
 }
 
 func (t *T) TagValues(input, tkey []byte, cb func(result []byte) bool) {
+	// TODO: look at using ParOr
+
 	name, ok := t.tkey_names.Find(histdb.NewTagKeyHash(tkey))
 	if !ok {
 		return
@@ -445,6 +401,6 @@ func (t *T) TagValues(input, tkey []byte, cb func(result []byte) bool) {
 		} else if mbm != nil && !mbm.Intersects(t.tag_to_metrics[name]) {
 			return true
 		}
-		return cb(tag[len(tkey)+1:])
+		return cb(tagValue(tkey, tag))
 	})
 }

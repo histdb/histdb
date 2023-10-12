@@ -52,19 +52,6 @@ func token(x []byte) ([]byte, []byte) {
 			'='<<8 | '~', '!'<<8 | '~', // regex
 			'='<<8 | '*', '!'<<8 | '*': // glob
 			return x[:2], x[2:]
-
-			// // raw tag literals
-			// case 't'<<8 | '"', 't'<<8 | '\'':
-			// 	for i := uint(2); i < uint(len(x)); i++ {
-			// 		if x[i] == '\\' {
-			// 			i++
-			// 			continue
-			// 		}
-			// 		if x[i] == x[1] {
-			// 			return x[:i+1], x[i+1:]
-			// 		}
-			// 	}
-			// 	return nil, x
 		}
 	}
 

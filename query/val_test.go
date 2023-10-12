@@ -22,6 +22,7 @@ func TestValue(t *testing.T) {
 	assert.Equal(t, valInt(2).AsString(), "")
 	assert.Equal(t, valBool(true).AsString(), "")
 	assert.Equal(t, valFloat(1.5).AsString(), "")
+	assert.Equal(t, value{}.AsString(), "")
 
 	assert.Equal(t, valInt(0).AsBool(), false)
 	assert.Equal(t, valInt(1).AsBool(), true)
@@ -29,6 +30,7 @@ func TestValue(t *testing.T) {
 	assert.Equal(t, valFloat(1.5).AsBool(), true)
 	assert.Equal(t, valStr("").AsBool(), false)
 	assert.Equal(t, valStr("bar").AsBool(), true)
+	assert.Equal(t, value{}.AsBool(), false)
 
 	assert.Equal(t, valBool(false).AsInt(), 0)
 	assert.Equal(t, valBool(true).AsInt(), 1)
@@ -36,4 +38,5 @@ func TestValue(t *testing.T) {
 	assert.Equal(t, valFloat(1.5).AsInt(), 0)
 	assert.Equal(t, valStr("").AsInt(), 0)
 	assert.Equal(t, valStr("bar").AsInt(), 0)
+	assert.Equal(t, value{}.AsInt(), 0)
 }

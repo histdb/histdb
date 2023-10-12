@@ -3,7 +3,6 @@ package query
 import (
 	"fmt"
 	"math"
-	"reflect"
 	"unsafe"
 )
 
@@ -25,9 +24,7 @@ var (
 
 var emptyStrPtr = func() ptr {
 	// 8 bytes in case it gets dereferenced somehow
-	x := "\x00\x00\x00\x00\x00\x00\x00\x00"[:0]
-	h := (*reflect.StringHeader)(ptr(&x))
-	return ptr(h.Data)
+	return ptr(unsafe.StringData("\x00\x00\x00\x00\x00\x00\x00\x00"))
 }()
 
 type value struct {
@@ -77,8 +74,7 @@ func valFloat(val float64) value {
 func (v value) AsFloat() float64 { return math.Float64frombits(v.v) }
 
 func valStr(val string) value {
-	h := (*reflect.StringHeader)(ptr(&val))
-	v := value{p: ptr(h.Data), v: u64(h.Len)}
+	v := value{p: ptr(unsafe.StringData(val)), v: u64(len(val))}
 	if v.p == nil {
 		v.p = emptyStrPtr
 	}
@@ -86,8 +82,7 @@ func valStr(val string) value {
 }
 
 func valBytes(val []byte) value {
-	h := (*reflect.SliceHeader)(ptr(&val))
-	v := value{p: ptr(h.Data), v: u64(h.Len)}
+	v := value{p: ptr(unsafe.SliceData(val)), v: u64(len(val))}
 	if v.p == nil {
 		v.p = emptyStrPtr
 	}
@@ -95,10 +90,8 @@ func valBytes(val []byte) value {
 }
 
 func (v value) AsString() (x string) {
-	h := (*reflect.StringHeader)(ptr(&x))
 	if v.Tag() == tagStr {
-		h.Data = uintptr(v.p)
-		h.Len = int(v.v)
+		x = unsafe.String((*byte)(v.p), int(v.v))
 	}
 	return x
 }
@@ -117,5 +110,49 @@ func (v value) String() string {
 		return fmt.Sprintf("str(%q)", v.AsString())
 	default:
 		return "unknown"
+	}
+}
+
+func valueGT(x, y value) bool {
+	switch x.Tag() {
+	case tagInt:
+		return x.AsInt() > y.AsInt()
+	case tagFloat:
+		return x.AsFloat() > y.AsFloat()
+	default:
+		return x.AsString() > y.AsString()
+	}
+}
+
+func valueGTE(x, y value) bool {
+	switch x.Tag() {
+	case tagInt:
+		return x.AsInt() >= y.AsInt()
+	case tagFloat:
+		return x.AsFloat() >= y.AsFloat()
+	default:
+		return x.AsString() >= y.AsString()
+	}
+}
+
+func valueLT(x, y value) bool {
+	switch x.Tag() {
+	case tagInt:
+		return x.AsInt() < y.AsInt()
+	case tagFloat:
+		return x.AsFloat() < y.AsFloat()
+	default:
+		return x.AsString() < y.AsString()
+	}
+}
+
+func valueLTE(x, y value) bool {
+	switch x.Tag() {
+	case tagInt:
+		return x.AsInt() <= y.AsInt()
+	case tagFloat:
+		return x.AsFloat() <= y.AsFloat()
+	default:
+		return x.AsString() <= y.AsString()
 	}
 }

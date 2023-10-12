@@ -2,14 +2,11 @@ package query
 
 import (
 	"bytes"
-	"strconv"
+	"fmt"
+	"regexp"
 
 	"github.com/zeebo/errs/v2"
 )
-
-// the parseState is often shallowly cloned. the tags and strs
-// fields therefore must monotonically grow, and the code must
-// be ok with that.
 
 type parseState struct {
 	tokn uint
@@ -21,14 +18,23 @@ type parseState struct {
 	prog []inst
 	strs bytesSet
 	vals valueSet
+	mats []matcher
 }
+
+type matcher struct {
+	fn func([]byte) bool
+	k  string
+	q  string
+}
+
+func (m matcher) String() string { return fmt.Sprintf("%s(%s)", m.k, m.q) }
 
 func (ps *parseState) pushOp(op byte) { ps.pushInst(op, -1, -1) }
 func (ps *parseState) pushInst(op byte, v1, v2 int64) {
 	ps.prog = append(ps.prog, inst{
 		op: op,
-		v1: v1,
-		v2: v2,
+		s:  v1,
+		v:  v2,
 	})
 }
 
@@ -101,15 +107,14 @@ func Parse(query []byte) (Query, error) {
 		return Query{}, errs.Errorf("bad parse: %q", query)
 	}
 
-	// TODO: generate the query field on each selProg being sure to
-	// optimize by looking for things like (pushTag pushStr eq) and
-	// hoisting that out and replacing it with pushTrue so that we
-	// can take advantage of bitmap exact matches.
+	// TODO: escaping values is problematic. {name = \(*Dir\).Commit} vs {name = "\(*Dir\).Commit"}
+	// TODO: escaping tkeys is problematic.  {foo\= = 'bar'}
 
 	return Query{
 		prog: ps.prog,
 		strs: ps.strs.list,
 		vals: ps.vals.list,
+		mats: ps.mats,
 	}, nil
 }
 
@@ -290,7 +295,15 @@ func (ps *parseState) parseComp() bool {
 		return false
 	}
 
-	val, ok := ps.parseValue()
+	var val int64
+	switch op {
+	case inst_re, inst_nre:
+		val, ok = ps.parseRegexp()
+	case inst_glob, inst_nglob:
+		val, ok = ps.parseGlob()
+	default:
+		val, ok = ps.parseValue()
+	}
 	if !ok {
 		return false
 	}
@@ -349,6 +362,50 @@ func (ps *parseState) parseCompGroup() bool {
 	return true
 }
 
+func (ps *parseState) parseGlob() (int64, bool) {
+	tok := ps.next()
+	if len(tok) == 0 {
+		return 0, false
+	}
+
+	if tok[0] == '"' || tok[0] == '\'' {
+		tok = tok[1 : len(tok)-1]
+	} else if isSpecial(tok[0]) {
+		return 0, false
+	}
+
+	glob, ok := makeGlob(string(tok))
+	if !ok {
+		return 0, false
+	}
+
+	ps.mats = append(ps.mats, matcher{fn: glob, k: "glob", q: string(tok)})
+
+	return int64(len(ps.mats) - 1), true
+}
+
+func (ps *parseState) parseRegexp() (int64, bool) {
+	tok := ps.next()
+	if len(tok) == 0 {
+		return 0, false
+	}
+
+	if tok[0] == '"' || tok[0] == '\'' {
+		tok = tok[1 : len(tok)-1]
+	} else if isSpecial(tok[0]) {
+		return 0, false
+	}
+
+	re, err := regexp.Compile(string(tok))
+	if err != nil {
+		return 0, false
+	}
+
+	ps.mats = append(ps.mats, matcher{fn: re.Match, k: "re", q: string(tok)})
+
+	return int64(len(ps.mats) - 1), true
+}
+
 func (ps *parseState) parseValue() (int64, bool) {
 	tok := ps.next()
 	if len(tok) == 0 {
@@ -357,17 +414,11 @@ func (ps *parseState) parseValue() (int64, bool) {
 
 	// numeric values
 	if ('0' <= tok[0] && tok[0] <= '9') || tok[0] == '-' {
-		{
-			num, err := strconv.ParseInt(string(tok), 10, 64)
-			if err == nil {
-				return ps.vals.add(valInt(num)), true
-			}
+		if num, ok := parseInt(tok); ok {
+			return ps.vals.add(valInt(num)), true
 		}
-		{
-			num, err := strconv.ParseFloat(string(tok), 64)
-			if err == nil {
-				return ps.vals.add(valFloat(num)), true
-			}
+		if num, ok := parseFloat(tok); ok {
+			return ps.vals.add(valFloat(num)), true
 		}
 	}
 

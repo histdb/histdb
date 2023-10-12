@@ -4,8 +4,8 @@ import "fmt"
 
 type inst struct {
 	op byte
-	v1 int64
-	v2 int64
+	s  int64
+	v  int64
 }
 
 const (
@@ -44,7 +44,7 @@ func (i inst) String() string {
 	case inst_nop:
 		return "nop"
 	case inst_true:
-		return fmt.Sprintf("query(true, v1=%d)", i.v1)
+		return fmt.Sprintf("query(true, s=%d)", i.s)
 
 	case inst_eq:
 		prefix = "query(eq, "
@@ -83,5 +83,5 @@ func (i inst) String() string {
 		prefix = fmt.Sprintf("op%d(", i.op)
 	}
 
-	return fmt.Sprintf("%sv1=%d, v2=%d)", prefix, i.v1, i.v2)
+	return fmt.Sprintf("%ss=%d, v=%d)", prefix, i.s, i.v)
 }
