@@ -22,11 +22,11 @@ func makeGlob(pattern string) (func([]byte) bool, bool) {
 		} else {
 			pattern = "*" + pattern
 		}
-		if pattern[len(pattern)-1] == '$' {
-			pattern = pattern[:len(pattern)-1]
-		} else {
-			pattern = pattern + "*"
-		}
+	}
+	if len(pattern) > 0 && pattern[len(pattern)-1] == '$' {
+		pattern = pattern[:len(pattern)-1]
+	} else {
+		pattern = pattern + "*"
 	}
 
 	// check for well formed escapes
@@ -39,13 +39,15 @@ func makeGlob(pattern string) (func([]byte) bool, bool) {
 			return nil, false
 		}
 		// check for invalid escapes
-		if pattern[i] != '*' && pattern[i] != '?' && pattern[i] != '\\' {
+		switch pattern[i] {
+		case '*', '?', '\\', '^', '$':
+		default:
 			return nil, false
 		}
 	}
 
 	return func(scrut []byte) (match bool) {
-		nx, px := uint(0), uint(0)
+		px, nx := uint(0), uint(0)
 		npx, nnx := uint(0), uint(0)
 
 		for px < uint(len(pattern)) || nx < uint(len(scrut)) {

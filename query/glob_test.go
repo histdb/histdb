@@ -18,4 +18,7 @@ func TestGlob(t *testing.T) {
 
 	assert.That(t, matches(`^12X`, "12Xyab"))
 	assert.That(t, !matches(`^12X`, "a12Xyab"))
+
+	assert.That(t, matches(`^`, "foo"))
+	assert.That(t, matches(`$`, "foo"))
 }
