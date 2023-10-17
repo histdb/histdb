@@ -272,7 +272,7 @@ func (ps *parseState) peekCompConjugate() (op byte) {
 		switch tok[0] {
 		case '|':
 			return inst_union
-		case '&':
+		case '&', ',':
 			return inst_inter
 		}
 	}

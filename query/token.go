@@ -64,7 +64,7 @@ func token(x []byte) ([]byte, []byte) {
 		'&', '|', // sel      conjunctives
 		'{', '}', // sel      selection delims
 		'%', '^', // sel      sel operators
-		',': /**/ // sel      tag key separator
+		',': /**/ // sel      tag key separator & conjunction
 		return x[:1], x[1:]
 	}
 

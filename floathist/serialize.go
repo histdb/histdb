@@ -11,7 +11,9 @@ import (
 
 // TODO:
 //   1. instead of l0 bitmaps for serialization, each l2 is indexed by 8 bits
-//      this is almost certainly a win.
+//      this is almost certainly a win. (it becomes 9 bytes per l2 instead of
+//      8 bytes per l2 + 2 bytes per l1, so it's a win as long as there are
+//      less than 2 l2s per l1. so maybe not almost certainly a win?)
 //   2. instead of l2 being bitmap + non-zero varints, maybe it could be
 //      64*2bits of lengths, and that many bytes? the lengths could mean like
 //      {0, 1, 2, 8} so we don't write zeros, or {1, 2, 4, 8} which would

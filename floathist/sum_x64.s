@@ -1,29 +1,8 @@
+//go:build (amd64 || amd64p32) && gc
+// +build amd64 amd64p32
+// +build gc
+
 #include "textflag.h"
-
-// func sumLayer2SmallAVX2_32(data *layer2Small) uint64
-TEXT ·sumLayer2SmallAVX2_32(SB), NOSPLIT, $0-16
-	MOVQ         data+0(FP), AX
-
-	VMOVDQU      (AX), Y0
-	VPADDQ       32(AX), Y0, Y0
-	VPADDQ       64(AX), Y0, Y0
-	VPADDQ       96(AX), Y0, Y0
-	VPADDQ       128(AX), Y0, Y0
-	VPADDQ       160(AX), Y0, Y0
-	VPADDQ       192(AX), Y0, Y0
-	VPADDQ       224(AX), Y0, Y0
-
-	VEXTRACTI128 $0x01, Y0, X1
-	VPADDQ       X1, X0, X0
-	VPSHUFD      $0x4e, X0, X1
-	VPADDQ       X1, X0, X0
-	VPSHUFD      $0xe5, X0, X1
-	VPADDQ       X1, X0, X0
-	VMOVD        X0, BX
-
-	MOVQ         BX, ret+8(FP)
-	VZEROUPPER
-	RET
 
 // func sumLayer2SmallAVX2(data *layer2Small) uint64
 TEXT ·sumLayer2SmallAVX2(SB), NOSPLIT, $0-16
@@ -61,9 +40,9 @@ TEXT ·sumLayer2SmallAVX2(SB), NOSPLIT, $0-16
 	VPMOVZXDQ    240(AX), Y1
 	VPADDQ       Y0, Y1, Y0
 
-	VEXTRACTI128 $0x01, Y0, X1
+	VEXTRACTI128 $1, Y0, X1
 	VPADDQ       X1, X0, X0
-	VPSHUFD      $0x4e, X0, X1
+	VPSRLDQ	     $8, X0, X1
 	VPADDQ       X1, X0, X0
 	VMOVQ        X0, BX
 
@@ -92,9 +71,9 @@ TEXT ·sumLayer2LargeAVX2(SB), NOSPLIT, $0-16
 	VPADDQ       448(AX), Y0, Y0
 	VPADDQ       480(AX), Y0, Y0
 
-	VEXTRACTI128 $0x01, Y0, X1
+	VEXTRACTI128 $1, Y0, X1
 	VPADDQ       X1, X0, X0
-	VPSHUFD      $0x4e, X0, X1
+	VPSRLDQ	     $8, X0, X1
 	VPADDQ       X1, X0, X0
 	VMOVQ        X0, BX
 

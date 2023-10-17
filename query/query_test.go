@@ -1,35 +1,32 @@
 package query
 
 import (
-	"os"
 	"testing"
 	"time"
 
 	"github.com/zeebo/assert"
 
 	"github.com/histdb/histdb"
-	"github.com/histdb/histdb/buffer"
 	"github.com/histdb/histdb/memindex"
-	"github.com/histdb/histdb/rwutils"
 )
 
 func TestQuery(t *testing.T) {
 	var now time.Time
 	var idx memindex.T
 
-	// idx.Add([]byte("foo=bar,bif=bar"))
-	// idx.Add([]byte("foo=a,bif=a"))
-	// idx.Add([]byte("foo=b,bif=c"))
+	idx.Add([]byte("foo=bar,bif=bar"))
+	idx.Add([]byte("foo=a,bif=a"))
+	idx.Add([]byte("foo=b,bif=c"))
 
-	data, _ := os.ReadFile("../memindex/metrics.idx")
-	var r rwutils.R
-	r.Init(buffer.OfLen(data))
+	// data, _ := os.ReadFile("../memindex/metrics.idx")
+	// var r rwutils.R
+	// r.Init(buffer.OfLen(data))
 
-	now = time.Now()
-	memindex.ReadFrom(&idx, &r)
-	t.Log("metrics loaded in", time.Since(now))
-	_, err := r.Done()
-	assert.NoError(t, err)
+	// now = time.Now()
+	// memindex.ReadFrom(&idx, &r)
+	// t.Log("metrics loaded in", time.Since(now))
+	// _, err := r.Done()
+	// assert.NoError(t, err)
 
 	q, err := Parse(b(`inst !* 12z & name='(*Dir).Commit' & field=successes`))
 	assert.NoError(t, err)
@@ -55,12 +52,14 @@ func TestQuery(t *testing.T) {
 
 func BenchmarkQuery(b *testing.B) {
 	var idx memindex.T
-	data, _ := os.ReadFile("../memindex/metrics.idx")
-	var r rwutils.R
-	r.Init(buffer.OfLen(data))
-	memindex.ReadFrom(&idx, &r)
-	_, err := r.Done()
-	assert.NoError(b, err)
+
+	// data, _ := os.ReadFile("../memindex/metrics.idx")
+	// var r rwutils.R
+	// r.Init(buffer.OfLen(data))
+
+	// memindex.ReadFrom(&idx, &r)
+	// _, err := r.Done()
+	// assert.NoError(b, err)
 
 	q, err := Parse([]byte(`inst !* 12z & name='(*Dir).Commit' & field=successes`))
 	assert.NoError(b, err)

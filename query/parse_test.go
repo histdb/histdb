@@ -7,7 +7,7 @@ import (
 	"github.com/zeebo/assert"
 )
 
-const parseQuery = `(foo=foo & bar=wif) | (baz=baz & bar=baz) | whatever =~ foo`
+const parseQuery = `(foo=foo,bar=wif) | (baz=baz & bar=baz) | whatever =~ foo`
 
 func TestParse(t *testing.T) {
 	e, err := Parse(b(parseQuery))

@@ -44,17 +44,21 @@ provided examples so far.
 
     (e1 op e2) op e3   # grouping
 
-    tag      # tag variable reference
-    t"tag"   # quoted tag variable reference
+    tag     # tag variable reference
 
     lit     # string/number literal
     "lit"   # quoted string/number literal (with \ escapes)
-    'lit'   # either quotes are fine (with \ escapes)
+    'lit'   # quoted string/number literal (with \ escapes)
 
     e1 || e2   # logical or
+    e1 |  e2
+
     e1 && e2   # logical and
+    e1 &  e2
+    e1 ,  e2
 
     tag == lit    # equality
+    tag =  lit    # equality
     tag != lit    # inequality
 
     tag <  lit    # less than
@@ -65,8 +69,8 @@ provided examples so far.
     tag =~ lit    # regex matching
     tag !~ lit    # regex not matching
 
-    tag =? lit    # glob matching
-    tag !? lit    # glob not matching
+    tag =* lit    # glob matching
+    tag !* lit    # glob not matching
 
 #
 # selection expressions
@@ -100,4 +104,4 @@ a selection involving a single tag can be computed
 in linear time with respect to the tag, and the
 selection operations are also linear, making the total
 runtime linear, whereas computing the compound
-expressions naively is expo
+expressions naively is exponential

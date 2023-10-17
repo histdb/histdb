@@ -5,7 +5,6 @@ import (
 
 	"github.com/zeebo/assert"
 	"github.com/zeebo/mwc"
-	"golang.org/x/sys/cpu"
 )
 
 func TestSum(t *testing.T) {
@@ -39,15 +38,7 @@ func TestSum(t *testing.T) {
 	}
 
 	t.Run("Small", func(t *testing.T) {
-		if l2S == 64 && cpu.X86.HasAVX2 {
-			t.Run("AVX2_32", func(t *testing.T) {
-				run(t, testCase{
-					max: markAt,
-					new: newLayer2_small,
-					sum: sumLayer2SmallAVX2_32,
-				})
-			})
-
+		if l2S == 64 && hasAVX2 {
 			t.Run("AVX2", func(t *testing.T) {
 				run(t, testCase{
 					max: 2 * markAt,
@@ -61,13 +52,13 @@ func TestSum(t *testing.T) {
 			run(t, testCase{
 				max: 2 * markAt,
 				new: newLayer2_marked,
-				sum: sumLayer2SmallSlow,
+				sum: sumLayer2SmallFallback,
 			})
 		})
 	})
 
 	t.Run("Large", func(t *testing.T) {
-		if l2S == 64 && cpu.X86.HasAVX2 {
+		if l2S == 64 && hasAVX2 {
 			t.Run("AVX2", func(t *testing.T) {
 				run(t, testCase{
 					max: 1 << 64 / 64,
@@ -81,7 +72,70 @@ func TestSum(t *testing.T) {
 			run(t, testCase{
 				max: 1 << 64 / 64,
 				new: newLayer2_large,
-				sum: sumLayer2LargeSlow,
+				sum: sumLayer2LargeFallback,
+			})
+		})
+	})
+}
+
+func BenchmarkSum(b *testing.B) {
+	type testCase struct {
+		max uint64
+		new func() layer2
+		sum func(layer2) uint64
+	}
+
+	run := func(b *testing.B, tc testCase) {
+		l2 := tc.new()
+		rng := mwc.Rand()
+
+		for k := uint32(0); k < l2S; k++ {
+			v := rng.Uint64n(tc.max)
+			assert.That(b, layer2_unsafeSetCounter(l2, nil, k, v))
+		}
+
+		b.ResetTimer()
+
+		for i := 0; i < b.N; i++ {
+			tc.sum(layer2_truncate(l2))
+		}
+	}
+
+	b.Run("Small", func(b *testing.B) {
+		if l2S == 64 && hasAVX2 {
+			b.Run("AVX2", func(b *testing.B) {
+				run(b, testCase{
+					max: 2 * markAt,
+					new: newLayer2_marked,
+					sum: sumLayer2SmallAVX2,
+				})
+			})
+		}
+		b.Run("Generic", func(b *testing.B) {
+			run(b, testCase{
+				max: 2 * markAt,
+				new: newLayer2_marked,
+				sum: sumLayer2SmallFallback,
+			})
+		})
+	})
+
+	b.Run("Large", func(b *testing.B) {
+		if l2S == 64 && hasAVX2 {
+			b.Run("AVX2", func(b *testing.B) {
+				run(b, testCase{
+					max: 1 << 64 / 64,
+					new: newLayer2_large,
+					sum: sumLayer2LargeAVX2,
+				})
+			})
+		}
+
+		b.Run("Generic", func(b *testing.B) {
+			run(b, testCase{
+				max: 1 << 64 / 64,
+				new: newLayer2_large,
+				sum: sumLayer2LargeFallback,
 			})
 		})
 	})

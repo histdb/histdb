@@ -30,6 +30,8 @@ func TestSerialize(t *testing.T) {
 
 			assert.Equal(t, buf[:], w.Done().Prefix())
 		}
+
+		t.Logf("%d\n%s", len(buf), hex.Dump(buf[:]))
 	})
 
 	t.Run("Write", func(t *testing.T) {
