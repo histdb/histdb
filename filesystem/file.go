@@ -10,6 +10,8 @@ import (
 )
 
 type Handle struct {
+	_ [0]func() // no equality
+
 	fs *T
 	fh *os.File
 }

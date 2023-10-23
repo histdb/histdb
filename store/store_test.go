@@ -17,13 +17,13 @@ func BenchmarkStore(b *testing.B) {
 	values := make([][]byte, b.N)
 	for i := 0; i < b.N; i++ {
 		names[i] = testhelp.Name(3)
-		values[i] = testhelp.Value(512)
+		values[i] = testhelp.Value(256)
 	}
 
 	var s T
 	assert.NoError(b, s.Init(fs))
 
-	b.SetBytes(600)
+	b.SetBytes(256)
 	b.ReportAllocs()
 
 	now := time.Now()

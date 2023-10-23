@@ -25,6 +25,8 @@ const (
 )
 
 type keyPos struct {
+	_ [0]func() // no equality
+
 	key histdb.Key
 	pos uint16
 }
@@ -36,6 +38,8 @@ func (k keyPoss) Less(i int, j int) bool { return string(k[i].key[:]) < string(k
 func (k keyPoss) Swap(i int, j int)      { k[i], k[j] = k[j], k[i] }
 
 type T struct {
+	_ [0]func() // no equality
+
 	buf   []byte
 	fh    filesystem.Handle
 	len   uint32

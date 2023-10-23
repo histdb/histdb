@@ -2,7 +2,6 @@ package leveln
 
 import (
 	"io"
-	"io/ioutil"
 	"testing"
 	"time"
 
@@ -39,7 +38,7 @@ func TestKeyWriterPage(t *testing.T) {
 	// read it back
 	_, err := fh.Seek(0, io.SeekStart)
 	assert.NoError(t, err)
-	data, err := ioutil.ReadAll(fh)
+	data, err := io.ReadAll(fh)
 	assert.NoError(t, err)
 	assert.Equal(t, len(data), kwPageSize)
 

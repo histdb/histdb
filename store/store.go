@@ -58,7 +58,7 @@ func (t *T) Init(fs *filesystem.T) (err error) {
 		}
 	}()
 
-	addIndex := func(key histdb.Key, name, value []byte) { t.l0m.Add(name) }
+	addIndex := func(key histdb.Key, value []byte) { t.l0m.Add(name) }
 
 	l0s := t.txn.L0s()
 	lns := t.txn.LNs()
@@ -110,7 +110,7 @@ func (t *T) Write(ts uint32, name, value []byte) (err error) {
 	*key.TimestampPtr() = ts
 
 	for {
-		ok, err := t.l0.Append(key, name, value)
+		ok, err := t.l0.Append(key, value)
 		if err != nil {
 			return err
 		} else if ok {

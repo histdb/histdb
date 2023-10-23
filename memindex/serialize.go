@@ -75,7 +75,7 @@ func ReadFrom(t *T, r *rwutils.R) {
 				break
 			}
 			// TODO: do we need to make a copy?
-			bm.CloneCopyOnWriteContainers()
+			// bm.CloneCopyOnWriteContainers()
 			bms[i] = bm
 		}
 		return bms

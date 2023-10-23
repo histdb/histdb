@@ -11,7 +11,10 @@ import (
 )
 
 type Iterator struct {
+	_ [0]func() // no equality
+
 	eoff int64 // offset of ebuf
+	elen int   // valid length of ebuf
 	ebuf []byte
 
 	keyb histdb.Key
@@ -91,7 +94,7 @@ func (it *Iterator) Next() bool {
 func (it *Iterator) read(offset, length int64) []byte {
 	b := uint64(offset - it.eoff)
 	e := b + uint64(length)
-	if b < e && e < uint64(len(it.ebuf)) {
+	if b < e && e < uint64(len(it.ebuf)) && e < uint64(it.elen) {
 		return it.ebuf[b:e]
 	}
 
@@ -110,6 +113,7 @@ func (it *Iterator) read(offset, length int64) []byte {
 		return nil
 	}
 	it.eoff = offset
+	it.elen = n
 
 	if int64(n) < length {
 		length = int64(n)

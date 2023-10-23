@@ -9,6 +9,8 @@ import (
 )
 
 type T struct {
+	_ [0]func() // no equality
+
 	Base string
 }
 
@@ -20,21 +22,21 @@ func (t *T) Create(path string) (fh Handle, err error) {
 	path = t.child(path)
 
 	f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0644)
-	return Handle{t, f}, errs.Wrap(err)
+	return Handle{fs: t, fh: f}, errs.Wrap(err)
 }
 
 func (t *T) OpenWrite(path string) (fh Handle, err error) {
 	path = t.child(path)
 
 	f, err := os.OpenFile(path, os.O_RDWR, 0644)
-	return Handle{t, f}, errs.Wrap(err)
+	return Handle{fs: t, fh: f}, errs.Wrap(err)
 }
 
 func (t *T) OpenRead(path string) (fh Handle, err error) {
 	path = t.child(path)
 
 	f, err := os.Open(path)
-	return Handle{t, f}, errs.Wrap(err)
+	return Handle{fs: t, fh: f}, errs.Wrap(err)
 }
 
 func (t *T) Rename(old, new string) error {

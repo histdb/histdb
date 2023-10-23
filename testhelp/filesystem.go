@@ -3,7 +3,7 @@ package testhelp
 import (
 	"fmt"
 	"io"
-	"io/ioutil"
+	"os"
 	"testing"
 	"time"
 
@@ -14,7 +14,7 @@ import (
 )
 
 func FS(tb testing.TB) (*filesystem.T, func()) {
-	base, err := ioutil.TempDir("", "testhelp-fs-")
+	base, err := os.MkdirTemp("", "testhelp-fs-")
 	assert.NoError(tb, err)
 	fs := &filesystem.T{Base: base}
 	return fs, func() { assert.NoError(tb, fs.RemoveAll(".")) }
@@ -34,7 +34,7 @@ func ReadFile(tb testing.TB, fh filesystem.Handle) []byte {
 	assert.NoError(tb, err)
 	_, err = fh.Seek(0, io.SeekStart)
 	assert.NoError(tb, err)
-	data, err := ioutil.ReadAll(fh)
+	data, err := io.ReadAll(fh)
 	assert.NoError(tb, err)
 	_, err = fh.Seek(pos, io.SeekStart)
 	assert.NoError(tb, err)

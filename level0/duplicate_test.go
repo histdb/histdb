@@ -62,7 +62,6 @@ func TestDuplicate(t *testing.T) {
 	assert.NoError(t, it.Err())
 
 	// check seeking
-	t.Log(key)
 	assert.That(t, it.Seek(key))
 	assert.Equal(t, it.Key().String(), key.String())
 	assert.DeepEqual(t, it.Name(), []byte{11})
