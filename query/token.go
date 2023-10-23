@@ -1,45 +1,123 @@
 package query
 
-import "github.com/zeebo/errs/v2"
+import (
+	"fmt"
 
-// tokens calls the callback with successive tokens from the input
-// string x. It returns an error if the tokens are invalid.
-func tokens(x []byte, cb func([]byte)) error {
-	for len(x) > 0 {
-		var t []byte
-		t, x = token(x)
-		if len(t) == 0 {
-			return errs.Errorf("invalid token: %q", x)
-		}
-		cb(t)
+	"github.com/zeebo/errs/v2"
+)
+
+type token uint32
+
+const (
+	token_invalid token = 0
+
+	// literals are 0b1BBBBBBB_BBBBBBBB_FLLLLLLL_LLLLLLLL
+	// where L and B are the length and byte offset of the token
+	// and F is a flag for if the literal was quoted.
+
+	token_and2  token = '&'<<8 | '&'
+	token_or2   token = '|'<<8 | '|'
+	token_gte   token = '>'<<8 | '='
+	token_lte   token = '<'<<8 | '='
+	token_eq2   token = '='<<8 | '='
+	token_neq   token = '!'<<8 | '='
+	token_re    token = '='<<8 | '~'
+	token_nre   token = '!'<<8 | '~'
+	token_glob  token = '='<<8 | '*'
+	token_nglob token = '!'<<8 | '*'
+
+	token_lparen token = '('
+	token_rparen token = ')'
+	token_eq1    token = '='
+	token_gt     token = '>'
+	token_lt     token = '<'
+	token_and1   token = '&'
+	token_or1    token = '|'
+	token_lbrace token = '{'
+	token_rbrace token = '}'
+	token_mod    token = '%'
+	token_xor    token = '^'
+	token_comma  token = ','
+)
+
+func (t token) isLiteral() bool { return t&(1<<31) != 0 }
+func (t token) isQuoted() bool  { return t&(1<<15) != 0 }
+func (t token) litBounds() (uint, uint) {
+	l, b := uint(t)&0x7FFF, (uint(t)>>16)&0x7FFF
+	return b, b + l
+}
+
+func (t token) literal(x []byte) []byte {
+	if b, e := t.litBounds(); b < e && e <= uint(len(x)) {
+		return x[b:e]
 	}
 	return nil
 }
 
-// token returns the length of the next token in the input string x, or -1 if
-// the token is invalid. x must not begin with whitespace.
-func token(x []byte) ([]byte, []byte) {
+func (t token) String() string {
+	if t.isLiteral() {
+		b, e := t.litBounds()
+		q := map[bool]string{true: "quo", false: "lit"}[t.isQuoted()]
+		return fmt.Sprintf("%s[%d:%d]", q, b, e)
+	}
+	if t >= 256 {
+		return fmt.Sprintf("%c%c", t>>8, t&0xFF)
+	}
+	return fmt.Sprintf("%c", t)
+}
+
+func tokens(x []byte, cb func(token)) error {
+	if uint(len(x)) > 1<<15 {
+		return errs.Errorf("query too long")
+	}
+	for pos := uint(0); uint(pos) < uint(len(x)); {
+		t, n := nextToken(pos, x)
+		if n == 0 {
+			return errs.Errorf("invalid token: %q", x[pos:])
+		} else if t == token_invalid {
+			break
+		}
+		cb(t)
+		pos += n
+	}
+	return nil
+}
+
+func nextToken(pos uint, x []byte) (t token, l uint) {
+	if pos >= uint(len(x)) {
+		return token_invalid, 0
+	}
+	x = x[pos:]
+
 	for len(x) > 0 && (x[0] == ' ' || x[0] == '\t') {
 		x = x[1:]
+		pos++
+		l++
 	}
 
 	// nothing left
 	if len(x) == 0 {
-		return nil, nil
+		return token_invalid, l
 	}
 
 	// quoted strings
 	if c := x[0]; c == '"' || c == '\'' {
 		for i := uint(1); i < uint(len(x)); i++ {
 			if x[i] == '\\' {
+				if i+1 >= uint(len(x)) {
+					return token_invalid, 0
+				}
 				i++
+				if !isSpecial(x[i]) {
+					return token_invalid, 0
+				}
 				continue
 			}
 			if x[i] == c {
-				return x[:i+1], x[i+1:]
+				return token(1<<31 | 1<<15 | (pos+1)<<16 | i - 1), l + i + 1
 			}
 		}
-		return nil, x
+		return token_invalid, 0
 	}
 
 	// length 2 operators
@@ -51,7 +129,7 @@ func token(x []byte) ([]byte, []byte) {
 			'='<<8 | '=', '!'<<8 | '=', // equality
 			'='<<8 | '~', '!'<<8 | '~', // regex
 			'='<<8 | '*', '!'<<8 | '*': // glob
-			return x[:2], x[2:]
+			return token(u), l + 2
 		}
 	}
 
@@ -65,7 +143,7 @@ func token(x []byte) ([]byte, []byte) {
 		'{', '}', // sel      selection delims
 		'%', '^', // sel      sel operators
 		',': /**/ // sel      tag key separator & conjunction
-		return x[:1], x[1:]
+		return token(x[0]), l + 1
 	}
 
 	// tag keys
@@ -73,9 +151,12 @@ func token(x []byte) ([]byte, []byte) {
 		c := x[i]
 		if c == '\\' {
 			if i+1 >= uint(len(x)) {
-				return nil, x
+				return token_invalid, 0
 			}
 			i++
+			if !isSpecial(x[i]) {
+				return token_invalid, 0
+			}
 			continue
 		}
 
@@ -95,17 +176,17 @@ func token(x []byte) ([]byte, []byte) {
 		// accurate query.
 
 		if isSpecial(c) {
-			return x[:i], x[i:]
+			return token(1<<31 | pos<<16 | i), l + i
 		}
 	}
 
-	return x, nil
+	return token(1<<31 | pos<<16 | uint(len(x))), l + uint(len(x))
 }
 
 func isSpecial(x byte) bool {
 	switch x {
 	case
-		' ', 0x9, // whitespace
+		' ', '\t', // whitespace
 		'&', '|', // conjunctives
 		'>', '<', // comparison
 		'=', '!', // equality/regex/glob (first char only)
@@ -113,6 +194,7 @@ func isSpecial(x byte) bool {
 		'(', ')', // grouping
 		'%', '^', // sel operators
 		',',       // tag key separator
+		'\\',      // escape character
 		'"', '\'': // quoted strings
 
 		return true

@@ -2,15 +2,16 @@ package query
 
 import (
 	"bytes"
-	"fmt"
 	"regexp"
 
 	"github.com/zeebo/errs/v2"
 )
 
 type parseState struct {
+	query []byte
+
 	tokn uint
-	toks [][]byte
+	toks []token
 
 	tlock bool
 	tkeys bytesSet
@@ -18,19 +19,11 @@ type parseState struct {
 	prog []inst
 	strs bytesSet
 	vals valueSet
-	mats []matcher
+	mchs []matcher
 }
-
-type matcher struct {
-	fn func([]byte) bool
-	k  string
-	q  string
-}
-
-func (m matcher) String() string { return fmt.Sprintf("%s(%s)", m.k, m.q) }
 
 func (ps *parseState) pushOp(op byte) { ps.pushInst(op, -1, -1) }
-func (ps *parseState) pushInst(op byte, v1, v2 int64) {
+func (ps *parseState) pushInst(op byte, v1, v2 int16) {
 	ps.prog = append(ps.prog, inst{
 		op: op,
 		s:  v1,
@@ -48,59 +41,49 @@ func (ps *parseState) tkey(s []byte) bool {
 	return true
 }
 
-func (ps *parseState) peek() []byte {
+func (ps *parseState) peek() token {
 	if ps.tokn < uint(len(ps.toks)) {
 		return ps.toks[ps.tokn]
 	}
-	return nil
+	return token_invalid
 }
 
-func (ps *parseState) next() []byte {
+func (ps *parseState) next() token {
 	if ps.tokn < uint(len(ps.toks)) {
 		s := ps.toks[ps.tokn]
 		ps.tokn++
 		return s
 	}
-	return nil
+	return token_invalid
 }
 
-var (
-	openBrace  = []byte{'{'}
-	closeBrace = []byte{'}'}
-	comma      = []byte{','}
-)
-
 func Parse(query []byte) (Query, error) {
-	toks := make([][]byte, 1, 32)
-	toks[0] = openBrace
+	toks := make([]token, 1, 32)
+	toks[0] = token_lbrace
 
-	err := tokens(query, func(t []byte) { toks = append(toks, t) })
+	var braces bool
+	err := tokens(query, func(t token) {
+		toks = append(toks, t)
+		braces = braces || (t == token_lbrace || t == token_rbrace)
+	})
 	if err != nil {
 		return Query{}, err
 	}
 
-	// if we don't have any { or }, then infer add them
-	var braces bool
-	for _, t := range toks[1:] {
-		if string(t) == "{" || string(t) == "}" {
-			braces = true
-			break
-		}
-	}
+	// if we had no braces, infer add the right one. otherwise,
+	// remove the prefix left one we already added.
 	if !braces {
-		toks = append(toks, closeBrace)
+		toks = append(toks, token_rbrace)
 	} else {
 		toks = toks[1:]
 	}
 
 	ps := &parseState{
+		query: query,
+
 		toks: toks,
 
-		tkeys: newBytesSet(8),
-
 		prog: make([]inst, 0, 32),
-		strs: newBytesSet(8),
-		vals: newValueSet(8),
 	}
 
 	if ok := ps.parseCompoundSel(); !ok || ps.tokn != uint(len(ps.toks)) {
@@ -114,7 +97,7 @@ func Parse(query []byte) (Query, error) {
 		prog: ps.prog,
 		strs: ps.strs.list,
 		vals: ps.vals.list,
-		mats: ps.mats,
+		mchs: ps.mchs,
 	}, nil
 }
 
@@ -140,40 +123,38 @@ func (ps *parseState) parseCompoundSel() bool {
 }
 
 func (ps *parseState) peekSelConjugate() (op byte) {
-	switch tok := ps.peek(); len(tok) {
-	case 1:
-		switch tok[0] {
-		case '|':
-			return inst_union
-		case '&':
-			return inst_inter
-		case '^':
-			return inst_symdiff
-		case '%':
-			return inst_modulo
-		}
+	switch tok := ps.peek(); tok {
+	case token_or1:
+		return inst_union
+	case token_and1:
+		return inst_inter
+	case token_xor:
+		return inst_symdiff
+	case token_mod:
+		return inst_modulo
+	default:
+		return 0
 	}
-	return 0
 }
 
-func (ps *parseState) parseSel() bool {
+func (ps *parseState) parseSel() (ok bool) {
 	skipInter := false
 
-	if string(ps.peek()) == "(" {
+	if ps.peek() == token_lparen {
 		return ps.parseSelGroup()
 	}
 
-	if string(ps.next()) != "{" {
+	if ps.next() != token_lbrace {
 		return false
 	}
 
-	if string(ps.peek()) == "}" {
+	if ps.peek() == token_rbrace {
 		skipInter = true
 		ps.tokn++
 		goto done
 	}
 
-	if n := ps.tokn; ps.parseCompoundComp() && string(ps.next()) == "}" {
+	if n := ps.tokn; ps.parseCompoundComp() && ps.next() == token_rbrace {
 		goto done
 	} else {
 		ps.tokn = n
@@ -182,7 +163,7 @@ func (ps *parseState) parseSel() bool {
 	for {
 		if _, ok := ps.peekIdent(); ok {
 			ps.tokn++
-			if string(ps.peek()) == "," {
+			if ps.peek() == token_comma {
 				ps.tokn++
 				continue
 			}
@@ -190,14 +171,14 @@ func (ps *parseState) parseSel() bool {
 		break
 	}
 
-	if string(ps.next()) != "|" {
+	if ps.next() != token_or1 {
 		return false
 	}
 
 	// lock tkeys because we found a pipe
 	ps.tlock = true
 
-	if string(ps.peek()) == "}" {
+	if ps.peek() == token_rbrace {
 		skipInter = true
 		ps.tokn++
 		goto done
@@ -207,7 +188,7 @@ func (ps *parseState) parseSel() bool {
 		return false
 	}
 
-	if string(ps.next()) != "}" {
+	if ps.next() != token_rbrace {
 		return false
 	}
 
@@ -216,8 +197,8 @@ done:
 	ps.tlock = false
 
 	// store and reset tags for next selection
-	tn := ps.strs.add(bytes.Join(ps.tkeys.list, comma))
-	ps.tkeys = newBytesSet(8)
+	tn := ps.strs.add(bytes.Join(ps.tkeys.list, []byte{','}))
+	ps.tkeys = bytesSet{}
 
 	// push the intersection of the tagset for the metrics
 	ps.pushInst(inst_true, tn, -1)
@@ -230,7 +211,7 @@ done:
 }
 
 func (ps *parseState) parseSelGroup() bool {
-	if string(ps.next()) != "(" {
+	if ps.next() != token_lparen {
 		return false
 	}
 
@@ -238,7 +219,7 @@ func (ps *parseState) parseSelGroup() bool {
 		return false
 	}
 
-	if string(ps.next()) != ")" {
+	if ps.next() != token_rparen {
 		return false
 	}
 
@@ -267,20 +248,18 @@ func (ps *parseState) parseCompoundComp() bool {
 }
 
 func (ps *parseState) peekCompConjugate() (op byte) {
-	switch tok := ps.peek(); len(tok) {
-	case 1:
-		switch tok[0] {
-		case '|':
-			return inst_union
-		case '&', ',':
-			return inst_inter
-		}
+	switch tok := ps.peek(); tok {
+	case token_or1:
+		return inst_union
+	case token_and1, token_comma:
+		return inst_inter
+	default:
+		return 0
 	}
-	return 0
 }
 
 func (ps *parseState) parseComp() bool {
-	if string(ps.peek()) == "(" {
+	if ps.peek() == token_lparen {
 		return ps.parseCompGroup()
 	}
 
@@ -295,7 +274,7 @@ func (ps *parseState) parseComp() bool {
 		return false
 	}
 
-	var val int64
+	var val int16
 	switch op {
 	case inst_re, inst_nre:
 		val, ok = ps.parseRegexp()
@@ -313,41 +292,38 @@ func (ps *parseState) parseComp() bool {
 }
 
 func (ps *parseState) parseCompComparison() (op byte) {
-	switch tok := ps.next(); len(tok) {
-	case 1:
-		switch tok[0] {
-		case '=':
-			return inst_eq
-		case '>':
-			return inst_gt
-		case '<':
-			return inst_lt
-		}
-	case 2:
-		switch u := uint16(tok[0])<<8 | uint16(tok[1]); u {
-		case '='<<8 | '=':
-			return inst_eq
-		case '!'<<8 | '=':
-			return inst_neq
-		case '='<<8 | '~':
-			return inst_re
-		case '!'<<8 | '~':
-			return inst_nre
-		case '='<<8 | '*':
-			return inst_glob
-		case '!'<<8 | '*':
-			return inst_nglob
-		case '>'<<8 | '=':
-			return inst_gte
-		case '<'<<8 | '=':
-			return inst_lte
-		}
+	switch tok := ps.next(); tok {
+	case token_eq1, token_eq2:
+		return inst_eq
+	case token_neq:
+		return inst_neq
+
+	case token_gt:
+		return inst_gt
+	case token_gte:
+		return inst_gte
+	case token_lt:
+		return inst_lt
+	case token_lte:
+		return inst_lte
+
+	case token_re:
+		return inst_re
+	case token_nre:
+		return inst_nre
+
+	case token_glob:
+		return inst_glob
+	case token_nglob:
+		return inst_nglob
+
+	default:
+		return 0
 	}
-	return 0
 }
 
 func (ps *parseState) parseCompGroup() bool {
-	if string(ps.next()) != "(" {
+	if ps.next() != token_lparen {
 		return false
 	}
 
@@ -355,103 +331,103 @@ func (ps *parseState) parseCompGroup() bool {
 		return false
 	}
 
-	if string(ps.next()) != ")" {
+	if ps.next() != token_rparen {
 		return false
 	}
 
 	return true
 }
 
-func (ps *parseState) parseGlob() (int64, bool) {
+func (ps *parseState) parseGlob() (int16, bool) {
 	tok := ps.next()
-	if len(tok) == 0 {
+	if !tok.isLiteral() {
 		return 0, false
 	}
 
-	if tok[0] == '"' || tok[0] == '\'' {
-		tok = tok[1 : len(tok)-1]
-	} else if isSpecial(tok[0]) {
+	lit := tok.literal(ps.query)
+	if len(lit) == 0 {
 		return 0, false
 	}
+	lits := string(lit)
 
-	glob, ok := makeGlob(string(tok))
+	glob, ok := makeGlob(lits)
 	if !ok {
 		return 0, false
 	}
 
-	ps.mats = append(ps.mats, matcher{fn: glob, k: "glob", q: string(tok)})
+	ps.mchs = append(ps.mchs, matcher{
+		fn: glob,
+		k:  "glob",
+		q:  lits,
+	})
 
-	return int64(len(ps.mats) - 1), true
+	return int16(len(ps.mchs) - 1), true
 }
 
-func (ps *parseState) parseRegexp() (int64, bool) {
+func (ps *parseState) parseRegexp() (int16, bool) {
 	tok := ps.next()
-	if len(tok) == 0 {
+	if !tok.isLiteral() {
 		return 0, false
 	}
 
-	if tok[0] == '"' || tok[0] == '\'' {
-		tok = tok[1 : len(tok)-1]
-	} else if isSpecial(tok[0]) {
+	lit := tok.literal(ps.query)
+	if len(lit) == 0 {
 		return 0, false
 	}
+	lits := string(lit)
 
-	re, err := regexp.Compile(string(tok))
+	re, err := regexp.Compile(lits)
 	if err != nil {
 		return 0, false
 	}
 
-	ps.mats = append(ps.mats, matcher{fn: re.Match, k: "re", q: string(tok)})
+	ps.mchs = append(ps.mchs, matcher{
+		fn: re.Match,
+		k:  "re",
+		q:  lits,
+	})
 
-	return int64(len(ps.mats) - 1), true
+	return int16(len(ps.mchs) - 1), true
 }
 
-func (ps *parseState) parseValue() (int64, bool) {
+func (ps *parseState) parseValue() (int16, bool) {
 	tok := ps.next()
-	if len(tok) == 0 {
+	if !tok.isLiteral() {
+		return 0, false
+	}
+
+	lit := tok.literal(ps.query)
+	if len(lit) == 0 {
 		return 0, false
 	}
 
 	// numeric values
-	if ('0' <= tok[0] && tok[0] <= '9') || tok[0] == '-' {
-		if num, ok := parseInt(tok); ok {
+	if ('0' <= lit[0] && lit[0] <= '9') || lit[0] == '-' {
+		if num, ok := parseInt(lit); ok {
 			return ps.vals.add(valInt(num)), true
 		}
-		if num, ok := parseFloat(tok); ok {
+		if num, ok := parseFloat(lit); ok {
 			return ps.vals.add(valFloat(num)), true
 		}
 	}
 
-	// string values
-	if tok[0] == '"' || tok[0] == '\'' {
-		tok = tok[1 : len(tok)-1]
-		// TODO: unescape
-		return ps.vals.add(valBytes(tok)), true
-	}
-
-	// identifiers as values
-	// TODO: unescape
-	if isSpecial(tok[0]) {
-		return 0, false
-	}
-
-	return ps.vals.add(valBytes(tok)), true
+	return ps.vals.add(valBytes(lit)), true
 }
 
-func (ps *parseState) peekIdent() (int64, bool) {
+func (ps *parseState) peekIdent() (int16, bool) {
 	tok := ps.peek()
-	if len(tok) == 0 {
+	if !tok.isLiteral() || tok.isQuoted() {
 		return 0, false
 	}
 
-	// TODO: unescape
-	if isSpecial(tok[0]) {
+	lit := tok.literal(ps.query)
+	if len(lit) == 0 {
 		return 0, false
 	}
 
-	if !ps.tkey(tok) {
+	if !ps.tkey(lit) {
 		return 0, false
 	}
 
-	return ps.strs.add(tok), true
+	return ps.strs.add(lit), true
 }

@@ -13,20 +13,28 @@ var tokenCases = []struct {
 }{
 	0:  {`{foo, bar | foo == bar}` /**/, []string{`{`, `foo`, `,`, `bar`, `|`, `foo`, `==`, `bar`, `}`}},
 	1:  {`{foo\} | 2 == foo\}}` /*   */, []string{`{`, `foo\}`, `|`, `2`, `==`, `foo\}`, `}`}},
-	2:  {`"foo"` /*                  */, []string{`"foo"`}},
-	3:  {`"foo'"` /*                 */, []string{`"foo'"`}},
-	4:  {`"foo\""` /*                */, []string{`"foo\""`}},
-	5:  {`"foo\\"` /*                */, []string{`"foo\\"`}},
-	6:  {`'foo'` /*                  */, []string{`'foo'`}},
-	7:  {`'foo"'` /*                 */, []string{`'foo"'`}},
-	8:  {`'foo\''` /*                */, []string{`'foo\''`}},
-	9:  {`'foo\\'` /*                */, []string{`'foo\\'`}},
-	10: {`foo="foo"` /*              */, []string{`foo`, `=`, `"foo"`}},
+	2:  {`"foo"` /*                  */, []string{`foo`}},
+	3:  {`"foo'"` /*                 */, []string{`foo'`}},
+	4:  {`"foo\""` /*                */, []string{`foo\"`}},
+	5:  {`"foo\\"` /*                */, []string{`foo\\`}},
+	6:  {`'foo'` /*                  */, []string{`foo`}},
+	7:  {`'foo"'` /*                 */, []string{`foo"`}},
+	8:  {`'foo\''` /*                */, []string{`foo\'`}},
+	9:  {`'foo\\'` /*                */, []string{`foo\\`}},
+	10: {`  foo="foo"  ` /*          */, []string{`foo`, `=`, `foo`}},
 }
 
 func TestToken(t *testing.T) {
 	collect := func(t *testing.T, x string) (out []string) {
-		assert.NoError(t, tokens(b(x), func(t []byte) { out = append(out, s(t)) }))
+		bx := b(x)
+		assert.NoError(t, tokens(bx, func(tk token) {
+			t.Log(x, "=>", tk)
+			if tk.isLiteral() {
+				out = append(out, string(tk.literal(bx)))
+			} else {
+				out = append(out, tk.String())
+			}
+		}))
 		return out
 	}
 

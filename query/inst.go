@@ -4,8 +4,8 @@ import "fmt"
 
 type inst struct {
 	op byte
-	s  int64
-	v  int64
+	s  int16
+	v  int16
 }
 
 const (

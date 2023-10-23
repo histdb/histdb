@@ -10,7 +10,7 @@ type Query struct {
 	prog []inst
 	strs [][]byte
 	vals []value
-	mats []matcher
+	mchs []matcher
 }
 
 func (q Query) Eval(m *memindex.T) (*memindex.Bitmap, error) {
@@ -64,9 +64,9 @@ func (q Query) Eval(m *memindex.T) (*memindex.Bitmap, error) {
 			m.QueryNotEqual(q.strs[i.s], buf, push().Or)
 
 		case inst_re, inst_glob:
-			m.QueryFilter(q.strs[i.s], q.mats[i.v].fn, push().Or)
+			m.QueryFilter(q.strs[i.s], q.mchs[i.v].fn, push().Or)
 		case inst_nre, inst_nglob:
-			m.QueryFilterNot(q.strs[i.s], q.mats[i.v].fn, push().Or)
+			m.QueryFilterNot(q.strs[i.s], q.mchs[i.v].fn, push().Or)
 
 		// TODO: these could be directly supported by the memindex so that it
 		// doesn't need to do the more expensive QueryFilter. it would have to

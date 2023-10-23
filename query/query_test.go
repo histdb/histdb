@@ -34,7 +34,7 @@ func TestQuery(t *testing.T) {
 	t.Log("prog:", q.prog)
 	t.Logf("strs: %q", q.strs)
 	t.Log("vals:", q.vals)
-	t.Logf("mats: %q", q.mats)
+	t.Logf("mchs: %q", q.mchs)
 
 	now = time.Now()
 	bm, err := q.Eval(&idx)
