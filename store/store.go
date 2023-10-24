@@ -58,7 +58,7 @@ func (t *T) Init(fs *filesystem.T) (err error) {
 		}
 	}()
 
-	addIndex := func(key histdb.Key, value []byte) { t.l0m.Add(name) }
+	addIndex := func(key histdb.Key, name, value []byte) { t.l0m.Add(name) }
 
 	l0s := t.txn.L0s()
 	lns := t.txn.LNs()
@@ -84,8 +84,7 @@ func (t *T) Init(fs *filesystem.T) (err error) {
 	for i, ln := range lns {
 		t.lns[i].Init(ln.Keys.Handle, ln.Values.Handle)
 
-		// memindex holds on to the underlying bytes, so
-		// we do this. maybe it should copy. hmm.
+		// memindex holds on to the underlying bytes, so no reuse
 		data, err := io.ReadAll(ln.Memindex.Handle)
 		if err != nil {
 			return errs.Wrap(err)
@@ -110,7 +109,7 @@ func (t *T) Write(ts uint32, name, value []byte) (err error) {
 	*key.TimestampPtr() = ts
 
 	for {
-		ok, err := t.l0.Append(key, value)
+		ok, err := t.l0.Append(key, name, value)
 		if err != nil {
 			return err
 		} else if ok {
