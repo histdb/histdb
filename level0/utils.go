@@ -1,11 +1,9 @@
 package level0
 
-import "hash/crc32"
-
-var castagnoliTable = crc32.MakeTable(crc32.Castagnoli)
+import "github.com/zeebo/xxh3"
 
 func checksum(x []byte) uint32 {
-	return crc32.Checksum(x, castagnoliTable)
+	return uint32(xxh3.Hash(x))
 }
 
 func appendUint16(x []byte, v uint16) []byte {
