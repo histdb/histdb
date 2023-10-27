@@ -8,6 +8,8 @@ import (
 )
 
 type parseState struct {
+	_ [0]func() // no equality
+
 	query []byte
 
 	tokn uint

@@ -34,25 +34,25 @@ func TestKeyReader(t *testing.T) {
 	var kr keyReader
 	kr.Init(fh)
 
-	check := func(i int, key histdb.Key) func(uint32, bool, error) {
-		return func(offset uint32, ok bool, err error) {
+	check := func(i int, key histdb.Key) func(kwEntry, bool, error) {
+		return func(ent kwEntry, ok bool, err error) {
 			t.Helper()
 			assert.NoError(t, err)
 			assert.That(t, ok)
-			assert.Equal(t, i, offset)
+			assert.Equal(t, i, ent.ValOffset())
 		}
 	}
 
 	for i := 0; i < count; i++ {
 		var key histdb.Key
 		key.SetTimestamp(uint32(i*2 + 1))
-		check(i, key)(kr.Search(&key))
+		check(i, key)(kr.Search(key))
 		key.SetTimestamp(uint32(i*2 + 2))
-		check(i, key)(kr.Search(&key))
+		check(i, key)(kr.Search(key))
 	}
 
 	var key histdb.Key
-	_, ok, err := kr.Search(&key)
+	_, ok, err := kr.Search(key)
 	assert.NoError(t, err)
 	assert.That(t, !ok)
 }
@@ -85,7 +85,7 @@ func BenchmarkKeyReader(b *testing.B) {
 
 		for i := 0; i < b.N; i++ {
 			key := testhelp.KeyFrom(rng.Uint32n(n), 0, 0)
-			_, _, _ = kr.Search(&key)
+			_, _, _ = kr.Search(key)
 		}
 
 		b.ReportMetric(float64(kr.stats.reads)/float64(b.N), "reads/op")

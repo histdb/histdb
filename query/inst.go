@@ -3,6 +3,8 @@ package query
 import "fmt"
 
 type inst struct {
+	_ [0]func() // no equality
+
 	op byte
 	s  int16
 	v  int16

@@ -10,11 +10,14 @@ import (
 type Iterator interface {
 	Next() bool
 	Key() histdb.Key
+	Name() []byte
 	Value() []byte
 	Err() error
 }
 
 type T struct {
+	_ [0]func() // no equality
+
 	iters []Iterator
 	trn   []int
 	win   int
@@ -74,6 +77,13 @@ func (m *T) Err() error { return m.err }
 func (m *T) Key() (k histdb.Key) {
 	if uint(m.win) < uint(len(m.iters)) {
 		k = m.iters[m.win].Key()
+	}
+	return
+}
+
+func (m *T) Name() (v []byte) {
+	if uint(m.win) < uint(len(m.iters)) {
+		v = m.iters[m.win].Name()
 	}
 	return
 }

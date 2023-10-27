@@ -43,6 +43,8 @@ func untag[K comparable, V any](p ptr) *T[K, V] { return (*T[K, V])(ptr(uintptr(
 //
 
 type lazyValue[V any] struct {
+	_ [0]func() // no equality
+
 	value V
 	fn    func() V
 }
@@ -60,6 +62,8 @@ func (lv *lazyValue[V]) get() V {
 //
 
 type T[K comparable, V any] struct {
+	_ [0]func() // no equality
+
 	header[K, V]
 	_       [64 - unsafe.Sizeof(header[K, V]{})]byte // pad to cache line
 	buckets [_entries]ptr
@@ -67,6 +71,8 @@ type T[K comparable, V any] struct {
 
 // N.B. this must be defined after T (see golang.org/issue/14620)
 type header[K comparable, V any] struct {
+	_ [0]func() // no equality
+
 	level  uint
 	prev   *T[K, V]
 	bitmap bitmap.T
@@ -78,6 +84,8 @@ func (t *T[K, V]) getHashBucket(hash uint64) (*ptr, uint) {
 }
 
 type node[K comparable, V any] struct {
+	_ [0]func() // no equality
+
 	key   K
 	hash  uint64
 	value V
@@ -265,6 +273,8 @@ func (n *node[K, V]) find(k K, h uint64, t *T[K, V]) (V, bool) {
 //
 
 type Iterator[K comparable, V any] struct {
+	_ [0]func() // no equality
+
 	n     *node[K, V]
 	top   int
 	stack [_maxLevel]struct {

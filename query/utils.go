@@ -10,6 +10,8 @@ func appendTag(buf, tkey []byte, tval string) []byte {
 }
 
 type matcher struct {
+	_ [0]func() // no equality
+
 	fn func([]byte) bool
 	k  string
 	q  string
@@ -18,6 +20,8 @@ type matcher struct {
 func (m matcher) String() string { return fmt.Sprintf("%s(%q)", m.k, m.q) }
 
 type bytesSet struct {
+	_ [0]func() // no equality
+
 	set  map[string]int16
 	list [][]byte
 }
@@ -72,6 +76,8 @@ func (s *bytesSet) add(x []byte) (n int16) {
 }
 
 type valueSet struct {
+	_ [0]func() // no equality
+
 	set  map[value]int16
 	list []value
 }

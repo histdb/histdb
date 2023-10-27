@@ -20,6 +20,8 @@ func upperValue(i, j, k uint32) float32 {
 }
 
 type T struct {
+	_ [0]func() // no equality
+
 	l0 layer0
 }
 

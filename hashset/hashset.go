@@ -12,6 +12,8 @@ type Key interface {
 }
 
 type T[K Key] struct {
+	_ [0]func() // no equality
+
 	set  hashtbl.T[K, hashtbl.U32]
 	list []K
 }

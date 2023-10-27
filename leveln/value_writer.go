@@ -8,7 +8,14 @@ import (
 )
 
 const (
-	vwSpanSize        = 4096 * 4
+	vwSpanSize = 4096 * 4
+
+	vwSpanHashStart = 0
+	vwSpanHashEnd   = vwSpanHashStart + histdb.HashSize
+
+	vwSpanNameLengthIdx = vwSpanHashEnd
+	vwSpanNameStart     = vwSpanNameLengthIdx + 1
+
 	vwSpanAlignBits   = 8
 	vwSpanAlign       = 1 << vwSpanAlignBits
 	vwSpanMask        = vwSpanAlign - 1
@@ -16,6 +23,8 @@ const (
 )
 
 type valueWriter struct {
+	_ [0]func() // no equality
+
 	fh   filesystem.Handle
 	n    uint64
 	sn   uint
@@ -30,29 +39,36 @@ func (v *valueWriter) CanAppend(value []byte) []byte {
 	length := uint(len(value))
 	begin := v.sn
 	end := begin + vwEntryHeaderSize + length + 2 // final 2 for trailer 0s
-	if begin < end && end < vwSpanSize {
+	if begin <= end && end <= vwSpanSize {
 		return v.span[begin:end]
 	}
 	return nil
 }
 
 func (v *valueWriter) Append(buf []byte, ts uint32, value []byte) {
-	if len(buf) >= vwEntryHeaderSize {
-		len := vwEntryHeaderSize + uint(len(value))
-		buf[0] = uint8(len >> 8)
-		buf[1] = uint8(len)
-		buf[2] = uint8(ts >> 24)
-		buf[3] = uint8(ts >> 16)
-		buf[4] = uint8(ts >> 8)
-		buf[5] = uint8(ts)
+	if vwEntryHeaderSize <= len(buf) {
+		elen := vwEntryHeaderSize + uint(len(value))
+
+		be.PutUint16(buf[0:2], uint16(elen))
+		be.PutUint32(buf[2:6], uint32(ts))
 		copy(buf[vwEntryHeaderSize:], value)
-		v.sn += len
+
+		v.sn += elen
 	}
 }
 
-func (v *valueWriter) BeginSpan(key histdb.Key) {
-	v.sn = histdb.HashSize
-	copy(v.span[0:histdb.HashSize], key[:histdb.HashSize])
+func (v *valueWriter) BeginSpan(key histdb.Key, name []byte) bool {
+	sn := vwSpanNameStart + uint(len(name))
+	if span := v.span[:]; uint(len(name)) < 256 && vwSpanNameStart <= sn && sn <= uint(len(span)) {
+		copy(span[vwSpanHashStart:vwSpanHashEnd], key[:histdb.HashSize])
+		span[vwSpanNameLengthIdx] = byte(len(name))
+		copy(span[vwSpanNameStart:sn], name)
+
+		v.sn = sn
+		return true
+	}
+
+	return false
 }
 
 func (v *valueWriter) FinishSpan() (offset uint32, length uint8, err error) {
@@ -72,10 +88,13 @@ func (v *valueWriter) FinishSpan() (offset uint32, length uint8, err error) {
 	v.n += uint64(sn)
 
 	// add a zero entry to mark end of span
-	v.span[v.sn] = 0
-	v.span[v.sn+1] = 0
-
-	_, err = v.fh.Write(v.span[:sn])
+	if span, vsn := v.span, v.sn; vsn < uint(len(span)) && vsn+1 < uint(len(span)) && sn < uint(len(span)) {
+		v.span[vsn] = 0
+		v.span[vsn+1] = 0
+		_, err = v.fh.Write(span[:sn])
+	} else {
+		err = errs.Errorf("value writer corruption")
+	}
 
 	return offset, uint8(sn / vwSpanAlign), errs.Wrap(err)
 }

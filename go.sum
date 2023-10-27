@@ -13,11 +13,11 @@ github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZN
 github.com/stretchr/objx v0.1.0/go.mod h1:HFkY916IF+rwdDfMAkV7OtwuqBVzrE8GR6GFx+wExME=
 github.com/stretchr/testify v1.4.0 h1:2E4SXV/wtOkTonXsotYi4li6zVWxYlZuYNCXe9XRJyk=
 github.com/stretchr/testify v1.4.0/go.mod h1:j7eGeouHqKxXV5pUuKE4zz7dFj8WfuZ+81PSLYec5m4=
-github.com/zeebo/assert v1.1.0/go.mod h1:Pq9JiuJQpG8JLJdtkwrJESF0Foym2/D9XMU5ciN/wJ0=
+github.com/zeebo/assert v1.3.0/go.mod h1:Pq9JiuJQpG8JLJdtkwrJESF0Foym2/D9XMU5ciN/wJ0=
 github.com/zeebo/assert v1.3.1 h1:vukIABvugfNMZMQO1ABsyQDJDTVQbn+LWSMy1ol1h6A=
 github.com/zeebo/assert v1.3.1/go.mod h1:Pq9JiuJQpG8JLJdtkwrJESF0Foym2/D9XMU5ciN/wJ0=
-github.com/zeebo/errs/v2 v2.0.2 h1:BSX/4urHeb5mCKo92UHARtaF73RM0QdGeT8z181zA8c=
-github.com/zeebo/errs/v2 v2.0.2/go.mod h1:1MYZRauyKX92zwOSsW0nks61GZ07WShrW+oGeOX4bJ8=
+github.com/zeebo/errs/v2 v2.0.5 h1:edtyFoQq9OBBsNPcu0b0wHtRvA8haukAHrGyOfWQGNI=
+github.com/zeebo/errs/v2 v2.0.5/go.mod h1:OKmvVZt4UqpyJrYFykDKm168ZquJ55pbbIVUICNmLN0=
 github.com/zeebo/mwc v0.0.3 h1:kdN5aHGWYgyWvQHxGPL0dcCVcSPN2wZ9DOIiBGtmzPY=
 github.com/zeebo/mwc v0.0.3/go.mod h1:qNHfgp/ZCpQNcJHwKcO5EP3VgaBrW6DPohsK4QfyxxE=
 github.com/zeebo/xxh3 v1.0.2 h1:xZmwmqxHZA8AI603jOQ0tMqmBr9lPeFwGg6d+xy9DC0=

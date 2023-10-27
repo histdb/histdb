@@ -7,9 +7,11 @@ import (
 )
 
 type Ops struct {
+	_ [0]func() // no equality
+
 	fs     *filesystem.T
 	err    error
-	tid    uint32
+	id     uint32
 	closed bool
 }
 
@@ -22,8 +24,8 @@ func (ops *Ops) close(fs *filesystem.T) error {
 }
 
 func (ops *Ops) getPath(tid uint32, f File) string {
-	var buf [20]byte
-	writeTransactionFile(&buf, tid, f)
+	var buf [25]byte
+	writeDirectoryFile(&buf, tid, f)
 	return string(buf[:])
 }
 
@@ -37,13 +39,13 @@ func (ops *Ops) store(err error) {
 	}
 }
 
-func (ops *Ops) Include(txn *Txn, f File) {
+func (ops *Ops) Include(txn *Dir, f File) {
 	if ops.done() {
 		return
 	}
 
-	src := ops.getPath(txn.tid, f)
-	dst := ops.getPath(ops.tid, f)
+	src := ops.getPath(txn.id, f)
+	dst := ops.getPath(ops.id, f)
 
 	err := ops.fs.Link(src, dst)
 	ops.store(err)
@@ -54,13 +56,15 @@ func (ops *Ops) Allocate(f File, size int64) {
 		return
 	}
 
-	dst := ops.getPath(ops.tid, f)
+	dst := ops.getPath(ops.id, f)
 
 	fh, err := ops.fs.Create(dst)
 	ops.store(err)
 
 	if err == nil {
-		ops.store(fh.Fallocate(size))
+		if size > 0 {
+			ops.store(fh.Fallocate(size))
+		}
 		ops.store(fh.Close())
 	}
 }

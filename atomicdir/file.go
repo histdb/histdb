@@ -9,37 +9,44 @@ var be = binary.BigEndian
 
 type File struct {
 	Generation uint32
+	Level      uint8
 	Kind       uint8
 }
 
 func (f File) String() string {
-	var buf [11]byte
+	var buf [16]byte
 	writeFile(&buf, f)
 	return string(buf[:])
 }
 
-func writeFile(buf *[11]byte, f File) {
-	*buf = [...]byte{'0', '0', '0', '0', '0', '0', '0', '0', '.', '0', '0'}
+func writeFile(buf *[16]byte, f File) {
+	*buf = [...]byte{
+		'0', '0', '0', '0', '0', '0', '0', '0',
+		'-', 'L', '0', '0',
+		'-', 'K', '0', '0',
+	}
 	be.PutUint64(buf[0:8], hexUint32(f.Generation))
-	be.PutUint16(buf[9:11], hexUint8(f.Kind))
+	be.PutUint16(buf[10:12], hexUint8(f.Level))
+	be.PutUint16(buf[14:16], hexUint8(f.Kind))
 }
 
 func parseFile(name string) (f File, ok bool) {
-	if len(name) == 11 && name[8] == '.' {
+	if len(name) == 16 {
 		f.Generation = unhexUint32(readUint64(name[0:8]))
-		f.Kind = unhexUint8(readUint16(name[9:11]))
+		f.Level = unhexUint8(readUint16(name[10:12]))
+		f.Kind = unhexUint8(readUint16(name[14:16]))
 		ok = true
 	}
 	return
 }
 
-func writeTransaction(buf *[8]byte, tid uint32) string {
+func writeDirectoryName(buf *[8]byte, tid uint32) string {
 	*buf = [...]byte{'0', '0', '0', '0', '0', '0', '0', '0'}
 	be.PutUint64(buf[0:8], hexUint32(tid))
 	return string(buf[:])
 }
 
-func parseTransaction(name string) (tid uint32, ok bool) {
+func parseDirectoryName(name string) (tid uint32, ok bool) {
 	if len(name) == 8 {
 		tid = unhexUint32(readUint64(name[0:8]))
 		ok = true
@@ -47,14 +54,20 @@ func parseTransaction(name string) (tid uint32, ok bool) {
 	return
 }
 
-func writeTransactionFile(buf *[20]byte, tid uint32, f File) {
+func writeDirectoryFile(buf *[25]byte, tid uint32, f File) {
 	*buf = [...]byte{
-		'0', '0', '0', '0', '0', '0', '0', '0', filepath.Separator,
-		'0', '0', '0', '0', '0', '0', '0', '0', '.', '0', '0',
+		'0', '0', '0', '0', '0', '0', '0', '0',
+		filepath.Separator,
+		'0', '0', '0', '0', '0', '0', '0', '0',
+		'-', 'L',
+		'0', '0',
+		'-', 'K',
+		'0', '0',
 	}
 	be.PutUint64(buf[0:8], hexUint32(tid))
 	be.PutUint64(buf[9:17], hexUint32(f.Generation))
-	be.PutUint16(buf[18:20], hexUint8(f.Kind))
+	be.PutUint16(buf[19:21], hexUint8(f.Level))
+	be.PutUint16(buf[23:25], hexUint8(f.Kind))
 }
 
 //

@@ -11,11 +11,13 @@ func TestFileName(t *testing.T) {
 		Expect string
 		File   File
 	}{
-		{"00000000.00", File{}},
-		{"00000000.01", File{Kind: 1}},
-		{"00000000.FF", File{Kind: 255}},
-		{"00000001.00", File{Generation: 1}},
-		{"FFFFFFFF.00", File{Generation: ^uint32(0)}},
+		{"00000000-L00-K00", File{}},
+		{"00000000-L01-K00", File{Level: 1}},
+		{"00000000-LFF-K00", File{Level: 255}},
+		{"00000000-L00-K01", File{Kind: 1}},
+		{"00000000-L00-KFF", File{Kind: 255}},
+		{"00000001-L00-K00", File{Generation: 1}},
+		{"FFFFFFFF-L00-K00", File{Generation: ^uint32(0)}},
 	}
 
 	for _, tc := range cases {
@@ -39,8 +41,9 @@ func BenchmarkFileName(b *testing.B) {
 			b.ReportAllocs()
 			for i := 0; i < b.N; i++ {
 				_ = File{
-					Kind:       ^uint8(0),
 					Generation: ^uint32(0),
+					Level:      ^uint8(0),
+					Kind:       ^uint8(0),
 				}.String()
 			}
 		})
@@ -57,8 +60,9 @@ func BenchmarkFileName(b *testing.B) {
 
 		b.Run("Hard", func(b *testing.B) {
 			name := File{
-				Kind:       ^uint8(0),
 				Generation: ^uint32(0),
+				Level:      ^uint8(0),
+				Kind:       ^uint8(0),
 			}.String()
 			b.ReportAllocs()
 			for i := 0; i < b.N; i++ {

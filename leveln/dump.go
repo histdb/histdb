@@ -35,11 +35,12 @@ func dump(fh filesystem.Handle) { //nolint
 		}
 		check(err)
 
-		copy(hdr[0:16], buf[0:16])
+		copy(hdr[:], buf[0:kwHeaderSize])
 		fmt.Printf("node%d [label=\"n%d (%d)\"]\n", i, i, hdr.Count())
 
 		if !hdr.Leaf() {
 			for j := uint16(0); j < hdr.Count(); j++ {
+				// TODO: what are these constants?
 				child := binary.BigEndian.Uint32(buf[16+24*j+20:])
 				fmt.Printf("node%d -> node%d;\n", i, child)
 			}

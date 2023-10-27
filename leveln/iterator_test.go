@@ -10,7 +10,7 @@ import (
 	"github.com/histdb/histdb/testhelp"
 )
 
-func TestLevelNSeek(t *testing.T) {
+func TestIteratorSeek(t *testing.T) {
 	const count = 1e4
 
 	fs, cleanup := testhelp.FS(t)
@@ -27,15 +27,12 @@ func TestLevelNSeek(t *testing.T) {
 
 	for i := 0; i < count; i++ {
 		key := testhelp.KeyFrom(uint32(i)/8, 0, uint32(i))
-		assert.NoError(t, lnw.Append(key, []byte{byte(i >> 8), byte(i)}))
+		assert.NoError(t, lnw.Append(key, key[:4], []byte{byte(i >> 8), byte(i)}))
 	}
 	assert.NoError(t, lnw.Finish())
 
-	var lnr Reader
-	lnr.Init(keys, values)
-
 	var it Iterator
-	lnr.InitIterator(&it)
+	it.Init(keys, values, nil)
 
 	for i := 0; i < count; i++ {
 		key := testhelp.KeyFrom(uint32(i)/8, 0, uint32(i))
@@ -56,7 +53,7 @@ func TestLevelNSeek(t *testing.T) {
 	assert.NoError(t, it.Err())
 }
 
-func TestLevelNSeekBoundaries(t *testing.T) {
+func TestIteratorSeekBoundaries(t *testing.T) {
 	fs, cleanup := testhelp.FS(t)
 	defer cleanup()
 
@@ -69,17 +66,14 @@ func TestLevelNSeekBoundaries(t *testing.T) {
 	var lnw Writer
 	lnw.Init(keys, values)
 
-	assert.NoError(t, lnw.Append(histdb.Key{0: 0x10, 16: 0x30}, nil))
-	assert.NoError(t, lnw.Append(histdb.Key{0: 0x10, 16: 0x40}, nil))
-	assert.NoError(t, lnw.Append(histdb.Key{0: 0x20, 16: 0x30}, nil))
-	assert.NoError(t, lnw.Append(histdb.Key{0: 0x20, 16: 0x40}, nil))
+	assert.NoError(t, lnw.Append(histdb.Key{0: 0x10, 16: 0x30}, nil, nil))
+	assert.NoError(t, lnw.Append(histdb.Key{0: 0x10, 16: 0x40}, nil, nil))
+	assert.NoError(t, lnw.Append(histdb.Key{0: 0x20, 16: 0x30}, nil, nil))
+	assert.NoError(t, lnw.Append(histdb.Key{0: 0x20, 16: 0x40}, nil, nil))
 	assert.NoError(t, lnw.Finish())
 
-	var lnr Reader
-	lnr.Init(keys, values)
-
 	var it Iterator
-	lnr.InitIterator(&it)
+	it.Init(keys, values, nil)
 
 	assert.NoError(t, it.Err())
 
@@ -104,7 +98,7 @@ func TestLevelNSeekBoundaries(t *testing.T) {
 	assert.That(t, !it.Seek(histdb.Key{0: 0x20, 16: 0x45}))
 }
 
-func BenchmarkLevelNReader(b *testing.B) {
+func BenchmarkIterator(b *testing.B) {
 	run := func(b *testing.B, n uint32) {
 		fs, cleanup := testhelp.FS(b)
 		defer cleanup()
@@ -122,15 +116,12 @@ func BenchmarkLevelNReader(b *testing.B) {
 
 		for i := uint32(0); i < n; i++ {
 			key := testhelp.KeyFrom(i/512, 0, uint32(i))
-			assert.NoError(b, lnw.Append(key, nil))
+			assert.NoError(b, lnw.Append(key, nil, nil))
 		}
 		assert.NoError(b, lnw.Finish())
 
-		var lnr Reader
-		lnr.Init(keys, values)
-
 		var it Iterator
-		lnr.InitIterator(&it)
+		it.Init(keys, values, nil)
 
 		b.ReportAllocs()
 		b.ResetTimer()

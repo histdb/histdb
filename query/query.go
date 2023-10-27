@@ -7,6 +7,8 @@ import (
 )
 
 type Query struct {
+	_ [0]func() // no equality
+
 	prog []inst
 	strs [][]byte
 	vals []value

@@ -1,6 +1,7 @@
 package store
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -11,7 +12,10 @@ import (
 
 func BenchmarkStore(b *testing.B) {
 	fs, cleanup := testhelp.FS(b)
-	defer cleanup()
+	// defer cleanup()
+	_ = cleanup
+
+	fmt.Println(fs.Base)
 
 	names := make([][]byte, b.N)
 	values := make([][]byte, b.N)

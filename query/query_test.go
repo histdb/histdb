@@ -44,8 +44,11 @@ func TestQuery(t *testing.T) {
 
 	t.Log(bm.GetCardinality(), "matching metrics")
 	t.Log(float64(bm.GetCardinality())/dur.Seconds(), "metrics/sec")
+
+	var name []byte
 	idx.MetricHashes(bm, func(u uint32, h histdb.Hash) bool {
-		t.Logf("%-10d %x %s", u, h, idx.SlowReverseMetricName(u))
+		name, _ = idx.AppendMetricName(u, name[:0])
+		t.Logf("%-10d %x %s", u, h, name)
 		return true
 	})
 }

@@ -77,11 +77,7 @@ func BenchmarkKeyWriterAppend(b *testing.B) {
 			kw.Init(fh)
 
 			for j := 0; j < n; j++ {
-				if kw.CanAppendFast() {
-					kw.AppendFast(kwEntry{})
-				} else {
-					_ = kw.AppendSlow(kwEntry{})
-				}
+				_ = kw.Append(kwEntry{})
 			}
 			_ = kw.Finish()
 		}

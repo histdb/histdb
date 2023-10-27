@@ -1,7 +1,6 @@
 package leveln
 
 import (
-	"encoding/binary"
 	"testing"
 
 	"github.com/zeebo/assert"
@@ -25,23 +24,21 @@ func TestLevelNWriterReader(t *testing.T) {
 
 	for i := 0; i < 1000; i++ {
 		key := testhelp.KeyFrom(uint32(i)/8, 0, uint32(i))
-		assert.NoError(t, lnw.Append(key, []byte{byte(i >> 8), byte(i)}))
+		assert.NoError(t, lnw.Append(key, key[:4], []byte{byte(i >> 8), byte(i)}))
 	}
 	assert.NoError(t, lnw.Finish())
 
-	var lnr Reader
-	lnr.Init(keys, values)
-
 	var it Iterator
-	lnr.InitIterator(&it)
+	it.Init(keys, values, nil)
 
 	i := 0
 	for ; it.Next(); i++ {
 		var key histdb.Key
-		binary.BigEndian.PutUint32(key.TagKeyHashPtr()[:], uint32(i)/8)
+		be.PutUint32(key.TagKeyHashPtr()[:], uint32(i)/8)
 		key.SetTimestamp(uint32(i))
 
 		assert.Equal(t, key, it.Key())
+		assert.Equal(t, it.Name(), key[:4])
 		assert.Equal(t, it.Value()[0], i/256)
 		assert.Equal(t, it.Value()[1], i%256)
 	}

@@ -1,8 +1,6 @@
 package leveln
 
 import (
-	"encoding/binary"
-
 	"github.com/zeebo/errs/v2"
 
 	"github.com/histdb/histdb"
@@ -10,11 +8,15 @@ import (
 )
 
 type krPage struct {
+	_ [0]func() // no equality
+
 	page *kwPage
 	id   uint32
 }
 
 type keyReader struct {
+	_ [0]func() // no equality
+
 	fh    filesystem.Handle
 	root  uint32
 	cache []krPage
@@ -64,8 +66,8 @@ func (k *keyReader) cachePage(depth uint, id uint32) (*kwPage, error) {
 	return p.page, err
 }
 
-func (k *keyReader) Search(key *histdb.Key) (offset uint32, ok bool, err error) {
-	keyp := binary.BigEndian.Uint64(key[0:8])
+func (k *keyReader) Search(key histdb.Key) (ent kwEntry, ok bool, err error) {
+	keyp := be.Uint64(key[0:8])
 	id := k.root
 
 	for depth := uint(0); ; depth++ {
@@ -75,7 +77,7 @@ func (k *keyReader) Search(key *histdb.Key) (offset uint32, ok bool, err error) 
 		} else {
 			page, err = k.cachePage(depth, id)
 			if err != nil {
-				return 0, false, err
+				return kwEntry{}, false, err
 			}
 		}
 
@@ -83,11 +85,14 @@ func (k *keyReader) Search(key *histdb.Key) (offset uint32, ok bool, err error) 
 		i, j := -1, int(count)
 		for j-i > 1 {
 			h := int(uint(i+j) >> 1)
+			if uint(h) >= uint(len(page.ents)) {
+				goto corrupt
+			}
 			ent := &page.ents[h]
 
 			// LessPtr does a call into the runtime when the first 8 bytes will
 			// frequently be enough to compare unequal, so try that first.
-			if keyhp := binary.BigEndian.Uint64(ent[0:8]); keyhp < keyp {
+			if keyhp := be.Uint64(ent[0:8]); keyhp < keyp {
 				i = h
 			} else if keyhp > keyp {
 				j = h
@@ -102,28 +107,39 @@ func (k *keyReader) Search(key *histdb.Key) (offset uint32, ok bool, err error) 
 			if i == -1 {
 				prev := page.hdr.Prev()
 				if prev == ^uint32(0) {
-					return 0, false, nil
+					return kwEntry{}, false, nil
 				}
 				page, err = k.cachePage(depth, prev)
 				if err != nil {
-					return 0, false, err
+					return kwEntry{}, false, err
 				}
 				count := page.hdr.Count()
 				if count == 0 {
-					return 0, false, err
+					return kwEntry{}, false, err
 				}
-				ent := &page.ents[count-1]
-				return ent.Offset(), true, nil
+				if uint(count-1) < uint(len(page.ents)) {
+					return page.ents[count-1], true, nil
+				} else {
+					goto corrupt
+				}
 			}
-			ent := &page.ents[i]
-			return ent.Offset(), true, nil
+			if uint(i) < uint(len(page.ents)) {
+				return page.ents[i], true, nil
+			} else {
+				goto corrupt
+			}
 		}
 
 		i++
 		if i >= int(count) || i >= kwEntries {
 			id = page.hdr.Next()
-		} else {
+		} else if uint(i) < uint(len(page.ents)) {
 			id = page.ents[i].Child()
+		} else {
+			goto corrupt
 		}
 	}
+
+corrupt:
+	return kwEntry{}, false, errs.Errorf("corrupt key reader")
 }

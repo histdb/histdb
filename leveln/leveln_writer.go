@@ -7,7 +7,15 @@ import (
 	"github.com/histdb/histdb/filesystem"
 )
 
+// TODO: this api kinda sucks because names were bolted on. i think we want to
+// have the writer auto-add/encode names into a memindex, but that makes testing
+// super hard because the keys have to come in sorted order for it to be correct
+// and they are hashes of the name. right now, we assume the caller has a memindex
+// that it is encoding the names through, which is a bit weird.
+
 type Writer struct {
+	_ [0]func() // no equality
+
 	err   error
 	key   histdb.Key
 	first bool
@@ -28,9 +36,11 @@ func (w *Writer) storeErr(err error) error {
 	return w.err
 }
 
-func (w *Writer) Append(key histdb.Key, value []byte) error {
+func (w *Writer) Append(key histdb.Key, name, value []byte) error {
 	if w.err != nil {
 		return w.err
+	} else if len(name) >= 256 {
+		return w.storeErr(errs.Errorf("name too large: %d", len(name)))
 	}
 
 	// if not first, we may either append or finish an old span
@@ -42,18 +52,16 @@ func (w *Writer) Append(key histdb.Key, value []byte) error {
 			}
 		}
 
-		// either mismatch or span full, so finish and record offset
-		offset, length, err := w.vw.FinishSpan()
+		// either mismatch or span full, so finish and record voff
+		voff, vlen, err := w.vw.FinishSpan()
 		if err != nil {
 			return w.storeErr(err)
 		}
 
 		var ent kwEntry
-		ent.Set(w.key, offset, length)
+		ent.Set(w.key, voff, vlen)
 
-		if w.kw.CanAppendFast() {
-			w.kw.AppendFast(ent)
-		} else if err := w.kw.AppendSlow(ent); err != nil {
+		if err := w.kw.Append(ent); err != nil {
 			return w.storeErr(err)
 		}
 	} else {
@@ -62,14 +70,17 @@ func (w *Writer) Append(key histdb.Key, value []byte) error {
 	}
 
 	// start the new span, and since it's new, the value must fit
-	w.vw.BeginSpan(key)
+	if !w.vw.BeginSpan(key, name) {
+		return w.storeErr(errs.Errorf("name too large: %d", len(name)))
+	}
 	w.key = key
 
 	if buf := w.vw.CanAppend(value); buf != nil {
 		w.vw.Append(buf, key.Timestamp(), value)
 		return nil
 	}
-	return w.storeErr(errs.Errorf("value too large"))
+
+	return w.storeErr(errs.Errorf("value too large: %d", len(value)))
 }
 
 func (w *Writer) Finish() error {
@@ -78,17 +89,15 @@ func (w *Writer) Finish() error {
 	}
 
 	if !w.first {
-		offset, length, err := w.vw.FinishSpan()
+		voff, vlen, err := w.vw.FinishSpan()
 		if err != nil {
 			return w.storeErr(err)
 		}
 
 		var ent kwEntry
-		ent.Set(w.key, offset, length)
+		ent.Set(w.key, voff, vlen)
 
-		if w.kw.CanAppendFast() {
-			w.kw.AppendFast(ent)
-		} else if err := w.kw.AppendSlow(ent); err != nil {
+		if err := w.kw.Append(ent); err != nil {
 			return w.storeErr(err)
 		}
 	}

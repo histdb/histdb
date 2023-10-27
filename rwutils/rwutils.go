@@ -30,6 +30,8 @@ type RW[T any] interface {
 }
 
 type W struct {
+	_ [0]func() // no equality
+
 	buf buffer.T
 }
 
@@ -114,6 +116,8 @@ func (w *W) Bytes(buf []byte) {
 }
 
 type R struct {
+	_ [0]func() // no equality
+
 	buf buffer.T
 	err error
 }
@@ -123,7 +127,7 @@ func (r *R) Init(buf buffer.T) {
 }
 
 func (r *R) Done() (buffer.T, error) {
-	return r.buf, r.err
+	return r.buf, errs.Wrap(r.err)
 }
 
 func (r *R) Remaining() uintptr {
@@ -247,7 +251,7 @@ func (r *R) Bytes(n int) (x []byte) {
 
 func (r *R) Invalid(err error) {
 	if r.err == nil {
-		r.err = err
+		r.err = errs.Wrap(err)
 		r.buf = buffer.T{}
 	}
 }

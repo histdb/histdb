@@ -15,8 +15,8 @@ func TestDir(t *testing.T) {
 	var dir T
 	assert.NoError(t, dir.Init(fs))
 
-	var txn Txn
-	err := dir.InitTxn(&txn, func(ops Ops) Ops {
+	var txn Dir
+	err := dir.InitDir(&txn, func(ops Ops) Ops {
 		ops.Allocate(File{Generation: 0, Kind: 0}, 100)
 		return ops
 	})

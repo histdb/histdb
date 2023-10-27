@@ -3,7 +3,6 @@ package memindex
 import (
 	"bytes"
 	"sort"
-	"strings"
 
 	"github.com/RoaringBitmap/roaring"
 
@@ -19,6 +18,8 @@ import (
 // have the same prefix faster.
 
 type T struct {
+	_ [0]func() // no equality
+
 	fixed bool
 	card  int
 
@@ -73,6 +74,10 @@ func (t *T) Fix() {
 }
 
 func (t *T) Add(metric []byte) (histdb.Hash, bool) {
+	if len(metric) == 0 || t.fixed || bytes.Count(metric, []byte{','}) >= 256 {
+		return histdb.Hash{}, false
+	}
+
 	tkeyis := make([]uint32, 0, 8)
 	tagis := make([]uint32, 0, 8)
 	var tkeyus map[uint32]struct{}
@@ -105,7 +110,7 @@ func (t *T) Add(metric []byte) (histdb.Hash, bool) {
 		}
 	}
 
-	if t.fixed || t.metrics.Len() > 1<<31-1 {
+	if t.metrics.Len() > 1<<31-1 {
 		return hash, false
 	}
 
@@ -132,23 +137,93 @@ func (t *T) Add(metric []byte) (histdb.Hash, bool) {
 	return hash, true
 }
 
+func (t *T) EncodeInto(metric []byte, out []uint32) ([]uint32, bool) {
+	if len(metric) == 0 {
+		return nil, false
+	}
+
+	tkeyis := make([]uint32, 0, 8)
+	var tkeyus map[uint32]struct{}
+
+	for rest := metric; len(rest) > 0; {
+		var tkey, tag []byte
+		tkey, tag, _, rest = metrics.PopTag(rest)
+		if len(tag) == 0 {
+			continue
+		}
+
+		tkeyh := histdb.NewTagKeyHash(tkey)
+		tkeyi, ok := t.tkey_names.Find(tkeyh)
+		if !ok {
+			return nil, false
+		}
+
+		tkeyis, tkeyus, ok = addSet(tkeyis, tkeyus, tkeyi)
+
+		if ok {
+			tagh := histdb.NewTagHash(tag)
+			tagi, ok := t.tag_names.Find(tagh)
+			if !ok {
+				return nil, false
+			}
+
+			out = append(out, tagi)
+		}
+	}
+
+	if len(out) >= 256 {
+		return nil, false
+	}
+
+	return out, true
+}
+
+func (t *T) DecodeInto(tagis []uint32, buf []byte) ([]byte, bool) {
+	if len(tagis) == 0 || len(tagis) >= 256 {
+		return nil, false
+	}
+
+	for i, tagi := range tagis {
+		tag := t.tag_names.Get(tagi)
+		if tag == nil {
+			return nil, false
+		}
+
+		if i > 0 {
+			buf = append(buf, ',')
+		}
+		buf = append(buf, tag...)
+	}
+
+	return buf, true
+}
+
 func (t *T) Cardinality() int { return t.card }
 
-func (t *T) SlowReverseMetricName(n uint32) string {
-	var out []string
+func (t *T) AppendMetricName(n uint32, buf []byte) ([]byte, bool) {
+	tagis := make([]uint32, 0, 8)
+
 	for tkeyn, tkeybm := range t.tkey_to_metrics {
 		if !tkeybm.Contains(n) {
 			continue
 		}
 		t.tkey_to_tvals[tkeyn].Iterate(func(tagn uint32) bool {
 			if t.tag_to_metrics[tagn].Contains(n) {
-				out = append(out, string(t.tag_names.Get(uint32(tagn))))
+				tagis = append(tagis, tagn)
 			}
 			return true
 		})
 	}
-	sort.Strings(out)
-	return strings.Join(out, ",")
+
+	if len(tagis) == 0 {
+		return nil, false
+	}
+
+	sort.Slice(tagis, func(i, j int) bool {
+		return tagis[i] < tagis[j]
+	})
+
+	return t.DecodeInto(tagis, buf)
 }
 
 func (t *T) MetricHashes(metrics *Bitmap, cb func(uint32, histdb.Hash) bool) {

@@ -8,18 +8,18 @@ import (
 
 	"github.com/zeebo/assert"
 
-	"github.com/histdb/histdb"
 	"github.com/histdb/histdb/buffer"
 	"github.com/histdb/histdb/metrics"
 	"github.com/histdb/histdb/rwutils"
 	"github.com/histdb/histdb/testhelp"
 )
 
-func bs(s string) []byte { return []byte(s) }
+func bs(s string) []byte       { return []byte(s) }
+func sl[T any](x ...T) []T     { return x }
+func fst[T, U any](t T, u U) T { return t }
+func snd[T, U any](t T, u U) U { return u }
 
 func TestMemindex(t *testing.T) {
-	h := func(x histdb.Hash, _ bool) histdb.Hash { return x }
-	b := func(_ histdb.Hash, x bool) bool { return x }
 
 	t.Run("Add", func(t *testing.T) {
 		var idx T
@@ -29,22 +29,48 @@ func TestMemindex(t *testing.T) {
 		}
 	})
 
+	t.Run("EncodeInto", func(t *testing.T) {
+		var idx T
+
+		idx.Add(bs("foo1=bar1,foo2=bar2,foo3=bar3"))
+
+		tagis, ok := idx.EncodeInto(bs("foo1=bar1,foo3=bar3"), nil)
+		assert.That(t, ok)
+		assert.Equal(t, tagis, []uint32{0, 2})
+
+		_, ok = idx.EncodeInto(bs("foo1=bar1,foo4=bar4"), nil)
+		assert.That(t, !ok)
+	})
+
+	t.Run("DecodeInto", func(t *testing.T) {
+		var idx T
+
+		idx.Add(bs("foo1=bar1,foo2=bar2,foo3=bar3"))
+
+		metric, ok := idx.DecodeInto([]uint32{0, 2}, nil)
+		assert.That(t, ok)
+		assert.Equal(t, string(metric), "foo1=bar1,foo3=bar3")
+
+		_, ok = idx.DecodeInto([]uint32{0, 3}, nil)
+		assert.That(t, !ok)
+	})
+
 	t.Run("Duplicate Tags", func(t *testing.T) {
 		var idx T
 
-		assert.That(t, b(idx.Add(bs("foo=bar"))))
-		assert.That(t, !b(idx.Add(bs("foo=bar"))))
-		assert.That(t, !b(idx.Add(bs("foo=bar,foo=bar"))))
-		assert.That(t, !b(idx.Add(bs("foo=bar,foo=baz"))))
+		assert.That(t, snd(idx.Add(bs("foo=bar"))))
+		assert.That(t, !snd(idx.Add(bs("foo=bar"))))
+		assert.That(t, !snd(idx.Add(bs("foo=bar,foo=bar"))))
+		assert.That(t, !snd(idx.Add(bs("foo=bar,foo=baz"))))
 	})
 
 	t.Run("Empty Value", func(t *testing.T) {
 		var idx T
 
-		assert.That(t, b(idx.Add(bs("foo=bar,baz"))))
-		assert.That(t, b(idx.Add(bs("bif"))))
-		assert.That(t, b(idx.Add(bs("baz"))))
-		assert.That(t, !b(idx.Add(bs("baz="))))
+		assert.That(t, snd(idx.Add(bs("foo=bar,baz"))))
+		assert.That(t, snd(idx.Add(bs("bif"))))
+		assert.That(t, snd(idx.Add(bs("baz"))))
+		assert.That(t, !snd(idx.Add(bs("baz="))))
 	})
 
 	type col struct {
@@ -64,16 +90,16 @@ func TestMemindex(t *testing.T) {
 		var idx T
 		c := collector()
 
-		assert.That(t, b(idx.Add(bs("k0=v0,k1=v1,k2=v2"))))
-		assert.That(t, b(idx.Add(bs("k0=v0,foo"))))
-		assert.That(t, b(idx.Add(bs("k1=v1,foo,baz"))))
-		assert.That(t, b(idx.Add(bs("k0=v1,bar"))))
+		assert.That(t, snd(idx.Add(bs("k0=v0,k1=v1,k2=v2"))))
+		assert.That(t, snd(idx.Add(bs("k0=v0,foo"))))
+		assert.That(t, snd(idx.Add(bs("k1=v1,foo,baz"))))
+		assert.That(t, snd(idx.Add(bs("k0=v1,bar"))))
 
 		idx.TagKeys(bs("k0=v0"), c.collect())
-		assert.Equal(t, c.vals, []string{"k1", "k2", "foo"})
+		assert.Equal(t, c.vals, sl("k1", "k2", "foo"))
 
 		idx.TagKeys(bs("k0"), c.collect())
-		assert.Equal(t, c.vals, []string{"k1", "k2", "foo", "bar"})
+		assert.Equal(t, c.vals, sl("k1", "k2", "foo", "bar"))
 
 		idx.TagKeys(bs("k0="), c.collect())
 		assert.Equal(t, c.vals, []string{})
@@ -82,47 +108,47 @@ func TestMemindex(t *testing.T) {
 		assert.Equal(t, c.vals, []string{})
 
 		idx.TagKeys(bs("k0=v0,k1=v1"), c.collect())
-		assert.Equal(t, c.vals, []string{"k2"})
+		assert.Equal(t, c.vals, sl("k2"))
 	})
 
 	t.Run("TagValues", func(t *testing.T) {
 		var idx T
 		c := collector()
 
-		assert.That(t, b(idx.Add(bs("k0=v0,k1=va,k2=v2"))))
-		assert.That(t, b(idx.Add(bs("k0=v0,k1=vb,k2=v3"))))
-		assert.That(t, b(idx.Add(bs("k0=v0,k2=v4"))))
-		assert.That(t, b(idx.Add(bs("k1=va,k2=v4"))))
-		assert.That(t, b(idx.Add(bs("k1=vb,k2=v4"))))
-		assert.That(t, b(idx.Add(bs("k0=v1,k2=v5"))))
-		assert.That(t, b(idx.Add(bs("k3=vx,k2=v6"))))
+		assert.That(t, snd(idx.Add(bs("k0=v0,k1=va,k2=v2"))))
+		assert.That(t, snd(idx.Add(bs("k0=v0,k1=vb,k2=v3"))))
+		assert.That(t, snd(idx.Add(bs("k0=v0,k2=v4"))))
+		assert.That(t, snd(idx.Add(bs("k1=va,k2=v4"))))
+		assert.That(t, snd(idx.Add(bs("k1=vb,k2=v4"))))
+		assert.That(t, snd(idx.Add(bs("k0=v1,k2=v5"))))
+		assert.That(t, snd(idx.Add(bs("k3=vx,k2=v6"))))
 
 		idx.TagValues(bs("k0=v0"), bs("k2"), c.collect())
-		assert.Equal(t, c.vals, []string{"v2", "v3", "v4"})
+		assert.Equal(t, c.vals, sl("v2", "v3", "v4"))
 
 		idx.TagValues(bs("k0"), bs("k2"), c.collect())
-		assert.Equal(t, c.vals, []string{"v2", "v3", "v4", "v5"})
+		assert.Equal(t, c.vals, sl("v2", "v3", "v4", "v5"))
 
 		idx.TagValues(bs(""), bs("k2"), c.collect())
-		assert.Equal(t, c.vals, []string{"v2", "v3", "v4", "v5", "v6"})
+		assert.Equal(t, c.vals, sl("v2", "v3", "v4", "v5", "v6"))
 
 		idx.TagValues(bs("k0=v0,k1=va"), bs("k2"), c.collect())
-		assert.Equal(t, c.vals, []string{"v2"})
+		assert.Equal(t, c.vals, sl("v2"))
 
 		idx.TagValues(bs("k0=v0,k1=vb"), bs("k2"), c.collect())
-		assert.Equal(t, c.vals, []string{"v3"})
+		assert.Equal(t, c.vals, sl("v3"))
 	})
 
 	t.Run("Hash", func(t *testing.T) {
 		var idx T
 
-		assert.Equal(t, h(idx.Add(bs("k0=v0"))), metrics.Hash(bs("k0=v0")))
-		assert.Equal(t, h(idx.Add(bs("k0=v0,k1=v1"))), metrics.Hash(bs("k0=v0,k1=v1")))
-		assert.Equal(t, h(idx.Add(bs("k0=v0,k1=v1"))), metrics.Hash(bs("k0=v0,k1=v1")))
-		assert.NotEqual(t, h(idx.Add(bs("k0=v0,k1=v1"))), metrics.Hash(bs("k0=v0,k1=v2")))
-		assert.Equal(t, h(idx.Add(bs("k0=v0,k0=v1"))), metrics.Hash(bs("k0=v0,k0=v1")))
-		assert.Equal(t, h(idx.Add(bs("k0=v0,k0=v1"))), metrics.Hash(bs("k0=v0")))
-		assert.Equal(t, h(idx.Add(bs("k0=v0"))), metrics.Hash(bs("k0=v0,k0=v1")))
+		assert.Equal(t, fst(idx.Add(bs("k0=v0"))), metrics.Hash(bs("k0=v0")))
+		assert.Equal(t, fst(idx.Add(bs("k0=v0,k1=v1"))), metrics.Hash(bs("k0=v0,k1=v1")))
+		assert.Equal(t, fst(idx.Add(bs("k0=v0,k1=v1"))), metrics.Hash(bs("k0=v0,k1=v1")))
+		assert.NotEqual(t, fst(idx.Add(bs("k0=v0,k1=v1"))), metrics.Hash(bs("k0=v0,k1=v2")))
+		assert.Equal(t, fst(idx.Add(bs("k0=v0,k0=v1"))), metrics.Hash(bs("k0=v0,k0=v1")))
+		assert.Equal(t, fst(idx.Add(bs("k0=v0,k0=v1"))), metrics.Hash(bs("k0=v0")))
+		assert.Equal(t, fst(idx.Add(bs("k0=v0"))), metrics.Hash(bs("k0=v0,k0=v1")))
 	})
 
 	t.Run("QueryFilter", func(t *testing.T) {
@@ -227,6 +253,32 @@ func BenchmarkMemindex(b *testing.B) {
 		// mquery = bs(string(query) + "," + string(tkey))
 		// mquery = bs(`name,field,app`)
 	)
+
+	b.Run("EncodeInto", func(b *testing.B) {
+		b.ReportAllocs()
+
+		tagis, ok := idx.EncodeInto(query, nil)
+		assert.That(b, ok)
+
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			_, _ = idx.EncodeInto(query, tagis[:0])
+		}
+	})
+
+	b.Run("DecodeInto", func(b *testing.B) {
+		b.ReportAllocs()
+
+		tagis, ok := idx.EncodeInto(query, nil)
+		assert.That(b, ok)
+		buf, ok := idx.DecodeInto(tagis, nil)
+		assert.That(b, ok)
+
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			_, _ = idx.DecodeInto(tagis, buf[:0])
+		}
+	})
 
 	b.Run("TagKeys", func(b *testing.B) {
 		b.ReportAllocs()

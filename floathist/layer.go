@@ -39,6 +39,8 @@ const (
 //
 
 type layer0 struct {
+	_ [0]func() // no equality
+
 	bm  l0Bitmap
 	l1s [l0S]*layer1
 }
@@ -48,6 +50,8 @@ type layer0 struct {
 //
 
 type layer1 struct {
+	_ [0]func() // no equality
+
 	bm  l1Bitmap
 	l2s [l1S]layer2
 }

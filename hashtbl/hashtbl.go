@@ -67,11 +67,15 @@ func np2(x uint64) uint64  { return 1 << (uint(bits.Len64(x-1)) % 64) }
 func log2(x uint64) uint64 { return uint64(bits.Len64(x)-1) % 64 }
 
 type slot[K, V any] struct {
+	_ [0]func() // no equality
+
 	k K
 	v V
 }
 
 type slotIndex[K, V any] struct {
+	_ [0]func() // no equality
+
 	s *slot[K, V]
 	m *uint8
 	i uint64
@@ -88,6 +92,8 @@ func (si slotIndex[K, V]) hasJump() bool    { return si.meta()&maskDistance != 0
 func (si slotIndex[K, V]) jump() uint8      { return si.meta() & maskDistance }
 
 type T[K Key, V any] struct {
+	_ [0]func() // no equality
+
 	slots []slot[K, V]
 	metas []uint8
 	mask  uint64
@@ -172,7 +178,7 @@ func (t *T[K, V]) Insert(k K, v V) (V, bool) {
 
 func (t *T[K, V]) insertDirectHit(si slotIndex[K, V], k K, v V) (V, bool) {
 	if si.meta() == flagsEmpty {
-		si.setSlot(slot[K, V]{k, v})
+		si.setSlot(slot[K, V]{k: k, v: v})
 		si.setMeta(flagsHit)
 		t.eles++
 		return v, false
@@ -207,7 +213,7 @@ func (t *T[K, V]) insertDirectHit(si slotIndex[K, V], k K, v V) (V, bool) {
 		}
 	}
 
-	si.setSlot(slot[K, V]{k, v})
+	si.setSlot(slot[K, V]{k: k, v: v})
 	si.setMeta(flagsHit)
 	t.eles++
 	return v, false
@@ -220,7 +226,7 @@ func (t *T[K, V]) insertNew(si slotIndex[K, V], k K, v V) (V, bool) {
 		return t.Insert(k, v)
 	}
 
-	free.setSlot(slot[K, V]{k, v})
+	free.setSlot(slot[K, V]{k: k, v: v})
 	free.setMeta(flagsHit | flagsList)
 	si.setJump(ji)
 	t.eles++
@@ -239,7 +245,7 @@ func (t *T[K, V]) findParent(si slotIndex[K, V]) slotIndex[K, V] {
 	parent := t.findDirectHit(si)
 	for {
 		next := t.next(parent, parent.jump())
-		if next == si {
+		if next.s == si.s {
 			return parent
 		}
 		parent = next

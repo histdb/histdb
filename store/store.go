@@ -1,32 +1,42 @@
 package store
 
 import (
-	"io"
-
 	"github.com/zeebo/errs/v2"
 
 	"github.com/histdb/histdb"
 	"github.com/histdb/histdb/atomicdir"
-	"github.com/histdb/histdb/buffer"
 	"github.com/histdb/histdb/filesystem"
 	"github.com/histdb/histdb/level0"
 	"github.com/histdb/histdb/leveln"
 	"github.com/histdb/histdb/memindex"
-	"github.com/histdb/histdb/rwutils"
+	"github.com/histdb/histdb/mergeiter"
 )
 
+type Config struct {
+	_ [0]func() // no equality
+
+	L0Width int // number of files in l0 before compacting
+}
+
 type T struct {
-	fs  *filesystem.T
-	dir atomicdir.T
-	txn atomicdir.Txn
+	_ [0]func() // no equality
+
+	cfg Config
+
+	fs   *filesystem.T
+	at   atomicdir.T
+	cdir atomicdir.Dir
+	ndir atomicdir.Dir
+
+	comp struct {
+		dir atomicdir.Dir
+		its []mergeiter.Iterator
+		lnw leveln.Writer
+		mi  mergeiter.T
+	}
 
 	l0  level0.T
 	l0m memindex.T // all l0s share memindex
-
-	// readonly data
-	l0s  []level0.T
-	lns  []leveln.Reader
-	lnms []memindex.T
 }
 
 func (t *T) Init(fs *filesystem.T) (err error) {
@@ -34,14 +44,14 @@ func (t *T) Init(fs *filesystem.T) (err error) {
 		fs: fs,
 	}
 
-	if err := t.dir.Init(fs); err != nil {
-		return err
+	if err := t.at.Init(fs); err != nil {
+		return errs.Wrap(err)
 	}
 
-	if ok, err := t.dir.InitCurrent(&t.txn); err != nil {
-		return err
+	if ok, err := t.at.InitCurrent(&t.cdir); err != nil {
+		return errs.Wrap(err)
 	} else if !ok {
-		err := t.dir.InitTxn(&t.txn, func(ops atomicdir.Ops) atomicdir.Ops {
+		err := t.at.InitDir(&t.cdir, func(ops atomicdir.Ops) atomicdir.Ops {
 			ops.Allocate(atomicdir.File{
 				Generation: 0,
 				Kind:       atomicdir.KindLevel0,
@@ -49,54 +59,24 @@ func (t *T) Init(fs *filesystem.T) (err error) {
 			return ops
 		})
 		if err != nil {
-			return err
+			return errs.Wrap(err)
 		}
 	}
 	defer func() {
 		if err != nil {
-			err = errs.Combine(err, t.txn.Close())
+			err = errs.Combine(err, t.cdir.Close())
 		}
 	}()
 
 	addIndex := func(key histdb.Key, name, value []byte) { t.l0m.Add(name) }
 
-	l0s := t.txn.L0s()
-	lns := t.txn.LNs()
+	l0s := t.cdir.L0s()
 
 	// load the earliest l0
 	if err := t.l0.Init(l0s[0].Handle, addIndex); err != nil {
-		return err
+		return errs.Wrap(err)
 	}
 	l0s = l0s[1:]
-
-	// load the remaining l0s
-	t.l0s = make([]level0.T, len(l0s))
-	for i, fh := range l0s {
-		if err := t.l0s[i].Init(fh.Handle, addIndex); err != nil {
-			return err
-		}
-	}
-
-	// load the lns
-	t.lns = make([]leveln.Reader, len(lns))
-	t.lnms = make([]memindex.T, len(lns))
-
-	for i, ln := range lns {
-		t.lns[i].Init(ln.Keys.Handle, ln.Values.Handle)
-
-		// memindex holds on to the underlying bytes, so no reuse
-		data, err := io.ReadAll(ln.Memindex.Handle)
-		if err != nil {
-			return errs.Wrap(err)
-		}
-
-		var r rwutils.R
-		r.Init(buffer.OfLen(data))
-		memindex.ReadFrom(&t.lnms[i], &r)
-		if _, err := r.Done(); err != nil {
-			return errs.Wrap(err)
-		}
-	}
 
 	return nil
 }
@@ -111,40 +91,42 @@ func (t *T) Write(ts uint32, name, value []byte) (err error) {
 	for {
 		ok, err := t.l0.Append(key, name, value)
 		if err != nil {
-			return err
+			return errs.Wrap(err)
 		} else if ok {
 			return nil
 		}
 
-		var txn atomicdir.Txn
-		if err := t.dir.InitTxn(&txn, func(ops atomicdir.Ops) atomicdir.Ops {
-			for _, fh := range t.txn.FHs() {
-				ops.Include(&t.txn, fh.File)
+		if err := t.at.InitDir(&t.ndir, func(ops atomicdir.Ops) atomicdir.Ops {
+			for _, fh := range t.cdir.FHs() {
+				ops.Include(&t.cdir, fh.File)
 			}
 			ops.Allocate(atomicdir.File{
-				Generation: t.txn.MaxGen() + 1,
+				Generation: t.cdir.MaxGen() + 1,
 				Kind:       atomicdir.KindLevel0,
 			}, level0.L0DataSize)
 			return ops
 		}); err != nil {
-			return errs.Combine(err, txn.Close())
+			return errs.Wrap(errs.Combine(err, t.ndir.Close()))
 		}
 
-		if err := t.dir.SetCurrent(&txn); err != nil {
-			return errs.Combine(err, txn.Close())
+		if err := t.at.SetCurrent(&t.ndir); err != nil {
+			return errs.Wrap(errs.Combine(err, t.ndir.Close()))
 		}
+
+		// TODO: errors here should put the store into an invalid state
+		// where it has to reopen or something.
 
 		// safety: l0.Init can't cause any mutations to t.l0
 		l0 := t.l0
-		if err := l0.Init(txn.L0s()[0].Handle, nil); err != nil {
-			return errs.Combine(err, txn.Close())
+		if err := l0.Init(t.ndir.L0s()[0].Handle, nil); err != nil {
+			return errs.Wrap(errs.Combine(err, t.ndir.Close()))
 		}
 
-		if err := t.txn.Close(); err != nil {
-			return errs.Combine(err, txn.Close())
+		if err := t.cdir.Close(); err != nil {
+			return errs.Wrap(errs.Combine(err, t.ndir.Close()))
 		}
 
-		t.txn = txn
-		t.l0 = l0
+		// swap curr and next now that we've fully succeeded
+		t.cdir, t.ndir = t.ndir, t.cdir
 	}
 }

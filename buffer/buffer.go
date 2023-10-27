@@ -15,6 +15,8 @@ type (
 //
 
 type T struct {
+	_ [0]func() // no equality
+
 	base ptr
 	pos  uptr
 	cap  uptr

@@ -241,5 +241,5 @@ func (t *T) InitIterator(it *Iterator) (err error) {
 	} else {
 		it.Init(t.fh)
 	}
-	return err
+	return errs.Wrap(err)
 }

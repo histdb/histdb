@@ -6,11 +6,15 @@ import (
 )
 
 type span struct {
+	_ [0]func() // no equality
+
 	begin uint32
 	end   uint32
 }
 
 type T[K hashtbl.Key] struct {
+	_ [0]func() // no equality
+
 	buf   []byte
 	idxs  hashtbl.T[K, hashtbl.U32]
 	spans []span
