@@ -45,14 +45,14 @@ func AppendTo(t *T, w *rwutils.W) {
 	bm := t.l0.bm.AtomicClone()
 	w.Uint16(uint16(bm.Uint64()))
 
-	for ; !bm.Empty(); bm.Next() {
+	for ; !bm.Empty(); bm.ClearLowest() {
 		i := bm.Lowest()
 		l1 := layer1_load(&t.l0.l1s[i])
 
 		bm := l1.bm.AtomicClone()
 		w.Uint16(uint16(bm.Uint64()))
 
-		for ; !bm.Empty(); bm.Next() {
+		for ; !bm.Empty(); bm.ClearLowest() {
 			i := bm.Lowest()
 			l2 := layer2_load(&l1.l2s[i])
 
@@ -74,7 +74,7 @@ func AppendTo(t *T, w *rwutils.W) {
 // ReadFrom implements rwutils.RW and is not safe to call with concurrent mutations.
 func ReadFrom(t *T, r *rwutils.R) {
 	bm := newL0Bitmap(uint64(r.Uint16()))
-	for ; !bm.Empty(); bm.Next() {
+	for ; !bm.Empty(); bm.ClearLowest() {
 		l1i := bm.Lowest()
 		l1 := t.l0.l1s[l1i]
 
@@ -85,7 +85,7 @@ func ReadFrom(t *T, r *rwutils.R) {
 		}
 
 		bm := newL1Bitmap(uint64(r.Uint16()))
-		for ; !bm.Empty(); bm.Next() {
+		for ; !bm.Empty(); bm.ClearLowest() {
 			l2i := bm.Lowest()
 			l2 := l1.l2s[l2i]
 
@@ -95,7 +95,7 @@ func ReadFrom(t *T, r *rwutils.R) {
 			}
 
 			bm := newL2Bitmap(r.Uint64())
-			for ; !bm.Empty(); bm.Next() {
+			for ; !bm.Empty(); bm.ClearLowest() {
 				k := bm.Lowest()
 
 				val := r.Varint() + layer2_loadCounter(l2, k)

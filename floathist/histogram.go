@@ -28,11 +28,11 @@ type T struct {
 // Reset clears the histogram without freeing the memory it is using. It is
 // not safe to call with concurrent reads or writes to h.
 func (t *T) Reset() {
-	for bm := t.l0.bm.AtomicClone(); !bm.Empty(); bm.Next() {
+	for bm := t.l0.bm.AtomicClone(); !bm.Empty(); bm.ClearLowest() {
 		i := bm.Lowest()
 		l1 := layer1_load(&t.l0.l1s[i])
 
-		for bm := l1.bm.AtomicClone(); !bm.Empty(); bm.Next() {
+		for bm := l1.bm.AtomicClone(); !bm.Empty(); bm.ClearLowest() {
 			j := bm.Lowest()
 			l2 := layer2_load(&l1.l2s[j])
 
@@ -44,7 +44,7 @@ func (t *T) Reset() {
 // Merge adds all of the values from g into h. It is not safe to call with
 // concurrent mutations to g or h.
 func (t *T) Merge(g *T) error {
-	for bm := g.l0.bm.AtomicClone(); !bm.Empty(); bm.Next() {
+	for bm := g.l0.bm.AtomicClone(); !bm.Empty(); bm.ClearLowest() {
 		l1idx := bm.Lowest()
 		l1g := g.l0.l1s[l1idx]
 		l1h := t.l0.l1s[l1idx]
@@ -55,7 +55,7 @@ func (t *T) Merge(g *T) error {
 			t.l0.bm.AtomicSetIdx(l1idx)
 		}
 
-		for bm := l1g.bm.AtomicClone(); !bm.Empty(); bm.Next() {
+		for bm := l1g.bm.AtomicClone(); !bm.Empty(); bm.ClearLowest() {
 			l2idx := bm.Lowest()
 			l2g := l1g.l2s[l2idx]
 			l2h := l1h.l2s[l2idx]
@@ -184,11 +184,11 @@ func (t *T) Max() float32 {
 //
 // It is safe to be called concurrently.
 func (t *T) Total() (total uint64) {
-	for bm := t.l0.bm.AtomicClone(); !bm.Empty(); bm.Next() {
+	for bm := t.l0.bm.AtomicClone(); !bm.Empty(); bm.ClearLowest() {
 		i := bm.Lowest()
 		l1 := layer1_load(&t.l0.l1s[i])
 
-		for bm := l1.bm.AtomicClone(); !bm.Empty(); bm.Next() {
+		for bm := l1.bm.AtomicClone(); !bm.Empty(); bm.ClearLowest() {
 			j := bm.Lowest()
 			l2 := layer2_load(&l1.l2s[j])
 
@@ -206,11 +206,11 @@ func (t *T) Total() (total uint64) {
 func (t *T) Quantile(q float64) (v float32) {
 	target, acc := uint64(q*float64(t.Total())+0.5), uint64(0)
 
-	for bm := t.l0.bm.AtomicClone(); !bm.Empty(); bm.Next() {
+	for bm := t.l0.bm.AtomicClone(); !bm.Empty(); bm.ClearLowest() {
 		i := bm.Lowest()
 		l1 := layer1_load(&t.l0.l1s[i])
 
-		for bm := l1.bm.AtomicClone(); !bm.Empty(); bm.Next() {
+		for bm := l1.bm.AtomicClone(); !bm.Empty(); bm.ClearLowest() {
 			j := bm.Lowest()
 			l2 := layer2_load(&l1.l2s[j])
 
@@ -248,11 +248,11 @@ func (t *T) CDF(v float32) float64 {
 
 	var sum, total uint64
 
-	for bm := t.l0.bm.AtomicClone(); !bm.Empty(); bm.Next() {
+	for bm := t.l0.bm.AtomicClone(); !bm.Empty(); bm.ClearLowest() {
 		i := bm.Lowest()
 		l1 := layer1_load(&t.l0.l1s[i])
 
-		for bm := l1.bm.AtomicClone(); !bm.Empty(); bm.Next() {
+		for bm := l1.bm.AtomicClone(); !bm.Empty(); bm.ClearLowest() {
 			j := bm.Lowest()
 			l2 := layer2_load(&l1.l2s[j])
 
@@ -282,11 +282,11 @@ func (t *T) CDF(v float32) float64 {
 func (t *T) Summary() (total, sum, avg, vari float64) {
 	var total2 float64
 
-	for bm := t.l0.bm.AtomicClone(); !bm.Empty(); bm.Next() {
+	for bm := t.l0.bm.AtomicClone(); !bm.Empty(); bm.ClearLowest() {
 		i := bm.Lowest()
 		l1 := layer1_load(&t.l0.l1s[i])
 
-		for bm := l1.bm.AtomicClone(); !bm.Empty(); bm.Next() {
+		for bm := l1.bm.AtomicClone(); !bm.Empty(); bm.ClearLowest() {
 			j := bm.Lowest()
 			l2 := layer2_load(&l1.l2s[j])
 
@@ -326,11 +326,11 @@ func (t *T) Summary() (total, sum, avg, vari float64) {
 func (t *T) Distribution(cb func(value float32, count, total uint64)) {
 	acc, total := uint64(0), t.Total()
 
-	for bm := t.l0.bm.AtomicClone(); !bm.Empty(); bm.Next() {
+	for bm := t.l0.bm.AtomicClone(); !bm.Empty(); bm.ClearLowest() {
 		i := bm.Lowest()
 		l1 := layer1_load(&t.l0.l1s[i])
 
-		for bm := l1.bm.AtomicClone(); !bm.Empty(); bm.Next() {
+		for bm := l1.bm.AtomicClone(); !bm.Empty(); bm.ClearLowest() {
 			j := bm.Lowest()
 			l2 := layer2_load(&l1.l2s[j])
 

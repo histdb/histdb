@@ -5,8 +5,6 @@ import (
 	"math/bits"
 	"sync/atomic"
 	"unsafe"
-
-	"github.com/histdb/histdb/bitmap"
 )
 
 // https://repositorio.inesctec.pt/bitstream/123456789/5465/1/P-00F-YAG.pdf
@@ -73,9 +71,9 @@ type T[K comparable, V any] struct {
 type header[K comparable, V any] struct {
 	_ [0]func() // no equality
 
-	level  uint
-	prev   *T[K, V]
-	bitmap bitmap.T
+	level uint
+	prev  *T[K, V]
+	bmap  bmap
 }
 
 func (t *T[K, V]) getHashBucket(hash uint64) (*ptr, uint) {
@@ -116,7 +114,7 @@ func (t *T[K, V]) insert(k K, h uint64, lv lazyValue[V]) *node[K, V] {
 	if entryRef == nil {
 		newNode := &node[K, V]{key: k, hash: h, value: lv.get(), next: tag(t)}
 		if cas(bucket, nil, ptr(newNode)) {
-			t.bitmap.AtomicSetIdx(idx)
+			t.bmap.AtomicSetIdx(idx)
 			return newNode
 		}
 		entryRef = load(bucket)
@@ -187,7 +185,7 @@ func (t *T[K, V]) adjustNode(n *node[K, V]) {
 	entryRef := load(bucket)
 	if entryRef == nil {
 		if cas(bucket, nil, ptr(n)) {
-			t.bitmap.AtomicSetIdx(idx)
+			t.bmap.AtomicSetIdx(idx)
 			return
 		}
 		entryRef = load(bucket)
@@ -279,13 +277,13 @@ type Iterator[K comparable, V any] struct {
 	top   int
 	stack [_maxLevel]struct {
 		table *T[K, V]
-		pos   bitmap.T
+		pos   bmap
 	}
 }
 
 func (t *T[K, V]) Iterator() (itr Iterator[K, V]) {
 	itr.stack[0].table = t
-	itr.stack[0].pos = t.bitmap.AtomicClone()
+	itr.stack[0].pos = t.bmap.AtomicClone()
 	return itr
 }
 
@@ -306,7 +304,7 @@ next:
 			goto next
 		}
 		idx := is.pos.Lowest()
-		is.pos.Next()
+		is.pos.ClearLowest()
 
 		bucket := &is.table.buckets[idx&127]
 		entryRef := load(bucket)
@@ -348,7 +346,7 @@ next:
 	if nextTable != is.table {
 		i.top++
 		i.stack[i.top].table = nextTable
-		i.stack[i.top].pos = nextTable.bitmap.AtomicClone()
+		i.stack[i.top].pos = nextTable.bmap.AtomicClone()
 	}
 
 	// walk to the next entry in the top of the stack table
