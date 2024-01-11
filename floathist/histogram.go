@@ -220,14 +220,13 @@ func (t *T) Quantile(q float64) (v float32) {
 			}
 
 			for k := uint32(0); k < l2S; k++ {
-				count := layer2_loadCounter(l2, k)
-				if acc+count >= target {
-					if target-acc < (acc+count)-target {
-						return lowerValue(i, j, k)
-					}
+				if acc == target {
+					return lowerValue(i, j, k)
+				}
+				acc += layer2_loadCounter(l2, k)
+				if acc >= target {
 					return upperValue(i, j, k)
 				}
-				acc += count
 			}
 		}
 	}
