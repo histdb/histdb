@@ -49,8 +49,8 @@ func TestHistogram(t *testing.T) {
 		}
 
 		assert.Equal(t, h.Quantile(0), 0.)
-		assert.Equal(t, h.Quantile(.25), 250.)
-		assert.Equal(t, h.Quantile(.5), 500.)
+		assert.Equal(t, h.Quantile(.25), 248.)
+		assert.Equal(t, h.Quantile(.5), 496.)
 		assert.Equal(t, h.Quantile(1), 1000.)
 		assert.Equal(t, h.Quantile(2), 1000.)
 	})

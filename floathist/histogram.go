@@ -147,10 +147,16 @@ func (t *T) Min() float32 {
 	bm0 := t.l0.bm.AtomicClone()
 	i := bm0.Lowest()
 	l1 := layer1_load(&t.l0.l1s[i])
+	if l1 == nil {
+		return float32(math.NaN())
+	}
 
 	bm1 := l1.bm.AtomicClone()
 	j := bm1.Lowest()
 	l2 := layer2_load(&l1.l2s[j])
+	if l2 == nil {
+		return float32(math.NaN())
+	}
 
 	for k := uint32(0); k < l2S; k++ {
 		if layer2_loadCounter(l2, uint32(k)) > 0 {
@@ -167,10 +173,16 @@ func (t *T) Max() float32 {
 	bm0 := t.l0.bm.AtomicClone()
 	i := bm0.Highest()
 	l1 := layer1_load(&t.l0.l1s[i])
+	if l1 == nil {
+		return float32(math.NaN())
+	}
 
 	bm1 := l1.bm.AtomicClone()
 	j := bm1.Highest()
 	l2 := layer2_load(&l1.l2s[j])
+	if l2 == nil {
+		return float32(math.NaN())
+	}
 
 	for k := int32(l2S) - 1; k >= 0; k-- {
 		if layer2_loadCounter(l2, uint32(k)) > 0 {
@@ -220,12 +232,9 @@ func (t *T) Quantile(q float64) (v float32) {
 			}
 
 			for k := uint32(0); k < l2S; k++ {
-				if acc == target {
-					return lowerValue(i, j, k)
-				}
 				acc += layer2_loadCounter(l2, k)
-				if acc >= target {
-					return upperValue(i, j, k)
+				if acc > target {
+					return lowerValue(i, j, k)
 				}
 			}
 		}
