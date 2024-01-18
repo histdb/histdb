@@ -12,23 +12,25 @@ type span struct {
 	end   uint32
 }
 
-type T[K hashtbl.Key] struct {
+type Numeric interface{ ~uint32 | ~uint64 }
+
+type T[K hashtbl.Key, V Numeric] struct {
 	_ [0]func() // no equality
 
 	buf   []byte
-	idxs  hashtbl.T[K, hashtbl.U64]
+	idxs  hashtbl.T[K, V]
 	spans []span
 }
 
-func (t *T[K]) Buf() []byte { return t.buf }
+func (t *T[K, V]) Buf() []byte { return t.buf }
 
-func (t *T[K]) Len() int {
+func (t *T[K, V]) Len() int {
 	if t == nil {
 		return 0
 	}
 	return t.idxs.Len()
 }
-func (t *T[K]) Size() uint64 {
+func (t *T[K, V]) Size() uint64 {
 	return 0 +
 		/* buf   */ sizeof.Slice(t.buf) +
 		/* idxs  */ t.idxs.Size() +
@@ -36,8 +38,8 @@ func (t *T[K]) Size() uint64 {
 		0
 }
 
-func (t *T[K]) Put(h K, v []byte) uint64 {
-	n, ok := t.idxs.Insert(h, hashtbl.U64(len(t.spans)))
+func (t *T[K, V]) Put(h K, v []byte) V {
+	n, ok := t.idxs.Insert(h, V(len(t.spans)))
 	if !ok && len(v) > 0 {
 		t.spans = append(t.spans, span{
 			begin: uint32(len(t.buf)),
@@ -45,15 +47,12 @@ func (t *T[K]) Put(h K, v []byte) uint64 {
 		})
 		t.buf = append(t.buf, v...)
 	}
-	return uint64(n)
+	return n
 }
 
-func (t *T[K]) Find(h K) (uint64, bool) {
-	v, ok := t.idxs.Find(h)
-	return uint64(v), ok
-}
+func (t *T[K, V]) Find(h K) (V, bool) { return t.idxs.Find(h) }
 
-func (t *T[K]) Get(n uint64) []byte {
+func (t *T[K, V]) Get(n V) []byte {
 	if uint64(n) < uint64(len(t.spans)) {
 		s := t.spans[n]
 		b, e := uint64(s.begin), uint64(s.end)

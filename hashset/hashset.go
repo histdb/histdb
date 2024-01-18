@@ -11,35 +11,33 @@ type Key interface {
 	hashtbl.Key
 }
 
-type T[K Key] struct {
+type Numeric interface{ ~uint32 | ~uint64 }
+
+type T[K Key, V Numeric] struct {
 	_ [0]func() // no equality
 
-	set  hashtbl.T[K, hashtbl.U64]
+	set  hashtbl.T[K, V]
 	list []K
 }
 
-func (t *T[K]) Len() int { return len(t.list) }
+func (t *T[K, V]) Len() int { return len(t.list) }
 
-func (t *T[K]) Size() uint64 {
+func (t *T[K, V]) Size() uint64 {
 	return 0 +
 		/* set  */ t.set.Size() +
 		/* list */ sizeof.Slice(t.list) +
 		0
 }
 
-func (t *T[K]) Fix() {
-	t.set = hashtbl.T[K, hashtbl.U64]{}
-}
+func (t *T[K, V]) Fix() { t.set = hashtbl.T[K, V]{} }
 
-func (t *T[K]) Insert(k K) (uint64, bool) {
-	idx, ok := t.set.Insert(k, hashtbl.U64(len(t.list)))
+func (t *T[K, V]) Insert(k K) (V, bool) {
+	idx, ok := t.set.Insert(k, V(len(t.list)))
 	if ok {
-		return uint64(idx), ok
+		return idx, ok
 	}
 	t.list = append(t.list, k)
-	return uint64(idx), false
+	return idx, false
 }
 
-func (t *T[K]) Hash(idx uint64) K {
-	return t.list[idx]
-}
+func (t *T[K, V]) Hash(idx V) K { return t.list[idx] }

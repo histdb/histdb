@@ -6,14 +6,30 @@ import (
 
 	"github.com/RoaringBitmap/roaring/roaring64"
 
+	"github.com/histdb/histdb/hashtbl"
 	"github.com/histdb/histdb/sizeof"
 )
 
 const orParallelism = 0
 
-type Bitmap = roaring64.Bitmap
+//
+// bitmap parameters
+//
 
-var queryPool = sync.Pool{New: func() interface{} { return roaring64.New() }}
+type (
+	Bitmap = roaring64.Bitmap
+	Id     = uint64
+	rwId   = hashtbl.U64
+)
+
+func newBitmap() *Bitmap           { return roaring64.New() }
+func parOr(bms ...*Bitmap) *Bitmap { return roaring64.ParOr(0, bms...) }
+
+//
+//
+//
+
+var queryPool = sync.Pool{New: func() interface{} { return newBitmap() }}
 
 func replaceBitmap(m *Bitmap) {
 	queryPool.Put(m)
@@ -27,11 +43,11 @@ func acquireBitmap() *Bitmap {
 	return bm
 }
 
-func getBitmap(bmsp *[]*Bitmap, n uint64) (bm *Bitmap) {
-	if bms := *bmsp; n < uint64(len(bms)) {
+func getBitmap(bmsp *[]*Bitmap, n Id) (bm *Bitmap) {
+	if bms := *bmsp; n < Id(len(bms)) {
 		bm = bms[n]
-	} else if n == uint64(len(bms)) {
-		bm = roaring64.New()
+	} else if n == Id(len(bms)) {
+		bm = newBitmap()
 		*bmsp = append(bms, bm)
 	} else {
 		panic(fmt.Sprintf("petname non-monotonic: req=%d len=%d", n, len(bms)))
@@ -73,8 +89,8 @@ func addSet[T comparable](l []T, s map[T]struct{}, v T) ([]T, map[T]struct{}, bo
 	return l, s, true
 }
 
-func iter(bm *Bitmap, cb func(uint64) bool) {
-	var buf [64]uint64
+func iter(bm *Bitmap, cb func(Id) bool) {
+	var buf [64]Id
 	it := bm.ManyIterator()
 	for {
 		n := it.NextMany(buf[:])

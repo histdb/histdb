@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"math/bits"
 
-	"github.com/RoaringBitmap/roaring/roaring64"
 	"github.com/zeebo/errs/v2"
 
 	"github.com/histdb/histdb/hashset"
@@ -68,7 +67,7 @@ func ReadFrom(t *T, r *rwutils.R) {
 
 		bms := make([]*Bitmap, n)
 		for i := range bms {
-			bm := roaring64.New()
+			bm := newBitmap()
 			_, err := bm.ReadFrom(bytes.NewBuffer(r.Bytes(int(r.Varint()))))
 			if err != nil {
 				r.Invalid(err)

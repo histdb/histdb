@@ -9,15 +9,15 @@ import (
 	"github.com/histdb/histdb/rwutils"
 )
 
-type RW[K hashtbl.Key, RWK rwutils.RW[K]] T[K]
+type RW[K hashtbl.Key, RWK rwutils.RW[K], V Numeric, RWV rwutils.RW[V]] T[K, V]
 
-func (rw *RW[K, RWK]) AppendTo(w *rwutils.W) { AppendTo[K, RWK]((*T[K])(rw), w) }
-func (rw *RW[K, RWK]) ReadFrom(r *rwutils.R) { ReadFrom[K, RWK]((*T[K])(rw), r) }
+func (rw *RW[K, RWK, V, RWV]) AppendTo(w *rwutils.W) { AppendTo[K, RWK, V, RWV]((*T[K, V])(rw), w) }
+func (rw *RW[K, RWK, V, RWV]) ReadFrom(r *rwutils.R) { ReadFrom[K, RWK, V, RWV]((*T[K, V])(rw), r) }
 
-func AppendTo[K hashtbl.Key, RWK rwutils.RW[K]](t *T[K], w *rwutils.W) {
+func AppendTo[K hashtbl.Key, RWK rwutils.RW[K], V Numeric, RWV rwutils.RW[V]](t *T[K, V], w *rwutils.W) {
 	w.Varint(uint64(len(t.buf)))
 	w.Bytes(t.buf)
-	hashtbl.AppendTo[K, RWK](&t.idxs, w)
+	hashtbl.AppendTo[K, RWK, V, RWV](&t.idxs, w)
 	w.Varint(uint64(len(t.spans)))
 	for _, span := range t.spans {
 		w.Uint32(span.begin)
@@ -25,9 +25,9 @@ func AppendTo[K hashtbl.Key, RWK rwutils.RW[K]](t *T[K], w *rwutils.W) {
 	}
 }
 
-func ReadFrom[K hashtbl.Key, RWK rwutils.RW[K]](t *T[K], r *rwutils.R) {
+func ReadFrom[K hashtbl.Key, RWK rwutils.RW[K], V Numeric, RWV rwutils.RW[V]](t *T[K, V], r *rwutils.R) {
 	t.buf = r.Bytes(int(r.Varint()))
-	hashtbl.ReadFrom[K, RWK](&t.idxs, r)
+	hashtbl.ReadFrom[K, RWK, V, RWV](&t.idxs, r)
 
 	n := r.Varint()
 	if hi, lo := bits.Mul64(n, 8); hi > 0 || lo > uint64(r.Remaining()) {

@@ -6,11 +6,12 @@ import (
 	"github.com/zeebo/assert"
 
 	"github.com/histdb/histdb"
+	"github.com/histdb/histdb/hashtbl"
 	"github.com/histdb/histdb/rwutils"
 )
 
 func TestHashSet(t *testing.T) {
-	var hs T[histdb.Hash]
+	var hs T[histdb.Hash, hashtbl.U64]
 
 	hs.Insert(histdb.Hash{1})
 	hs.Insert(histdb.Hash{2})
@@ -26,7 +27,7 @@ func TestHashSet(t *testing.T) {
 	var r rwutils.R
 	r.Init(w.Done().Reset())
 
-	var ms2 T[histdb.Hash]
+	var ms2 T[histdb.Hash, hashtbl.U64]
 	ReadFrom(&ms2, &r)
 
 	assert.Equal(t, ms2.Hash(0), histdb.Hash{1})
