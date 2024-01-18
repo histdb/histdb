@@ -4,16 +4,16 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/RoaringBitmap/roaring"
+	"github.com/RoaringBitmap/roaring/roaring64"
 
 	"github.com/histdb/histdb/sizeof"
 )
 
 const orParallelism = 0
 
-type Bitmap = roaring.Bitmap
+type Bitmap = roaring64.Bitmap
 
-var queryPool = sync.Pool{New: func() interface{} { return roaring.New() }}
+var queryPool = sync.Pool{New: func() interface{} { return roaring64.New() }}
 
 func replaceBitmap(m *Bitmap) {
 	queryPool.Put(m)
@@ -27,11 +27,11 @@ func acquireBitmap() *Bitmap {
 	return bm
 }
 
-func getBitmap(bmsp *[]*Bitmap, n uint32) (bm *Bitmap) {
-	if bms := *bmsp; n < uint32(len(bms)) {
+func getBitmap(bmsp *[]*Bitmap, n uint64) (bm *Bitmap) {
+	if bms := *bmsp; n < uint64(len(bms)) {
 		bm = bms[n]
-	} else if n == uint32(len(bms)) {
-		bm = roaring.New()
+	} else if n == uint64(len(bms)) {
+		bm = roaring64.New()
 		*bmsp = append(bms, bm)
 	} else {
 		panic(fmt.Sprintf("petname non-monotonic: req=%d len=%d", n, len(bms)))
@@ -71,4 +71,20 @@ func addSet[T comparable](l []T, s map[T]struct{}, v T) ([]T, map[T]struct{}, bo
 	}
 
 	return l, s, true
+}
+
+func iter(bm *Bitmap, cb func(uint64) bool) {
+	var buf [64]uint64
+	it := bm.ManyIterator()
+	for {
+		n := it.NextMany(buf[:])
+		if n == 0 {
+			return
+		}
+		for _, u := range buf[:n] {
+			if !cb(u) {
+				return
+			}
+		}
+	}
 }

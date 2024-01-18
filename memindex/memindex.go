@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"sort"
 
-	"github.com/RoaringBitmap/roaring"
+	"github.com/RoaringBitmap/roaring/roaring64"
 
 	"github.com/histdb/histdb"
 	"github.com/histdb/histdb/hashset"
@@ -78,9 +78,9 @@ func (t *T) Add(metric []byte) (histdb.Hash, bool) {
 		return histdb.Hash{}, false
 	}
 
-	tkeyis := make([]uint32, 0, 8)
-	tagis := make([]uint32, 0, 8)
-	var tkeyus map[uint32]struct{}
+	tkeyis := make([]uint64, 0, 8)
+	tagis := make([]uint64, 0, 8)
+	var tkeyus map[uint64]struct{}
 	var hash histdb.Hash
 
 	mhp := hash.TagHashPtr()
@@ -137,13 +137,13 @@ func (t *T) Add(metric []byte) (histdb.Hash, bool) {
 	return hash, true
 }
 
-func (t *T) EncodeInto(metric []byte, out []uint32) ([]uint32, bool) {
+func (t *T) EncodeInto(metric []byte, out []uint64) ([]uint64, bool) {
 	if len(metric) == 0 {
 		return nil, false
 	}
 
-	tkeyis := make([]uint32, 0, 8)
-	var tkeyus map[uint32]struct{}
+	tkeyis := make([]uint64, 0, 8)
+	var tkeyus map[uint64]struct{}
 
 	for rest := metric; len(rest) > 0; {
 		var tkey, tag []byte
@@ -178,7 +178,7 @@ func (t *T) EncodeInto(metric []byte, out []uint32) ([]uint32, bool) {
 	return out, true
 }
 
-func (t *T) DecodeInto(tagis []uint32, buf []byte) ([]byte, bool) {
+func (t *T) DecodeInto(tagis []uint64, buf []byte) ([]byte, bool) {
 	if len(tagis) == 0 || len(tagis) >= 256 {
 		return nil, false
 	}
@@ -200,19 +200,26 @@ func (t *T) DecodeInto(tagis []uint32, buf []byte) ([]byte, bool) {
 
 func (t *T) Cardinality() int { return t.card }
 
-func (t *T) AppendMetricName(n uint32, buf []byte) ([]byte, bool) {
-	tagis := make([]uint32, 0, 8)
+func (t *T) AppendMetricName(n uint64, buf []byte) ([]byte, bool) {
+	tagis := make([]uint64, 0, 8)
 
 	for tkeyn, tkeybm := range t.tkey_to_metrics {
 		if !tkeybm.Contains(n) {
 			continue
 		}
-		t.tkey_to_tvals[tkeyn].Iterate(func(tagn uint32) bool {
+
+		iter(t.tkey_to_tvals[tkeyn], func(tagn uint64) bool {
 			if t.tag_to_metrics[tagn].Contains(n) {
 				tagis = append(tagis, tagn)
 			}
 			return true
 		})
+		// t.tkey_to_tvals[tkeyn].Iterate(func(tagn uint32) bool {
+		// 	if t.tag_to_metrics[tagn].Contains(n) {
+		// 		tagis = append(tagis, tagn)
+		// 	}
+		// 	return true
+		// })
 	}
 
 	if len(tagis) == 0 {
@@ -226,10 +233,13 @@ func (t *T) AppendMetricName(n uint32, buf []byte) ([]byte, bool) {
 	return t.DecodeInto(tagis, buf)
 }
 
-func (t *T) MetricHashes(metrics *Bitmap, cb func(uint32, histdb.Hash) bool) {
-	metrics.Iterate(func(metricn uint32) bool {
+func (t *T) MetricHashes(metrics *Bitmap, cb func(uint64, histdb.Hash) bool) {
+	iter(metrics, func(metricn uint64) bool {
 		return cb(metricn, t.metrics.Hash(metricn))
 	})
+	// metrics.Iterate(func(metricn uint32) bool {
+	// 	return cb(metricn, t.metrics.Hash(metricn))
+	// })
 }
 
 func (t *T) QueryTrue(tkeys []byte, cb func(*Bitmap)) {
@@ -258,7 +268,7 @@ func (t *T) QueryTrue(tkeys []byte, cb func(*Bitmap)) {
 		bms = append(bms, t.tkey_to_metrics[tkeyn])
 	}
 
-	cb(roaring.ParOr(orParallelism, bms...))
+	cb(roaring64.ParOr(orParallelism, bms...))
 }
 
 func (t *T) QueryEqual(tag []byte, cb func(*Bitmap)) {
@@ -308,14 +318,14 @@ func (t *T) QueryFilter(tkey []byte, fn func([]byte) bool, cb func(*Bitmap)) {
 
 	var bms []*Bitmap
 
-	t.tkey_to_tvals[tkeyn].Iterate(func(tagn uint32) bool {
+	iter(t.tkey_to_tvals[tkeyn], func(tagn uint64) bool {
 		if fn(tagValue(tkey, t.tag_names.Get(tagn))) {
 			bms = append(bms, t.tag_to_metrics[tagn])
 		}
 		return true
 	})
 
-	cb(roaring.ParOr(orParallelism, bms...))
+	cb(roaring64.ParOr(orParallelism, bms...))
 }
 
 func (t *T) QueryFilterNot(tkey []byte, fn func([]byte) bool, cb func(*Bitmap)) {
@@ -327,14 +337,14 @@ func (t *T) QueryFilterNot(tkey []byte, fn func([]byte) bool, cb func(*Bitmap)) 
 
 	var bms []*Bitmap
 
-	t.tkey_to_tvals[tkeyn].Iterate(func(tagn uint32) bool {
+	iter(t.tkey_to_tvals[tkeyn], func(tagn uint64) bool {
 		if !fn(tagValue(tkey, t.tag_names.Get(tagn))) {
 			bms = append(bms, t.tag_to_metrics[tagn])
 		}
 		return true
 	})
 
-	cb(roaring.ParOr(orParallelism, bms...))
+	cb(roaring64.ParOr(orParallelism, bms...))
 }
 
 func (t *T) TagKeys(input []byte, cb func(result []byte) bool) {
@@ -393,14 +403,14 @@ func (t *T) TagKeys(input []byte, cb func(result []byte) bool) {
 	// the only way it's here and still empty is if the input query was empty
 	if mbm.IsEmpty() {
 		for i := 0; i < t.tkey_names.Len(); i++ {
-			if !cb(t.tkey_names.Get(uint32(i))) {
+			if !cb(t.tkey_names.Get(uint64(i))) {
 				return
 			}
 		}
 		return
 	}
 
-	tkbm.Iterate(func(name uint32) bool {
+	iter(tkbm, func(name uint64) bool {
 		if mbm != nil && !mbm.Intersects(t.tkey_to_metrics[name]) {
 			return true
 		}
@@ -469,7 +479,7 @@ func (t *T) TagValues(input, tkey []byte, cb func(result []byte) bool) {
 		tbm.And(t.tkey_to_tvals[name])
 	}
 
-	tbm.Iterate(func(name uint32) bool {
+	iter(tbm, func(name uint64) bool {
 		tag := t.tag_names.Get(name)
 		if len(tag) <= len(tkey) {
 			return true

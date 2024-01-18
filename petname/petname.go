@@ -16,7 +16,7 @@ type T[K hashtbl.Key] struct {
 	_ [0]func() // no equality
 
 	buf   []byte
-	idxs  hashtbl.T[K, hashtbl.U32]
+	idxs  hashtbl.T[K, hashtbl.U64]
 	spans []span
 }
 
@@ -36,8 +36,8 @@ func (t *T[K]) Size() uint64 {
 		0
 }
 
-func (t *T[K]) Put(h K, v []byte) uint32 {
-	n, ok := t.idxs.Insert(h, hashtbl.U32(len(t.spans)))
+func (t *T[K]) Put(h K, v []byte) uint64 {
+	n, ok := t.idxs.Insert(h, hashtbl.U64(len(t.spans)))
 	if !ok && len(v) > 0 {
 		t.spans = append(t.spans, span{
 			begin: uint32(len(t.buf)),
@@ -45,15 +45,15 @@ func (t *T[K]) Put(h K, v []byte) uint32 {
 		})
 		t.buf = append(t.buf, v...)
 	}
-	return uint32(n)
+	return uint64(n)
 }
 
-func (t *T[K]) Find(h K) (uint32, bool) {
+func (t *T[K]) Find(h K) (uint64, bool) {
 	v, ok := t.idxs.Find(h)
-	return uint32(v), ok
+	return uint64(v), ok
 }
 
-func (t *T[K]) Get(n uint32) []byte {
+func (t *T[K]) Get(n uint64) []byte {
 	if uint64(n) < uint64(len(t.spans)) {
 		s := t.spans[n]
 		b, e := uint64(s.begin), uint64(s.end)

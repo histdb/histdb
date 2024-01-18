@@ -36,7 +36,7 @@ func TestMemindex(t *testing.T) {
 
 		tagis, ok := idx.EncodeInto(bs("foo1=bar1,foo3=bar3"), nil)
 		assert.That(t, ok)
-		assert.Equal(t, tagis, []uint32{0, 2})
+		assert.Equal(t, tagis, []uint64{0, 2})
 
 		_, ok = idx.EncodeInto(bs("foo1=bar1,foo4=bar4"), nil)
 		assert.That(t, !ok)
@@ -47,11 +47,11 @@ func TestMemindex(t *testing.T) {
 
 		idx.Add(bs("foo1=bar1,foo2=bar2,foo3=bar3"))
 
-		metric, ok := idx.DecodeInto([]uint32{0, 2}, nil)
+		metric, ok := idx.DecodeInto([]uint64{0, 2}, nil)
 		assert.That(t, ok)
 		assert.Equal(t, string(metric), "foo1=bar1,foo3=bar3")
 
-		_, ok = idx.DecodeInto([]uint32{0, 3}, nil)
+		_, ok = idx.DecodeInto([]uint64{0, 3}, nil)
 		assert.That(t, !ok)
 	})
 

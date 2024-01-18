@@ -14,7 +14,7 @@ type Key interface {
 type T[K Key] struct {
 	_ [0]func() // no equality
 
-	set  hashtbl.T[K, hashtbl.U32]
+	set  hashtbl.T[K, hashtbl.U64]
 	list []K
 }
 
@@ -28,18 +28,18 @@ func (t *T[K]) Size() uint64 {
 }
 
 func (t *T[K]) Fix() {
-	t.set = hashtbl.T[K, hashtbl.U32]{}
+	t.set = hashtbl.T[K, hashtbl.U64]{}
 }
 
-func (t *T[K]) Insert(k K) (uint32, bool) {
-	idx, ok := t.set.Insert(k, hashtbl.U32(len(t.list)))
+func (t *T[K]) Insert(k K) (uint64, bool) {
+	idx, ok := t.set.Insert(k, hashtbl.U64(len(t.list)))
 	if ok {
-		return uint32(idx), ok
+		return uint64(idx), ok
 	}
 	t.list = append(t.list, k)
-	return uint32(idx), false
+	return uint64(idx), false
 }
 
-func (t *T[K]) Hash(idx uint32) K {
+func (t *T[K]) Hash(idx uint64) K {
 	return t.list[idx]
 }
