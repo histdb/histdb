@@ -4,15 +4,16 @@ import (
 	"reflect"
 	"unsafe"
 
+	"github.com/histdb/histdb/num"
 	"github.com/histdb/histdb/rwutils"
 )
 
-type RW[K Key, V Numeric] T[K, V]
+type RW[K Key, V num.T] T[K, V]
 
 func (rw *RW[K, V]) AppendTo(w *rwutils.W) { AppendTo((*T[K, V])(rw), w) }
 func (rw *RW[K, V]) ReadFrom(r *rwutils.R) { ReadFrom((*T[K, V])(rw), r) }
 
-func AppendTo[K Key, V Numeric](t *T[K, V], w *rwutils.W) {
+func AppendTo[K Key, V num.T](t *T[K, V], w *rwutils.W) {
 	w.Varint(uint64(len(t.list)))
 
 	var buf []byte
@@ -23,7 +24,7 @@ func AppendTo[K Key, V Numeric](t *T[K, V], w *rwutils.W) {
 	w.Bytes(buf)
 }
 
-func ReadFrom[K Key, V Numeric](t *T[K, V], r *rwutils.R) {
+func ReadFrom[K Key, V num.T](t *T[K, V], r *rwutils.R) {
 	buf := r.Bytes(int(r.Varint()) * len(*new(K)))
 	if len(buf) > 0 {
 		t.list = nil

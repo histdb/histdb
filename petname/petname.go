@@ -2,6 +2,7 @@ package petname
 
 import (
 	"github.com/histdb/histdb/hashtbl"
+	"github.com/histdb/histdb/num"
 	"github.com/histdb/histdb/sizeof"
 )
 
@@ -12,9 +13,7 @@ type span struct {
 	end   uint32
 }
 
-type Numeric interface{ ~uint32 | ~uint64 }
-
-type T[K hashtbl.Key, V Numeric] struct {
+type T[K hashtbl.Key, V num.T] struct {
 	_ [0]func() // no equality
 
 	buf   []byte

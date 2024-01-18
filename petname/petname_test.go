@@ -5,11 +5,11 @@ import (
 
 	"github.com/zeebo/assert"
 
-	"github.com/histdb/histdb/hashtbl"
+	"github.com/histdb/histdb/num"
 )
 
 func TestPetname(t *testing.T) {
-	var pn T[hashtbl.U64, hashtbl.U64]
+	var pn T[num.U64, num.U64]
 
 	assert.Equal(t, pn.Len(), 0)
 	assert.Equal(t, pn.Size(), 0x80)

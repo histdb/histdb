@@ -2,6 +2,7 @@ package hashset
 
 import (
 	"github.com/histdb/histdb/hashtbl"
+	"github.com/histdb/histdb/num"
 	"github.com/histdb/histdb/rwutils"
 	"github.com/histdb/histdb/sizeof"
 )
@@ -11,9 +12,7 @@ type Key interface {
 	hashtbl.Key
 }
 
-type Numeric interface{ ~uint32 | ~uint64 }
-
-type T[K Key, V Numeric] struct {
+type T[K Key, V num.T] struct {
 	_ [0]func() // no equality
 
 	set  hashtbl.T[K, V]

@@ -11,7 +11,7 @@ import (
 	"github.com/histdb/histdb/rwutils"
 )
 
-var reload = true
+var reload = false
 
 func init() {
 	if !reload {

@@ -6,7 +6,7 @@ import (
 
 	"github.com/RoaringBitmap/roaring/roaring64"
 
-	"github.com/histdb/histdb/hashtbl"
+	"github.com/histdb/histdb/num"
 	"github.com/histdb/histdb/sizeof"
 )
 
@@ -19,7 +19,7 @@ const orParallelism = 0
 type (
 	Bitmap = roaring64.Bitmap
 	Id     = uint64
-	rwId   = hashtbl.U64
+	rwId   = num.U64
 )
 
 func newBitmap() *Bitmap           { return roaring64.New() }
