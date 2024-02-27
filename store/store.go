@@ -82,7 +82,7 @@ func (t *T) Init(fs *filesystem.T) (err error) {
 }
 
 func (t *T) Write(ts uint32, name, value []byte) (err error) {
-	hash, _ := t.l0m.Add(name)
+	hash, _, _ := t.l0m.Add(name)
 
 	var key histdb.Key
 	*key.HashPtr() = hash

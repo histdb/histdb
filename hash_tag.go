@@ -26,6 +26,8 @@ func NewTagHashParts(tkey, value []byte) (mh TagHash) {
 	return mh
 }
 
+func (h TagHash) Equal(g TagHash) bool { return h == g }
+
 func (h TagHash) Digest() uint64 {
 	return 0 +
 		le.Uint64(h[0:8]) +

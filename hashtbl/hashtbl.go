@@ -7,8 +7,10 @@ import (
 	"github.com/histdb/histdb/sizeof"
 )
 
-type Key interface {
-	comparable
+// https://probablydance.com/2018/05/28/a-new-fast-hash-table-in-response-to-googles-new-fast-hash-table/
+
+type Key[T any] interface {
+	Equal(T) bool
 	Digest() uint64
 }
 
@@ -67,7 +69,7 @@ func (si slotIndex[K, V]) setJump(ji uint8) { si.setMeta(si.meta()&^maskDistance
 func (si slotIndex[K, V]) hasJump() bool    { return si.meta()&maskDistance != 0 }
 func (si slotIndex[K, V]) jump() uint8      { return si.meta() & maskDistance }
 
-type T[K Key, V any] struct {
+type T[K Key[K], V any] struct {
 	_ [0]func() // no equality
 
 	slots []slot[K, V]
@@ -121,7 +123,7 @@ func (t *T[K, V]) Find(k K) (v V, ok bool) {
 		return v, false
 	}
 	for {
-		if s := si.slot(); s.k == k {
+		if s := si.slot(); s.k.Equal(k) {
 			return s.v, true
 		}
 		ji := si.jump()
@@ -141,7 +143,7 @@ func (t *T[K, V]) Insert(k K, v V) (V, bool) {
 		return t.insertDirectHit(si, k, v)
 	}
 	for {
-		if s := si.slot(); s.k == k {
+		if s := si.slot(); s.k.Equal(k) {
 			return s.v, true
 		}
 		ji := si.jump()

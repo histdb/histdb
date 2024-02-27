@@ -1,6 +1,7 @@
 package histdb
 
 import (
+	"fmt"
 	"unsafe"
 
 	"github.com/histdb/histdb/rwutils"
@@ -8,12 +9,18 @@ import (
 
 type Hash [HashSize]byte
 
+func (h Hash) Equal(g Hash) bool { return h == g }
+
 func (h Hash) Digest() uint64 {
 	return 0 +
 		le.Uint64(h[0:8]) +
 		le.Uint64(h[8:16]) +
 		uint64(le.Uint32(h[16:20])) +
 		0
+}
+
+func (h Hash) String() string {
+	return fmt.Sprintf("(hash %08x %024x)", h.TagKeyHash(), h.TagHash())
 }
 
 func (h Hash) AppendTo(w *rwutils.W)  { w.Bytes20(h) }

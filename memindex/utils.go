@@ -24,6 +24,18 @@ type (
 
 func newBitmap() *Bitmap           { return roaring64.New() }
 func parOr(bms ...*Bitmap) *Bitmap { return roaring64.ParOr(0, bms...) }
+func parAnd(bms ...*Bitmap) *Bitmap {
+	// return roaring.ParAnd(0, bms...)
+
+	if len(bms) == 0 {
+		return newBitmap()
+	}
+	o := bms[0].Clone()
+	for _, bm := range bms[1:] {
+		o.And(bm)
+	}
+	return o
+}
 
 //
 //
@@ -89,7 +101,7 @@ func addSet[T comparable](l []T, s map[T]struct{}, v T) ([]T, map[T]struct{}, bo
 	return l, s, true
 }
 
-func iter(bm *Bitmap, cb func(Id) bool) {
+func Iter(bm *Bitmap, cb func(Id) bool) {
 	var buf [64]Id
 	it := bm.ManyIterator()
 	for {

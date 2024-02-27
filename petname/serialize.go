@@ -10,12 +10,12 @@ import (
 	"github.com/histdb/histdb/rwutils"
 )
 
-type RW[K hashtbl.Key, RWK rwutils.RW[K], V num.T, RWV rwutils.RW[V]] T[K, V]
+type RW[K hashtbl.Key[K], RWK rwutils.RW[K], V num.T, RWV rwutils.RW[V]] T[K, V]
 
 func (rw *RW[K, RWK, V, RWV]) AppendTo(w *rwutils.W) { AppendTo[K, RWK, V, RWV]((*T[K, V])(rw), w) }
 func (rw *RW[K, RWK, V, RWV]) ReadFrom(r *rwutils.R) { ReadFrom[K, RWK, V, RWV]((*T[K, V])(rw), r) }
 
-func AppendTo[K hashtbl.Key, RWK rwutils.RW[K], V num.T, RWV rwutils.RW[V]](t *T[K, V], w *rwutils.W) {
+func AppendTo[K hashtbl.Key[K], RWK rwutils.RW[K], V num.T, RWV rwutils.RW[V]](t *T[K, V], w *rwutils.W) {
 	w.Varint(uint64(len(t.buf)))
 	w.Bytes(t.buf)
 	hashtbl.AppendTo[K, RWK, V, RWV](&t.idxs, w)
@@ -26,7 +26,7 @@ func AppendTo[K hashtbl.Key, RWK rwutils.RW[K], V num.T, RWV rwutils.RW[V]](t *T
 	}
 }
 
-func ReadFrom[K hashtbl.Key, RWK rwutils.RW[K], V num.T, RWV rwutils.RW[V]](t *T[K, V], r *rwutils.R) {
+func ReadFrom[K hashtbl.Key[K], RWK rwutils.RW[K], V num.T, RWV rwutils.RW[V]](t *T[K, V], r *rwutils.R) {
 	t.buf = r.Bytes(int(r.Varint()))
 	hashtbl.ReadFrom[K, RWK, V, RWV](&t.idxs, r)
 

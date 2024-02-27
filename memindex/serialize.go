@@ -6,7 +6,7 @@ import (
 
 	"github.com/zeebo/errs/v2"
 
-	"github.com/histdb/histdb/hashset"
+	"github.com/histdb/histdb/hashtbl"
 	"github.com/histdb/histdb/petname"
 	"github.com/histdb/histdb/rwutils"
 )
@@ -21,9 +21,10 @@ func AppendTo(t *T, w *rwutils.W) {
 
 	w.Uint64(uint64(t.card))
 
-	hashset.AppendTo(&t.metrics, w)
+	hashtbl.AppendTo(&t.metrics, w)
 	petname.AppendTo(&t.tag_names, w)
 	petname.AppendTo(&t.tkey_names, w)
+	hashtbl.AppendTo(&t.tkeys_names, w)
 
 	var buf bytes.Buffer
 	appendBitmaps := func(bms []*Bitmap) {
@@ -39,6 +40,7 @@ func AppendTo(t *T, w *rwutils.W) {
 	appendBitmaps(t.tag_to_metrics)
 	appendBitmaps(t.tag_to_tkeys)
 	appendBitmaps(t.tag_to_tags)
+	appendBitmaps(t.tkeys_to_metrics)
 	appendBitmaps(t.tkey_to_metrics)
 	appendBitmaps(t.tkey_to_tkeys)
 	appendBitmaps(t.tkey_to_tags)
@@ -54,9 +56,10 @@ func ReadFrom(t *T, r *rwutils.R) {
 
 	t.card = int(r.Uint64())
 
-	hashset.ReadFrom(&t.metrics, r)
+	hashtbl.ReadFrom(&t.metrics, r)
 	petname.ReadFrom(&t.tag_names, r)
 	petname.ReadFrom(&t.tkey_names, r)
+	hashtbl.ReadFrom(&t.tkeys_names, r)
 
 	readBitmaps := func() []*Bitmap {
 		n := r.Varint()
@@ -83,6 +86,7 @@ func ReadFrom(t *T, r *rwutils.R) {
 	t.tag_to_metrics = readBitmaps()
 	t.tag_to_tkeys = readBitmaps()
 	t.tag_to_tags = readBitmaps()
+	t.tkeys_to_metrics = readBitmaps()
 	t.tkey_to_metrics = readBitmaps()
 	t.tkey_to_tkeys = readBitmaps()
 	t.tkey_to_tags = readBitmaps()

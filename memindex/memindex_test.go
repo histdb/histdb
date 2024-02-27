@@ -14,12 +14,36 @@ import (
 	"github.com/histdb/histdb/testhelp"
 )
 
-func bs(s string) []byte       { return []byte(s) }
-func sl[T any](x ...T) []T     { return x }
-func fst[T, U any](t T, u U) T { return t }
-func snd[T, U any](t T, u U) U { return u }
+func bs(s string) []byte               { return []byte(s) }
+func sl[T any](x ...T) []T             { return x }
+func fst[T, U, V any](t T, _ U, _ V) T { return t }
+func snd[T, U, V any](t T, u U, v V) U { return u }
+func trd[T, U, V any](t T, u U, v V) V { return v }
 
 func TestMemindex(t *testing.T) {
+	t.Run("Find", func(t *testing.T) {
+		var idx T
+
+		idx.Add(bs("a=foo,b=bar"))
+		idx.Add(bs("a=foo"))
+		idx.Add(bs("a=baz"))
+		idx.Add(bs("a=baz,b=bif"))
+
+		idx.Fix()
+
+		assert.That(t, trd(idx.Find(bs("a=foo,b=bar"))))
+		assert.That(t, trd(idx.Find(bs("b=bar,a=foo"))))
+		assert.That(t, trd(idx.Find(bs("a=foo"))))
+		assert.That(t, trd(idx.Find(bs("a=baz"))))
+		assert.That(t, trd(idx.Find(bs("a=baz,b=bif"))))
+		assert.That(t, trd(idx.Find(bs("b=bif,a=baz"))))
+
+		assert.That(t, !trd(idx.Find(bs("a=baz,b=bif,c=lol"))))
+		assert.That(t, !trd(idx.Find(bs("a=foo,c=lol"))))
+
+		assert.That(t, !trd(idx.Find(bs("a=foo,b=bif"))))
+		assert.That(t, !trd(idx.Find(bs("a=baz,b=bar"))))
+	})
 
 	t.Run("Add", func(t *testing.T) {
 		var idx T
@@ -58,19 +82,19 @@ func TestMemindex(t *testing.T) {
 	t.Run("Duplicate Tags", func(t *testing.T) {
 		var idx T
 
-		assert.That(t, snd(idx.Add(bs("foo=bar"))))
-		assert.That(t, !snd(idx.Add(bs("foo=bar"))))
-		assert.That(t, !snd(idx.Add(bs("foo=bar,foo=bar"))))
-		assert.That(t, !snd(idx.Add(bs("foo=bar,foo=baz"))))
+		assert.That(t, trd(idx.Add(bs("foo=bar"))))
+		assert.That(t, !trd(idx.Add(bs("foo=bar"))))
+		assert.That(t, !trd(idx.Add(bs("foo=bar,foo=bar"))))
+		assert.That(t, !trd(idx.Add(bs("foo=bar,foo=baz"))))
 	})
 
 	t.Run("Empty Value", func(t *testing.T) {
 		var idx T
 
-		assert.That(t, snd(idx.Add(bs("foo=bar,baz"))))
-		assert.That(t, snd(idx.Add(bs("bif"))))
-		assert.That(t, snd(idx.Add(bs("baz"))))
-		assert.That(t, !snd(idx.Add(bs("baz="))))
+		assert.That(t, trd(idx.Add(bs("foo=bar,baz"))))
+		assert.That(t, trd(idx.Add(bs("bif"))))
+		assert.That(t, trd(idx.Add(bs("baz"))))
+		assert.That(t, !trd(idx.Add(bs("baz="))))
 	})
 
 	type col struct {
@@ -90,10 +114,10 @@ func TestMemindex(t *testing.T) {
 		var idx T
 		c := collector()
 
-		assert.That(t, snd(idx.Add(bs("k0=v0,k1=v1,k2=v2"))))
-		assert.That(t, snd(idx.Add(bs("k0=v0,foo"))))
-		assert.That(t, snd(idx.Add(bs("k1=v1,foo,baz"))))
-		assert.That(t, snd(idx.Add(bs("k0=v1,bar"))))
+		assert.That(t, trd(idx.Add(bs("k0=v0,k1=v1,k2=v2"))))
+		assert.That(t, trd(idx.Add(bs("k0=v0,foo"))))
+		assert.That(t, trd(idx.Add(bs("k1=v1,foo,baz"))))
+		assert.That(t, trd(idx.Add(bs("k0=v1,bar"))))
 
 		idx.TagKeys(bs("k0=v0"), c.collect())
 		assert.Equal(t, c.vals, sl("k1", "k2", "foo"))
@@ -115,13 +139,13 @@ func TestMemindex(t *testing.T) {
 		var idx T
 		c := collector()
 
-		assert.That(t, snd(idx.Add(bs("k0=v0,k1=va,k2=v2"))))
-		assert.That(t, snd(idx.Add(bs("k0=v0,k1=vb,k2=v3"))))
-		assert.That(t, snd(idx.Add(bs("k0=v0,k2=v4"))))
-		assert.That(t, snd(idx.Add(bs("k1=va,k2=v4"))))
-		assert.That(t, snd(idx.Add(bs("k1=vb,k2=v4"))))
-		assert.That(t, snd(idx.Add(bs("k0=v1,k2=v5"))))
-		assert.That(t, snd(idx.Add(bs("k3=vx,k2=v6"))))
+		assert.That(t, trd(idx.Add(bs("k0=v0,k1=va,k2=v2"))))
+		assert.That(t, trd(idx.Add(bs("k0=v0,k1=vb,k2=v3"))))
+		assert.That(t, trd(idx.Add(bs("k0=v0,k2=v4"))))
+		assert.That(t, trd(idx.Add(bs("k1=va,k2=v4"))))
+		assert.That(t, trd(idx.Add(bs("k1=vb,k2=v4"))))
+		assert.That(t, trd(idx.Add(bs("k0=v1,k2=v5"))))
+		assert.That(t, trd(idx.Add(bs("k3=vx,k2=v6"))))
 
 		idx.TagValues(bs("k0=v0"), bs("k2"), c.collect())
 		assert.Equal(t, c.vals, sl("v2", "v3", "v4"))
@@ -164,39 +188,6 @@ func TestMemindex(t *testing.T) {
 		)
 	})
 
-	// t.Run("Metrics", func(t *testing.T) {
-	// 	var idx T
-
-	// 	h0, _ := idx.Add(bs("k0=v0a,k1=v1a,k2=v2a,k3=v3a"))
-	// 	h1, _ := idx.Add(bs("k0=v0b,k1=v1b,k2=v2b"))
-	// 	h2, _ := idx.Add(bs("k0=v0b,k1=v1b"))
-	// 	h3, _ := idx.Add(bs("k0=v0c,k1=v1c,k2=v2a"))
-	// 	h4, _ := idx.Add(bs("k0=v0c,k1=v1c,k2=v2b,k3=v3a"))
-	// 	h5, _ := idx.Add(bs("k0=v0c,k1=v1c,k2=v2c"))
-
-	// 	exp := []histdb.Hash{h0, h1, h2, h3, h4, h5}
-	// 	got := []histdb.Hash{}
-
-	// 	idx.Metrics(bs("k0,k1"), func(mbit *Bitmap, tags [][]byte) bool {
-	// 		t.Logf("%s %v", tags, mbit)
-	// 		for _, tag := range tags {
-	// 			tkey, _, _, _ := metrics.PopTag(tag)
-	// 			t.Logf("\tt:  %q = %q", tkey, tag[len(tkey)+1:])
-	// 		}
-	// 		idx.MetricHashes(mbit, func(n uint32, h histdb.Hash) bool {
-	// 			t.Logf("\th%d: %032x", n, h)
-	// 			got = append(got, h)
-	// 			return true
-	// 		})
-	// 		return true
-	// 	})
-
-	// 	sort.Slice(exp, func(i, j int) bool { return string(exp[i][:]) < string(exp[j][:]) })
-	// 	sort.Slice(got, func(i, j int) bool { return string(got[i][:]) < string(got[j][:]) })
-
-	// 	assert.DeepEqual(t, got, exp)
-	// })
-
 	t.Run("Serialize", func(t *testing.T) {
 		var idx T
 		loadRandom(&idx)
@@ -217,6 +208,7 @@ func TestMemindex(t *testing.T) {
 		assert.Equal(t, idx.metrics, idx2.metrics)
 		assert.Equal(t, idx.tag_names, idx2.tag_names)
 		assert.Equal(t, idx.tkey_names, idx2.tkey_names)
+		assert.Equal(t, idx.tkeys_names, idx2.tkeys_names)
 
 		equalBitmaps := func(a, b []*Bitmap) {
 			assert.Equal(t, len(a), len(b))
@@ -228,6 +220,7 @@ func TestMemindex(t *testing.T) {
 		equalBitmaps(idx.tag_to_metrics, idx2.tag_to_metrics)
 		equalBitmaps(idx.tag_to_tkeys, idx2.tag_to_tkeys)
 		equalBitmaps(idx.tag_to_tags, idx2.tag_to_tags)
+		equalBitmaps(idx.tkeys_to_metrics, idx2.tkeys_to_metrics)
 		equalBitmaps(idx.tkey_to_metrics, idx2.tkey_to_metrics)
 		equalBitmaps(idx.tkey_to_tkeys, idx2.tkey_to_tkeys)
 		equalBitmaps(idx.tkey_to_tags, idx2.tkey_to_tags)
@@ -339,25 +332,19 @@ func BenchmarkMemindex(b *testing.B) {
 		b.ReportMetric(1000*float64(b.N)/time.Since(start).Seconds()/1e6, "Mm/sec")
 	})
 
-	// b.Run("Metrics", func(b *testing.B) {
-	// 	b.ReportAllocs()
-	// 	b.ResetTimer()
-	// 	start := time.Now()
+	b.Run("Find", func(b *testing.B) {
+		m := bs("app=storagenode-release,metric=function_times,kind=failure,field=avg,inst=1Xxsgf7RjJkcTHgVnyw3vR4D39B8fFhgH1qMdg43yA5svKNGq,scope=storj.io/common/rpc,name=TCPConnector.DialContextUnencrypted")
 
-	// 	var sets uint64
-	// 	var count uint64
-	// 	for i := 0; i < b.N; i++ {
-	// 		idx.Metrics(mquery, func(metrics *Bitmap, tags [][]byte) bool {
-	// 			sets++
-	// 			count += metrics.GetCardinality()
-	// 			return true
-	// 		})
-	// 	}
+		start := time.Now()
+		b.ResetTimer()
+		b.ReportAllocs()
 
-	// 	b.ReportMetric(float64(sets)/float64(b.N), "sets/op")
-	// 	b.ReportMetric(float64(count)/float64(b.N), "metrics/op")
-	// 	b.ReportMetric(float64(b.N)/time.Since(start).Seconds(), "ops/sec")
-	// })
+		for i := 0; i < b.N; i++ {
+			idx.Find(m)
+		}
+
+		b.ReportMetric(float64(b.N)/time.Since(start).Seconds()/1e6, "Mm/sec")
+	})
 
 	b.Run("AppendTo", func(b *testing.B) {
 		var w rwutils.W
@@ -405,16 +392,18 @@ func dumpSizeStats(t testing.TB, idx *T) {
 		t.Log(name, "len:", len(x), "\t\tsize:", ss(x), "\t\tcard:", cs(x))
 	}
 
-	t.Log("idx:            ", "len:", idx.Cardinality(), "\tsize:", idx.Size(), "\tbpm: ", float64(idx.Size())/float64(idx.Cardinality()))
-	t.Log("metric_set:     ", "len:", idx.metrics.Len(), "\tsize:", idx.metrics.Size(), "\tbpm: ", float64(idx.metrics.Size())/float64(idx.metrics.Len()))
-	t.Log("tag_names:      ", "len:", idx.tag_names.Len(), "\t\tsize:", idx.tag_names.Size())
-	t.Log("tkey_names:     ", "len:", idx.tkey_names.Len(), "\t\tsize:", idx.tkey_names.Size())
-
-	dumpSlice("tag_to_metrics: ", idx.tag_to_metrics)
-	dumpSlice("tag_to_tkeys:   ", idx.tag_to_tkeys)
-	dumpSlice("tag_to_tags:    ", idx.tag_to_tags)
-	dumpSlice("tkey_to_metrics:", idx.tkey_to_metrics)
-	dumpSlice("tkey_to_tkeys:  ", idx.tkey_to_tkeys)
-	dumpSlice("tkey_to_tags:   ", idx.tkey_to_tags)
-	dumpSlice("tkey_to_tvals:  ", idx.tkey_to_tvals)
+	t.Log("idx:             ", "len:", idx.Cardinality(), "\tsize:", idx.Size(), "\tbpm: ", float64(idx.Size())/float64(idx.Cardinality()))
+	t.Log()
+	t.Log("tag_names:       ", "len:", idx.tag_names.Len(), "\t\tsize:", idx.tag_names.Size())
+	t.Log("tkey_names:      ", "len:", idx.tkey_names.Len(), "\t\tsize:", idx.tkey_names.Size())
+	t.Log("tkeys_names:     ", "len:", idx.tkeys_names.Len(), "\t\tsize:", idx.tkeys_names.Size())
+	t.Log()
+	dumpSlice("tag_to_metrics:  ", idx.tag_to_metrics)
+	dumpSlice("tag_to_tkeys:    ", idx.tag_to_tkeys)
+	dumpSlice("tag_to_tags:     ", idx.tag_to_tags)
+	dumpSlice("tkey_to_metrics: ", idx.tkey_to_metrics)
+	dumpSlice("tkeys_to_metrics:", idx.tkeys_to_metrics)
+	dumpSlice("tkey_to_tkeys:   ", idx.tkey_to_tkeys)
+	dumpSlice("tkey_to_tags:    ", idx.tkey_to_tags)
+	dumpSlice("tkey_to_tvals:   ", idx.tkey_to_tvals)
 }

@@ -3,9 +3,10 @@ package rwutils
 import (
 	"testing"
 
-	"github.com/histdb/histdb/buffer"
 	"github.com/zeebo/assert"
 	"github.com/zeebo/mwc"
+
+	"github.com/histdb/histdb/buffer"
 )
 
 func testRoundTrip[T any](

@@ -72,6 +72,8 @@ func TestTableSerialize(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, rem.Suffix(), []byte{1, 2, 3})
 
+	assert.Equal(t, tb, tb2)
+
 	for i := uint64(0); i < 1000; i++ {
 		val, ok := tb2.Insert(num.U64(i), ^num.U32(0))
 		assert.That(t, ok)

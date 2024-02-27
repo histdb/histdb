@@ -86,7 +86,7 @@ func (fh Handle) Size() (int64, error) {
 
 func (fh Handle) Fallocate(n int64) (err error) {
 intr:
-	err = syscall.Fallocate(fh.Fd(), 0, 0, n)
+	err = fallocate(fh.Fd(), 0, 0, n)
 	if err == syscall.EINTR {
 		goto intr
 	}

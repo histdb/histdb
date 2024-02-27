@@ -159,7 +159,7 @@ func (t *T) Min() float32 {
 	}
 
 	for k := uint32(0); k < l2S; k++ {
-		if layer2_loadCounter(l2, uint32(k)) > 0 {
+		if layer2_loadCounter(l2, k) > 0 {
 			return lowerValue(i, j, k)
 		}
 	}
@@ -184,9 +184,9 @@ func (t *T) Max() float32 {
 		return float32(math.NaN())
 	}
 
-	for k := int32(l2S) - 1; k >= 0; k-- {
-		if layer2_loadCounter(l2, uint32(k)) > 0 {
-			return upperValue(i, j, uint32(k))
+	for k := uint32(l2S - 1); k < l2S; k-- {
+		if layer2_loadCounter(l2, k) > 0 {
+			return upperValue(i, j, k)
 		}
 	}
 	return upperValue(i, j, 0)

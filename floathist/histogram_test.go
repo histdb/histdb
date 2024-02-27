@@ -5,6 +5,7 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/aclements/go-perfevent/perfbench"
 	"github.com/zeebo/assert"
 	"github.com/zeebo/mwc"
 )
@@ -104,24 +105,28 @@ func TestHistogram(t *testing.T) {
 
 func BenchmarkHistogram(b *testing.B) {
 	b.Run("Observe", func(b *testing.B) {
-		b.ReportAllocs()
+		var h T
 
-		his := new(T)
+		perfbench.Open(b)
+		b.ReportAllocs()
+		b.ResetTimer()
 
 		for i := 0; i < b.N; i++ {
-			his.Observe(1)
+			h.Observe(1)
 		}
 	})
 
 	b.Run("Observe_Parallel", func(b *testing.B) {
-		b.ReportAllocs()
+		var h T
 
-		his := new(T)
+		b.ReportAllocs()
+		b.ResetTimer()
+
 		n := int64(0)
 		b.RunParallel(func(pb *testing.PB) {
 			i := float32(uint64(1024) << uint64(atomic.AddInt64(&n, 1)))
 			for pb.Next() {
-				his.Observe(i)
+				h.Observe(i)
 			}
 		})
 	})
@@ -133,6 +138,8 @@ func BenchmarkHistogram(b *testing.B) {
 		for i := 0; i < 1000000; i++ {
 			his.Observe(math.Float32frombits(rng.Uint32() &^ ((1<<10 - 1) << 22)))
 		}
+
+		perfbench.Open(b)
 		b.ReportAllocs()
 		b.ResetTimer()
 
@@ -148,6 +155,8 @@ func BenchmarkHistogram(b *testing.B) {
 		for i := 0; i < 1000000; i++ {
 			his.Observe(math.Float32frombits(rng.Uint32() &^ ((1<<10 - 1) << 22)))
 		}
+
+		perfbench.Open(b)
 		b.ReportAllocs()
 		b.ResetTimer()
 
@@ -163,6 +172,8 @@ func BenchmarkHistogram(b *testing.B) {
 		for i := 0; i < 1000000; i++ {
 			his.Observe(rng.Float32())
 		}
+
+		perfbench.Open(b)
 		b.ReportAllocs()
 		b.ResetTimer()
 
@@ -179,6 +190,8 @@ func BenchmarkHistogram(b *testing.B) {
 			his.Observe(math.Float32frombits(rng.Uint32() &^ ((1<<10 - 1) << 22)))
 		}
 		assert.Equal(b, his.Total(), 1000000)
+
+		perfbench.Open(b)
 		b.ReportAllocs()
 		b.ResetTimer()
 
@@ -195,11 +208,13 @@ func BenchmarkHistogram(b *testing.B) {
 			his.Observe(rng.Float32())
 		}
 		assert.Equal(b, his.Total(), 1000000)
+
+		perfbench.Open(b)
 		b.ReportAllocs()
 		b.ResetTimer()
 
 		for i := 0; i < b.N; i++ {
-			his.Quantile(1.0)
+			his.Quantile(.95)
 		}
 	})
 
@@ -211,6 +226,8 @@ func BenchmarkHistogram(b *testing.B) {
 			his.Observe(math.Float32frombits(rng.Uint32() &^ ((1<<10 - 1) << 22)))
 		}
 		assert.Equal(b, his.Total(), 1000000)
+
+		perfbench.Open(b)
 		b.ReportAllocs()
 		b.ResetTimer()
 
@@ -227,6 +244,8 @@ func BenchmarkHistogram(b *testing.B) {
 			his.Observe(rng.Float32())
 		}
 		assert.Equal(b, his.Total(), 1000000)
+
+		perfbench.Open(b)
 		b.ReportAllocs()
 		b.ResetTimer()
 
@@ -243,6 +262,8 @@ func BenchmarkHistogram(b *testing.B) {
 			his.Observe(math.Float32frombits(rng.Uint32() &^ ((1<<10 - 1) << 22)))
 		}
 		assert.Equal(b, his.Total(), 1000000)
+
+		perfbench.Open(b)
 		b.ReportAllocs()
 		b.ResetTimer()
 
@@ -259,6 +280,8 @@ func BenchmarkHistogram(b *testing.B) {
 			his.Observe(rng.Float32())
 		}
 		assert.Equal(b, his.Total(), 1000)
+
+		perfbench.Open(b)
 		b.ReportAllocs()
 		b.ResetTimer()
 

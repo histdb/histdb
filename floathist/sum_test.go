@@ -3,6 +3,7 @@ package floathist
 import (
 	"testing"
 
+	"github.com/aclements/go-perfevent/perfbench"
 	"github.com/zeebo/assert"
 	"github.com/zeebo/mwc"
 )
@@ -94,6 +95,8 @@ func BenchmarkSum(b *testing.B) {
 			assert.That(b, layer2_unsafeSetCounter(l2, nil, k, v))
 		}
 
+		perfbench.Open(b)
+		b.ReportAllocs()
 		b.ResetTimer()
 
 		for i := 0; i < b.N; i++ {

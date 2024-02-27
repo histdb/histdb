@@ -13,7 +13,7 @@ type span struct {
 	end   uint32
 }
 
-type T[K hashtbl.Key, V num.T] struct {
+type T[K hashtbl.Key[K], V num.T] struct {
 	_ [0]func() // no equality
 
 	buf   []byte
