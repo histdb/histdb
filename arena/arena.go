@@ -24,6 +24,18 @@ type T[V any] struct {
 	mu sync.Mutex // protects realloc
 }
 
+func (t *T[V]) Size() uint64 {
+	return 0 +
+		/* buf */ uint64(((t.t+lBatch-1)/lBatch)*lBatch)*uint64(unsafe.Sizeof(*new(V))) +
+		/* s   */ 8 +
+		/* p   */ 4 +
+		/* t   */ 4 +
+		/* mu  */ 8 +
+		0
+}
+
+func (t *T[V]) Allocated() uint32 { return atomic.LoadUint32(&t.p) }
+
 type tag[V any] struct{}
 
 type P[V any] struct {
@@ -33,6 +45,10 @@ type P[V any] struct {
 
 func Raw[V any](v uint32) P[V] { return P[V]{v: v} }
 func (p P[V]) Raw() uint32     { return p.v }
+
+// Full returns true if the next call to New would reallocate. It is not safe
+// to call concurrently with New.
+func (l *T[V]) Full() bool { return l.p >= l.t-1 }
 
 func (l *T[V]) Get(p P[V]) *V {
 	b := unsafe.Add(unsafe.Pointer(l.s.Load()), uintptr(p.v/lBatch)*ptrSize)

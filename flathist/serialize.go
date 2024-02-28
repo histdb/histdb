@@ -35,7 +35,7 @@ const (
 )
 
 // AppendTo implements rwutils.RW and is not safe to call with concurrent mutations.
-func AppendTo(s *Store, h H, w *rwutils.W) {
+func AppendTo[T any](s *S[T], h H[T], w *rwutils.W) {
 	l0 := s.l0.Get(h.v)
 
 	bm := bitmask(&l0.l1)
@@ -77,7 +77,7 @@ func AppendTo(s *Store, h H, w *rwutils.W) {
 }
 
 // ReadFrom implements rwutils.RW and is not safe to call with concurrent mutations.
-func ReadFrom(s *Store, h H, r *rwutils.R) {
+func ReadFrom[T any](s *S[T], h H[T], r *rwutils.R) {
 	l0 := s.l0.Get(h.v)
 
 	for bm := bitmap.New32(uint32(r.Uint16())); !bm.Empty(); bm.ClearLowest() {

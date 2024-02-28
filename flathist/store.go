@@ -7,10 +7,11 @@ import (
 
 	"github.com/histdb/histdb/arena"
 	"github.com/histdb/histdb/bitmap"
+	"github.com/histdb/histdb/sizeof"
 )
 
-// Store arena allocates histograms.
-type Store struct {
+// S arena allocates histograms.
+type S[T any] struct {
 	_ [0]func() // no equality
 
 	l0  arena.T[layer0]
@@ -22,27 +23,71 @@ type Store struct {
 	growing []growFinalize
 }
 
+func (s *S[T]) Size() uint64 {
+	return 0 +
+		/* l0      */ s.l0.Size() +
+		/* l1      */ s.l1.Size() +
+		/* l2s     */ s.l2s.Size() +
+		/* l2l     */ s.l2l.Size() +
+		/* mu      */ 8 +
+		/* growing */ sizeof.Slice(s.growing) +
+		0
+}
+
+type Stats struct {
+	Size uint64
+	L0   uint32
+	L1   uint32
+	L2S  uint32
+	L2L  uint32
+}
+
+func (s *S[T]) WillRealloc() bool { return s.l0.Full() }
+
+func (s *S[T]) Stats() Stats {
+	return Stats{
+		Size: s.Size(),
+		L0:   s.l0.Allocated(),
+		L1:   s.l1.Allocated(),
+		L2S:  s.l2s.Allocated(),
+		L2L:  s.l2l.Allocated(),
+	}
+}
+
 type growFinalize struct {
 	l2so *layer2Small
 	l2sc *layer2Small
 	l2l  *layer2Large
 }
 
+type tag[T any] struct{}
+
 // H is a handle to a histogram.
-type H struct{ v arena.P[layer0] }
+type H[T any] struct {
+	_ tag[T]
+	v arena.P[layer0]
+}
+
+// UnsafeRawH lets one construct a handle for any store from a raw pointer value.
+// It is obviously very unsafe and should only be used when you know what's up.
+func UnsafeRawH[T any](x uint32) H[T] { return H[T]{v: arena.Raw[layer0](x)} }
 
 // New allocates a new histogram and returns a handle.
-func (s *Store) New() H { return H{v: s.l0.New()} }
+func (s *S[T]) New() H[T] { return H[T]{v: s.l0.New()} }
 
-func (s *Store) getL1(v uint32) *layer1 {
+func (s *S[T]) getL0(h H[T]) *layer0 {
+	return s.l0.Get(h.v)
+}
+
+func (s *S[T]) getL1(v uint32) *layer1 {
 	return s.l1.Get(arena.Raw[layer1](v & lAddrMask))
 }
 
-func (s *Store) getL2S(v uint32) *layer2Small {
+func (s *S[T]) getL2S(v uint32) *layer2Small {
 	return s.l2s.Get(arena.Raw[layer2Small](v & lAddrMask))
 }
 
-func (s *Store) getL2L(v uint32) *layer2Large {
+func (s *S[T]) getL2L(v uint32) *layer2Large {
 	return s.l2l.Get(arena.Raw[layer2Large](v & lAddrMask))
 }
 
@@ -50,7 +95,7 @@ func (s *Store) getL2L(v uint32) *layer2Large {
 // missed an observation.
 //
 // It is not safe to call concurrently with Observe.
-func (s *Store) Finalize() {
+func (s *S[T]) Finalize() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -66,9 +111,15 @@ func (s *Store) Finalize() {
 
 // Merge copies the data from h into g. It is not safe to call with
 // Observe on either g or h.
-func (s *Store) Merge(g, h H) {
+//
+// TODO: pass in a store for h that could be different from the store for g.
+//
+// TODO: maybe have an optimization in the arena for a small number of allocations
+// like maybe a static buffer of some small size that it uses first, but it
+// would suck to have to special case every Get call, so think more!
+func Merge[T, U any](s *S[T], g H[T], t *S[U], h H[U]) {
 	gl0 := s.l0.Get(g.v)
-	hl0 := s.l0.Get(h.v)
+	hl0 := t.l0.Get(h.v)
 
 	for bm := bitmap.New32(bitmask(&hl0.l1)); !bm.Empty(); bm.ClearLowest() {
 		l1idx := bm.Lowest()
@@ -79,8 +130,8 @@ func (s *Store) Merge(g, h H) {
 			gl0.l1[l1idx] = gl1a
 		}
 
-		hl1 := s.getL1(hl0.l1[l1idx])
 		gl1 := s.getL1(gl1a)
+		hl1 := t.getL1(hl0.l1[l1idx])
 
 		for bm := bitmap.New32(bitmask(&hl1.l2)); !bm.Empty(); bm.ClearLowest() {
 			l2idx := bm.Lowest()
@@ -101,9 +152,9 @@ func (s *Store) Merge(g, h H) {
 			var hl2l *layer2Large
 			var hl2s *layer2Small
 			if isAddrLarge(hl2a) {
-				hl2l = s.getL2L(hl2a)
+				hl2l = t.getL2L(hl2a)
 			} else {
-				hl2s = s.getL2S(hl2a)
+				hl2s = t.getL2S(hl2a)
 			}
 
 			var gl2l *layer2Large
@@ -149,7 +200,7 @@ func (s *Store) Merge(g, h H) {
 // Observe adds the value to the histogram.
 //
 // It is safe to be called concurrently.
-func (s *Store) Observe(h H, v float32) {
+func (s *S[T]) Observe(h H[T], v float32) {
 	if v != v || v > math.MaxFloat32 || v < -math.MaxFloat32 {
 		return
 	}
@@ -198,7 +249,7 @@ func (s *Store) Observe(h H, v float32) {
 	}
 }
 
-func (s *Store) growLayer2(l2so *layer2Small, l2a uint32, l2aSlot *uint32) {
+func (s *S[T]) growLayer2(l2so *layer2Small, l2a uint32, l2aSlot *uint32) {
 	l2la := s.l2l.New()
 	l2l := s.getL2L(l2la.Raw())
 	l2sc := new(layer2Small)
@@ -223,17 +274,17 @@ func (s *Store) growLayer2(l2so *layer2Small, l2a uint32, l2aSlot *uint32) {
 // Min returns an approximation of the smallest value stored in the histogram.
 //
 // It is safe to be called concurrently with Observe.
-func (s *Store) Min(h H) float32 {
+func (s *S[T]) Min(h H[T]) float32 {
 	l0 := s.l0.Get(h.v)
 
-	i := bitmap.New32(bitmask(&l0.l1)).Lowest()
+	i := uint32(bitmap.New32(bitmask(&l0.l1)).Lowest())
 	l1a := atomic.LoadUint32(&l0.l1[i])
 	if l1a == 0 {
 		return float32(math.NaN())
 	}
 	l1 := s.getL1(l1a)
 
-	j := bitmap.New32(bitmask(&l1.l2)).Lowest()
+	j := uint32(bitmap.New32(bitmask(&l1.l2)).Lowest())
 	l2a := atomic.LoadUint32(&l1.l2[j])
 	if l2a == 0 {
 		return float32(math.NaN())
@@ -261,17 +312,17 @@ func (s *Store) Min(h H) float32 {
 // Max returns an approximation of the largest value stored in the histogram.
 //
 // It is safe to be called concurrently with Observe.
-func (s *Store) Max(h H) float32 {
+func (s *S[T]) Max(h H[T]) float32 {
 	l0 := s.l0.Get(h.v)
 
-	i := bitmap.New32(bitmask(&l0.l1)).Highest()
+	i := uint32(bitmap.New32(bitmask(&l0.l1)).Highest())
 	l1a := atomic.LoadUint32(&l0.l1[i])
 	if l1a == 0 {
 		return float32(math.NaN())
 	}
 	l1 := s.getL1(l1a)
 
-	j := bitmap.New32(bitmask(&l1.l2)).Highest()
+	j := uint32(bitmap.New32(bitmask(&l1.l2)).Highest())
 	l2a := atomic.LoadUint32(&l1.l2[j])
 	if l2a == 0 {
 		return float32(math.NaN())
@@ -299,7 +350,7 @@ func (s *Store) Max(h H) float32 {
 // Total returns the number of observations that have been recorded.
 //
 // It is safe to be called concurrently with Observe.
-func (s *Store) Total(h H) (total uint64) {
+func (s *S[T]) Total(h H[T]) (total uint64) {
 	l0 := s.l0.Get(h.v)
 	for bm := bitmap.New32(bitmask(&l0.l1)); !bm.Empty(); bm.ClearLowest() {
 		l1 := s.getL1(atomic.LoadUint32(&l0.l1[bm.Lowest()]))
@@ -322,17 +373,17 @@ func (s *Store) Total(h H) (total uint64) {
 // fraction of values observed specified by q are smaller than it.
 //
 // It is safe to be called concurrently with Observe.
-func (s *Store) Quantile(h H, q float64) (v float32) {
+func (s *S[T]) Quantile(h H[T], q float64) (v float32) {
 	target, acc := uint64(q*float64(s.Total(h))+0.5), uint64(0)
 
 	l0 := s.l0.Get(h.v) // TODO: total did this. hmm.
 
 	for bm := bitmap.New32(bitmask(&l0.l1)); !bm.Empty(); bm.ClearLowest() {
-		i := bm.Lowest()
+		i := uint32(bm.Lowest())
 		l1 := s.getL1(atomic.LoadUint32(&l0.l1[i]))
 
 		for bm := bitmap.New32(bitmask(&l1.l2)); !bm.Empty(); bm.ClearLowest() {
-			j := bm.Lowest()
+			j := uint32(bm.Lowest())
 			l2a := atomic.LoadUint32(&l1.l2[j])
 
 			var l2s uint64
@@ -374,7 +425,7 @@ func (s *Store) Quantile(h H, q float64) (v float32) {
 // the requested value.
 //
 // It is safe to be called concurrently with Observe.
-func (s *Store) CDF(h H, v float32) float64 {
+func (s *S[T]) CDF(h H[T], v float32) float64 {
 	obs := math.Float32bits(v)
 	obs ^= uint32(int32(obs)>>31) | (1 << 31)
 
@@ -385,11 +436,11 @@ func (s *Store) CDF(h H, v float32) float64 {
 
 	l0 := s.l0.Get(h.v)
 	for bm := bitmap.New32(bitmask(&l0.l1)); !bm.Empty(); bm.ClearLowest() {
-		i := bm.Lowest()
+		i := uint32(bm.Lowest())
 		l1 := s.getL1(atomic.LoadUint32(&l0.l1[i]))
 
 		for bm := bitmap.New32(bitmask(&l1.l2)); !bm.Empty(); bm.ClearLowest() {
-			j := bm.Lowest()
+			j := uint32(bm.Lowest())
 			l2a := atomic.LoadUint32(&l1.l2[j])
 
 			var bacc uint64
@@ -430,16 +481,16 @@ func (s *Store) CDF(h H, v float32) float64 {
 // the values.
 //
 // It is safe to be called concurrently with Observe.
-func (s *Store) Summary(h H) (total, sum, avg, vari float64) {
+func (s *S[T]) Summary(h H[T]) (total, sum, avg, vari float64) {
 	var total2 float64
 
 	l0 := s.l0.Get(h.v)
 	for bm := bitmap.New32(bitmask(&l0.l1)); !bm.Empty(); bm.ClearLowest() {
-		i := bm.Lowest()
+		i := uint32(bm.Lowest())
 		l1 := s.getL1(atomic.LoadUint32(&l0.l1[i]))
 
 		for bm := bitmap.New32(bitmask(&l1.l2)); !bm.Empty(); bm.ClearLowest() {
-			j := bm.Lowest()
+			j := uint32(bm.Lowest())
 			l2a := atomic.LoadUint32(&l1.l2[j])
 
 			if isAddrLarge(l2a) {
@@ -494,16 +545,16 @@ func (s *Store) Summary(h H) (total, sum, avg, vari float64) {
 // be at least as big as the count.
 //
 // It is safe to be called concurrently with Observe.
-func (s *Store) Distribution(h H, cb func(value float32, count, total uint64)) {
+func (s *S[T]) Distribution(h H[T], cb func(value float32, count, total uint64)) {
 	acc, total := uint64(0), s.Total(h)
 
 	l0 := s.l0.Get(h.v)
 	for bm := bitmap.New32(bitmask(&l0.l1)); !bm.Empty(); bm.ClearLowest() {
-		i := bm.Lowest()
+		i := uint32(bm.Lowest())
 		l1 := s.getL1(atomic.LoadUint32(&l0.l1[i]))
 
 		for bm := bitmap.New32(bitmask(&l1.l2)); !bm.Empty(); bm.ClearLowest() {
-			j := bm.Lowest()
+			j := uint32(bm.Lowest())
 			l2a := atomic.LoadUint32(&l1.l2[j])
 
 			if isAddrLarge(l2a) {

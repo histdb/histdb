@@ -56,10 +56,6 @@ const (
 	_ uintptr = 64 - unsafe.Sizeof(layer1{})
 )
 
-type layer2 interface {
-	get(n int) uint64
-}
-
 type layer2Small struct {
 	_  [0]func() // no equality
 	cs [l2Size]uint32

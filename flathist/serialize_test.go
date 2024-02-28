@@ -17,7 +17,7 @@ func TestSerialize(t *testing.T) {
 		rng := mwc.Rand()
 		var buf [13]byte
 		var w rwutils.W
-		var s Store
+		var s S[any]
 
 		for i := 0; i < 10000; i++ {
 			v := rng.Float32()
@@ -39,7 +39,7 @@ func TestSerialize(t *testing.T) {
 	t.Run("Write", func(t *testing.T) {
 		rng := mwc.Rand()
 
-		var s Store
+		var s S[any]
 		h := s.New()
 		for i := int64(0); i < 10000; i++ {
 			r := float32(rng.Uint32n(1000) + 500)
@@ -55,7 +55,7 @@ func TestSerialize(t *testing.T) {
 	t.Run("Load", func(t *testing.T) {
 		rng := mwc.Rand()
 
-		var s Store
+		var s S[any]
 		h1 := s.New()
 		h2 := s.New()
 
@@ -101,7 +101,7 @@ func BenchmarkSerialize(b *testing.B) {
 	b.Run("AppendTo", func(b *testing.B) {
 		rng := mwc.Rand()
 
-		var s Store
+		var s S[any]
 		h := s.New()
 		for i := int64(0); i < 100000; i++ {
 			s.Observe(h, rng.Float32())
@@ -126,7 +126,7 @@ func BenchmarkSerialize(b *testing.B) {
 	b.Run("ReadFrom", func(b *testing.B) {
 		rng := mwc.Rand()
 
-		var s Store
+		var s S[any]
 		h := s.New()
 		for i := int64(0); i < 100000; i++ {
 			s.Observe(h, rng.Float32())

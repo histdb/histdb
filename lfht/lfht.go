@@ -2,9 +2,12 @@ package lfht
 
 import (
 	"fmt"
+	"io"
 	"math/bits"
 	"sync/atomic"
 	"unsafe"
+
+	"github.com/histdb/histdb/bitmap"
 )
 
 // https://repositorio.inesctec.pt/bitstream/123456789/5465/1/P-00F-YAG.pdf
@@ -73,7 +76,7 @@ type header[K comparable, V any] struct {
 
 	level uint
 	prev  *T[K, V]
-	bmap  bmap
+	bmap  bitmap.T64
 }
 
 func (t *T[K, V]) getHashBucket(hash uint64) (*ptr, uint) {
@@ -114,7 +117,7 @@ func (t *T[K, V]) insert(k K, h uint64, lv lazyValue[V]) *node[K, V] {
 	if entryRef == nil {
 		newNode := &node[K, V]{key: k, hash: h, value: lv.get(), next: tag(t)}
 		if cas(bucket, nil, ptr(newNode)) {
-			t.bmap.AtomicSetIdx(idx)
+			t.bmap.AtomicAddIdx(idx)
 			return newNode
 		}
 		entryRef = load(bucket)
@@ -185,7 +188,7 @@ func (t *T[K, V]) adjustNode(n *node[K, V]) {
 	entryRef := load(bucket)
 	if entryRef == nil {
 		if cas(bucket, nil, ptr(n)) {
-			t.bmap.AtomicSetIdx(idx)
+			t.bmap.AtomicAddIdx(idx)
 			return
 		}
 		entryRef = load(bucket)
@@ -277,7 +280,7 @@ type Iterator[K comparable, V any] struct {
 	top   int
 	stack [_maxLevel]struct {
 		table *T[K, V]
-		pos   bmap
+		pos   bitmap.T64
 	}
 }
 
@@ -364,21 +367,21 @@ func (i *Iterator[K, V]) Value() V     { return i.n.value }
 
 const dumpIndent = "|    "
 
-func dumpPointer[K comparable, V any](indent string, p ptr) {
+func dumpPointer[K comparable, V any](w io.Writer, indent string, p ptr) {
 	if tagged(p) {
 		table := untag[K, V](p)
-		fmt.Printf("%stable[%p]:\n", indent, table)
+		fmt.Fprintf(w, "%stable[%p]:\n", indent, table)
 		for i := range &table.buckets {
-			dumpPointer[K, V](indent+dumpIndent, load(&table.buckets[i]))
+			dumpPointer[K, V](w, indent+dumpIndent, load(&table.buckets[i]))
 		}
 	} else if p != nil {
 		n := (*node[K, V])(p)
 		p := load(&n.next)
-		fmt.Printf("%snode[%p](key:%v, hash:%v, value:%v, next:%p):\n", indent, n, n.key, n.hash, n.value, p)
+		fmt.Fprintf(w, "%snode[%p](key:%v, hash:%v, value:%v, next:%p):\n", indent, n, n.key, n.hash, n.value, p)
 		if !tagged(p) {
-			dumpPointer[K, V](indent+dumpIndent, load(&n.next))
+			dumpPointer[K, V](w, indent+dumpIndent, load(&n.next))
 		}
 	}
 }
 
-func (t *T[K, V]) dump() { dumpPointer[K, V]("", tag(t)) }
+func (t *T[K, V]) Dump(w io.Writer) { dumpPointer[K, V](w, "", tag(t)) }

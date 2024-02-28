@@ -12,10 +12,14 @@ import (
 
 func TestStore(t *testing.T) {
 	t.Run("Merge", func(t *testing.T) {
-		var s Store
+		type t1 struct{}
+		type t2 struct{}
 
-		h1 := s.New()
-		h2 := s.New()
+		var s1 S[t1]
+		var s2 S[t2]
+
+		h1 := s1.New()
+		h2 := s2.New()
 
 		// we want to test these cases:
 		// 1. merge small into large (easy)
@@ -27,108 +31,108 @@ func TestStore(t *testing.T) {
 		// 7. merge small into empty
 		// 8. merge large into empty
 
-		h1l0 := s.l0.Get(h1.v)
-		h1l0.l1[0] = s.l1.New().Raw() | 1<<31
-		h1l1 := s.getL1(h1l0.l1[0])
-		h1l1.l2[0] = s.l2l.New().Raw() | (l2TagLarge << 29)
-		h1l1.l2[1] = s.l2l.New().Raw() | (l2TagLarge << 29)
-		h1l1.l2[2] = s.l2s.New().Raw() | (l2TagSmall << 29)
-		h1l1.l2[3] = s.l2s.New().Raw() | (l2TagSmall << 29)
-		h1l1.l2[4] = s.l2s.New().Raw() | (l2TagSmall << 29)
-		h1l1.l2[5] = s.l2s.New().Raw() | (l2TagSmall << 29)
+		h1l0 := s1.getL0(h1)
+		h1l0.l1[0] = s1.l1.New().Raw() | 1<<31
+		h1l1 := s1.getL1(h1l0.l1[0])
+		h1l1.l2[0] = s1.l2l.New().Raw() | (l2TagLarge << 29)
+		h1l1.l2[1] = s1.l2l.New().Raw() | (l2TagLarge << 29)
+		h1l1.l2[2] = s1.l2s.New().Raw() | (l2TagSmall << 29)
+		h1l1.l2[3] = s1.l2s.New().Raw() | (l2TagSmall << 29)
+		h1l1.l2[4] = s1.l2s.New().Raw() | (l2TagSmall << 29)
+		h1l1.l2[5] = s1.l2s.New().Raw() | (l2TagSmall << 29)
 
-		h2l0 := s.l0.Get(h2.v)
-		h2l0.l1[0] = s.l1.New().Raw() | 1<<31
-		h2l1 := s.getL1(h2l0.l1[0])
-		h2l1.l2[0] = s.l2s.New().Raw() | (l2TagSmall << 29)
-		h2l1.l2[1] = s.l2l.New().Raw() | (l2TagLarge << 29)
-		h2l1.l2[2] = s.l2s.New().Raw() | (l2TagSmall << 29)
-		h2l1.l2[3] = s.l2l.New().Raw() | (l2TagLarge << 29)
-		h2l1.l2[4] = s.l2s.New().Raw() | (l2TagSmall << 29)
-		h2l1.l2[5] = s.l2l.New().Raw() | (l2TagLarge << 29)
-		h2l1.l2[6] = s.l2s.New().Raw() | (l2TagSmall << 29)
-		h2l1.l2[7] = s.l2l.New().Raw() | (l2TagLarge << 29)
+		h2l0 := s2.getL0(h2)
+		h2l0.l1[0] = s2.l1.New().Raw() | 1<<31
+		h2l1 := s2.getL1(h2l0.l1[0])
+		h2l1.l2[0] = s2.l2s.New().Raw() | (l2TagSmall << 29)
+		h2l1.l2[1] = s2.l2l.New().Raw() | (l2TagLarge << 29)
+		h2l1.l2[2] = s2.l2s.New().Raw() | (l2TagSmall << 29)
+		h2l1.l2[3] = s2.l2l.New().Raw() | (l2TagLarge << 29)
+		h2l1.l2[4] = s2.l2s.New().Raw() | (l2TagSmall << 29)
+		h2l1.l2[5] = s2.l2l.New().Raw() | (l2TagLarge << 29)
+		h2l1.l2[6] = s2.l2s.New().Raw() | (l2TagSmall << 29)
+		h2l1.l2[7] = s2.l2l.New().Raw() | (l2TagLarge << 29)
 
 		// case 1.
-		s.getL2L(h1l1.l2[0]).cs[0] = l2GrowAt + 1
-		s.getL2L(h1l1.l2[0]).cs[1] = l2GrowAt + 1
-		s.getL2L(h1l1.l2[0]).cs[9] = 1
-		s.getL2S(h2l1.l2[0]).cs[1] = 1
-		s.getL2S(h2l1.l2[0]).cs[2] = 1
+		s1.getL2L(h1l1.l2[0]).cs[0] = l2GrowAt + 1
+		s1.getL2L(h1l1.l2[0]).cs[1] = l2GrowAt + 1
+		s1.getL2L(h1l1.l2[0]).cs[9] = 1
+		s2.getL2S(h2l1.l2[0]).cs[1] = 1
+		s2.getL2S(h2l1.l2[0]).cs[2] = 1
 
 		// case 2.
-		s.getL2L(h1l1.l2[1]).cs[0] = l2GrowAt + 1
-		s.getL2L(h1l1.l2[1]).cs[1] = l2GrowAt + 1
-		s.getL2L(h1l1.l2[1]).cs[9] = 1
-		s.getL2L(h2l1.l2[1]).cs[1] = l2GrowAt + 1
-		s.getL2L(h2l1.l2[1]).cs[2] = l2GrowAt + 1
+		s1.getL2L(h1l1.l2[1]).cs[0] = l2GrowAt + 1
+		s1.getL2L(h1l1.l2[1]).cs[1] = l2GrowAt + 1
+		s1.getL2L(h1l1.l2[1]).cs[9] = 1
+		s2.getL2L(h2l1.l2[1]).cs[1] = l2GrowAt + 1
+		s2.getL2L(h2l1.l2[1]).cs[2] = l2GrowAt + 1
 
 		// case 3.
-		s.getL2S(h1l1.l2[2]).cs[0] = 1
-		s.getL2S(h1l1.l2[2]).cs[1] = 1
-		s.getL2S(h1l1.l2[2]).cs[9] = 1
-		s.getL2S(h2l1.l2[2]).cs[1] = 1
-		s.getL2S(h2l1.l2[2]).cs[2] = 1
+		s1.getL2S(h1l1.l2[2]).cs[0] = 1
+		s1.getL2S(h1l1.l2[2]).cs[1] = 1
+		s1.getL2S(h1l1.l2[2]).cs[9] = 1
+		s2.getL2S(h2l1.l2[2]).cs[1] = 1
+		s2.getL2S(h2l1.l2[2]).cs[2] = 1
 
 		// case 4.
-		s.getL2S(h1l1.l2[3]).cs[0] = 1
-		s.getL2S(h1l1.l2[3]).cs[1] = 1
-		s.getL2S(h1l1.l2[3]).cs[9] = 1
-		s.getL2L(h2l1.l2[3]).cs[1] = 1
-		s.getL2L(h2l1.l2[3]).cs[2] = 1
+		s1.getL2S(h1l1.l2[3]).cs[0] = 1
+		s1.getL2S(h1l1.l2[3]).cs[1] = 1
+		s1.getL2S(h1l1.l2[3]).cs[9] = 1
+		s2.getL2L(h2l1.l2[3]).cs[1] = 1
+		s2.getL2L(h2l1.l2[3]).cs[2] = 1
 
 		// case 5.
-		s.getL2S(h1l1.l2[4]).cs[0] = 1
-		s.getL2S(h1l1.l2[4]).cs[1] = l2GrowAt
-		s.getL2S(h1l1.l2[4]).cs[9] = 1
-		s.getL2S(h2l1.l2[4]).cs[1] = 1
-		s.getL2S(h2l1.l2[4]).cs[2] = 1
+		s1.getL2S(h1l1.l2[4]).cs[0] = 1
+		s1.getL2S(h1l1.l2[4]).cs[1] = l2GrowAt
+		s1.getL2S(h1l1.l2[4]).cs[9] = 1
+		s2.getL2S(h2l1.l2[4]).cs[1] = 1
+		s2.getL2S(h2l1.l2[4]).cs[2] = 1
 
 		// case 6.
-		s.getL2S(h1l1.l2[5]).cs[0] = 1
-		s.getL2S(h1l1.l2[5]).cs[1] = l2GrowAt
-		s.getL2S(h1l1.l2[5]).cs[9] = 1
-		s.getL2L(h2l1.l2[5]).cs[1] = 1
-		s.getL2L(h2l1.l2[5]).cs[2] = 1
+		s1.getL2S(h1l1.l2[5]).cs[0] = 1
+		s1.getL2S(h1l1.l2[5]).cs[1] = l2GrowAt
+		s1.getL2S(h1l1.l2[5]).cs[9] = 1
+		s2.getL2L(h2l1.l2[5]).cs[1] = 1
+		s2.getL2L(h2l1.l2[5]).cs[2] = 1
 
 		// case 7.
-		s.getL2S(h2l1.l2[6]).cs[1] = 1
-		s.getL2S(h2l1.l2[6]).cs[2] = 1
+		s2.getL2S(h2l1.l2[6]).cs[1] = 1
+		s2.getL2S(h2l1.l2[6]).cs[2] = 1
 
 		// case 8.
-		s.getL2L(h2l1.l2[7]).cs[1] = l2GrowAt + 1
-		s.getL2L(h2l1.l2[7]).cs[2] = l2GrowAt + 1
+		s2.getL2L(h2l1.l2[7]).cs[1] = l2GrowAt + 1
+		s2.getL2L(h2l1.l2[7]).cs[2] = l2GrowAt + 1
 
-		s.Merge(h1, h2)
+		Merge(&s1, h1, &s2, h2)
 
-		assert.Equal(t, s.getL2L(h1l1.l2[0]).cs, [64]uint64{
+		assert.Equal(t, s1.getL2L(h1l1.l2[0]).cs, [64]uint64{
 			0: l2GrowAt + 1, 1: l2GrowAt + 2, 2: 1, 9: 1,
 		})
-		assert.Equal(t, s.getL2L(h1l1.l2[1]).cs, [64]uint64{
+		assert.Equal(t, s1.getL2L(h1l1.l2[1]).cs, [64]uint64{
 			0: l2GrowAt + 1, 1: 2*l2GrowAt + 2, 2: l2GrowAt + 1, 9: 1,
 		})
-		assert.Equal(t, s.getL2S(h1l1.l2[2]).cs, [64]uint32{
+		assert.Equal(t, s1.getL2S(h1l1.l2[2]).cs, [64]uint32{
 			0: 1, 1: 2, 2: 1, 9: 1,
 		})
-		assert.Equal(t, s.getL2S(h1l1.l2[3]).cs, [64]uint32{
+		assert.Equal(t, s1.getL2S(h1l1.l2[3]).cs, [64]uint32{
 			0: 1, 1: 2, 2: 1, 9: 1,
 		})
-		assert.Equal(t, s.getL2L(h1l1.l2[4]).cs, [64]uint64{
+		assert.Equal(t, s1.getL2L(h1l1.l2[4]).cs, [64]uint64{
 			0: 1, 1: l2GrowAt + 1, 2: 1, 9: 1,
 		})
-		assert.Equal(t, s.getL2L(h1l1.l2[5]).cs, [64]uint64{
+		assert.Equal(t, s1.getL2L(h1l1.l2[5]).cs, [64]uint64{
 			0: 1, 1: l2GrowAt + 1, 2: 1, 9: 1,
 		})
-		assert.Equal(t, s.getL2S(h1l1.l2[6]).cs, [64]uint32{
+		assert.Equal(t, s1.getL2S(h1l1.l2[6]).cs, [64]uint32{
 			1: 1, 2: 1,
 		})
-		assert.Equal(t, s.getL2L(h1l1.l2[7]).cs, [64]uint64{
+		assert.Equal(t, s1.getL2L(h1l1.l2[7]).cs, [64]uint64{
 			1: l2GrowAt + 1, 2: l2GrowAt + 1,
 		})
 	})
 
 	t.Run("MinMax", func(t *testing.T) {
-		var s Store
+		var s S[any]
 
 		h := s.New()
 		for i := float32(0); i < 1000; i++ {
@@ -140,7 +144,7 @@ func TestStore(t *testing.T) {
 	})
 
 	t.Run("Total", func(t *testing.T) {
-		var s Store
+		var s S[any]
 
 		h := s.New()
 		for i := float32(0); i < 1000; i++ {
@@ -151,7 +155,7 @@ func TestStore(t *testing.T) {
 	})
 
 	t.Run("Quantile", func(t *testing.T) {
-		var s Store
+		var s S[any]
 
 		h := s.New()
 		for i := float32(0); i < 1000; i++ {
@@ -168,7 +172,7 @@ func TestStore(t *testing.T) {
 
 func BenchmarkHistogram(b *testing.B) {
 	b.Run("Observe", func(b *testing.B) {
-		var s Store
+		var s S[any]
 		h := s.New()
 
 		perfbench.Open(b)
@@ -181,7 +185,7 @@ func BenchmarkHistogram(b *testing.B) {
 	})
 
 	b.Run("Observe_Parallel", func(b *testing.B) {
-		var s Store
+		var s S[any]
 		h := s.New()
 
 		b.ReportAllocs()
@@ -199,7 +203,7 @@ func BenchmarkHistogram(b *testing.B) {
 	b.Run("Min", func(b *testing.B) {
 		rng := mwc.Rand()
 
-		var s Store
+		var s S[any]
 		h := s.New()
 
 		for i := 0; i < 1000000; i++ {
@@ -218,7 +222,7 @@ func BenchmarkHistogram(b *testing.B) {
 	b.Run("Max", func(b *testing.B) {
 		rng := mwc.Rand()
 
-		var s Store
+		var s S[any]
 		h := s.New()
 
 		for i := 0; i < 1000000; i++ {
@@ -237,7 +241,7 @@ func BenchmarkHistogram(b *testing.B) {
 	b.Run("Total", func(b *testing.B) {
 		rng := mwc.Rand()
 
-		var s Store
+		var s S[any]
 		h := s.New()
 
 		for i := 0; i < 1000000; i++ {
@@ -256,7 +260,7 @@ func BenchmarkHistogram(b *testing.B) {
 	b.Run("Total_Easy", func(b *testing.B) {
 		rng := mwc.Rand()
 
-		var s Store
+		var s S[any]
 		h := s.New()
 
 		for i := 0; i < 1000000; i++ {
@@ -276,7 +280,7 @@ func BenchmarkHistogram(b *testing.B) {
 	b.Run("Quantile", func(b *testing.B) {
 		rng := mwc.Rand()
 
-		var s Store
+		var s S[any]
 		h := s.New()
 
 		for i := 0; i < 1000000; i++ {
@@ -296,7 +300,7 @@ func BenchmarkHistogram(b *testing.B) {
 	b.Run("Quantile_Easy", func(b *testing.B) {
 		rng := mwc.Rand()
 
-		var s Store
+		var s S[any]
 		h := s.New()
 
 		for i := 0; i < 1000000; i++ {
@@ -316,7 +320,7 @@ func BenchmarkHistogram(b *testing.B) {
 	b.Run("CDF", func(b *testing.B) {
 		rng := mwc.Rand()
 
-		var s Store
+		var s S[any]
 		h := s.New()
 
 		for i := 0; i < 1000000; i++ {
@@ -336,7 +340,7 @@ func BenchmarkHistogram(b *testing.B) {
 	b.Run("CDF_Easy", func(b *testing.B) {
 		rng := mwc.Rand()
 
-		var s Store
+		var s S[any]
 		h := s.New()
 
 		for i := 0; i < 1000000; i++ {
@@ -356,7 +360,7 @@ func BenchmarkHistogram(b *testing.B) {
 	b.Run("Summary", func(b *testing.B) {
 		rng := mwc.Rand()
 
-		var s Store
+		var s S[any]
 		h := s.New()
 
 		for i := 0; i < 1000; i++ {

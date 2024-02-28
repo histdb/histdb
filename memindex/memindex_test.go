@@ -21,6 +21,24 @@ func snd[T, U, V any](t T, u U, v V) U { return u }
 func trd[T, U, V any](t T, u U, v V) V { return v }
 
 func TestMemindex(t *testing.T) {
+	t.Run("AppendMetricName", func(t *testing.T) {
+		var idx T
+
+		idx.Add(bs("a=b,foo="))
+		idx.Add(bs("a=b,foo"))
+		idx.Add(bs("a=c,foo=a"))
+
+		{
+			n, _ := idx.AppendMetricName(0, nil)
+			assert.Equal(t, n, "a=b,foo")
+		}
+
+		{
+			n, _ := idx.AppendMetricName(1, nil)
+			assert.Equal(t, n, "a=c,foo=a")
+		}
+	})
+
 	t.Run("Find", func(t *testing.T) {
 		var idx T
 

@@ -1,6 +1,7 @@
 package lfht
 
 import (
+	"os"
 	"runtime"
 	"sync"
 	"testing"
@@ -14,19 +15,19 @@ func TestTable(t *testing.T) {
 	for i := uint32(0); i < 100; i++ {
 		ta.Insert(getKey(i), getHash(i), getValue)
 		if v, ok := ta.Find(getKey(i), getHash(i)); !ok || v != 1 {
-			ta.dump()
+			ta.Dump(os.Stderr)
 			t.Fatal(i)
 		}
 	}
 	for i := uint32(0); i < 100; i++ {
 		if v, ok := ta.Find(getKey(i), getHash(i)); !ok || v != 1 {
-			ta.dump()
+			ta.Dump(os.Stderr)
 			t.Fatal(i)
 		}
 	}
 	for iter := ta.Iterator(); iter.Next(); {
 		if v, ok := ta.Find(iter.Key(), iter.Hash()); !ok || v != iter.Value() {
-			ta.dump()
+			ta.Dump(os.Stderr)
 			t.Fatal(iter.Key(), iter.Value())
 		}
 	}

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/RoaringBitmap/roaring/roaring64"
+	"github.com/RoaringBitmap/roaring"
 
 	"github.com/histdb/histdb/num"
 	"github.com/histdb/histdb/sizeof"
@@ -17,24 +17,24 @@ const orParallelism = 0
 //
 
 type (
-	Bitmap = roaring64.Bitmap
-	Id     = uint64
-	rwId   = num.U64
+	Bitmap = roaring.Bitmap
+	Id     = uint32
+	RWId   = num.U32
 )
 
-func newBitmap() *Bitmap           { return roaring64.New() }
-func parOr(bms ...*Bitmap) *Bitmap { return roaring64.ParOr(0, bms...) }
+func newBitmap() *Bitmap           { return roaring.New() }
+func parOr(bms ...*Bitmap) *Bitmap { return roaring.ParOr(0, bms...) }
 func parAnd(bms ...*Bitmap) *Bitmap {
-	// return roaring.ParAnd(0, bms...)
+	return roaring.ParAnd(0, bms...)
 
-	if len(bms) == 0 {
-		return newBitmap()
-	}
-	o := bms[0].Clone()
-	for _, bm := range bms[1:] {
-		o.And(bm)
-	}
-	return o
+	// if len(bms) == 0 {
+	// 	return newBitmap()
+	// }
+	// o := bms[0].Clone()
+	// for _, bm := range bms[1:] {
+	// 	o.And(bm)
+	// }
+	// return o
 }
 
 //

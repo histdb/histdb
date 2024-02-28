@@ -21,10 +21,10 @@ type T struct {
 	fixed bool
 	card  int
 
-	metrics     hashtbl.T[histdb.Hash, rwId]
-	tag_names   petname.T[histdb.TagHash, rwId]
-	tkey_names  petname.T[histdb.TagKeyHash, rwId]
-	tkeys_names hashtbl.T[tkeySet, rwId]
+	metrics     hashtbl.T[histdb.Hash, RWId]
+	tag_names   petname.T[histdb.TagHash, RWId]
+	tkey_names  petname.T[histdb.TagKeyHash, RWId]
+	tkeys_names hashtbl.T[tkeySet, RWId]
 
 	tag_to_metrics   []*Bitmap // what metrics include this tag
 	tag_to_tkeys     []*Bitmap // what tag keys exist in any metric with tag
@@ -71,7 +71,7 @@ func (t *T) Fix() {
 	fix(t.tkey_to_tags)
 	fix(t.tkey_to_tvals)
 
-	t.metrics = hashtbl.T[histdb.Hash, rwId]{}
+	t.metrics = hashtbl.T[histdb.Hash, RWId]{}
 
 	t.fixed = true
 }
@@ -188,7 +188,7 @@ func (t *T) Add(metric []byte) (histdb.Hash, Id, bool) {
 	// 	return hash, false
 	// }
 
-	metrici, ok := t.metrics.Insert(hash, rwId(t.metrics.Len()))
+	metrici, ok := t.metrics.Insert(hash, RWId(t.metrics.Len()))
 	if ok {
 		return hash, Id(metrici), false
 	}
@@ -198,7 +198,7 @@ func (t *T) Add(metric []byte) (histdb.Hash, Id, bool) {
 		return tkeyisSorted[i] < tkeyisSorted[j]
 	})
 
-	tkeyisi, _ := t.tkeys_names.Insert(tkeyisSorted, rwId(t.tkeys_names.Len()))
+	tkeyisi, _ := t.tkeys_names.Insert(tkeyisSorted, RWId(t.tkeys_names.Len()))
 	getBitmap(&t.tkeys_to_metrics, Id(tkeyisi)).Add(Id(metrici))
 
 	t.card++
@@ -266,7 +266,7 @@ func (t *T) DecodeInto(tagis []Id, buf []byte) ([]byte, bool) {
 	}
 
 	for i, tagi := range tagis {
-		tag := t.tag_names.Get(rwId(tagi))
+		tag := t.tag_names.Get(RWId(tagi))
 		if tag == nil {
 			return nil, false
 		}
@@ -303,8 +303,8 @@ func (t *T) AppendMetricName(id Id, buf []byte) ([]byte, bool) {
 	}
 
 	sort.Slice(tagis, func(i, j int) bool {
-		tagi := t.tag_names.Get(rwId(tagis[i]))
-		tagj := t.tag_names.Get(rwId(tagis[j]))
+		tagi := t.tag_names.Get(RWId(tagis[i]))
+		tagj := t.tag_names.Get(RWId(tagis[j]))
 		return string(tagi) < string(tagj)
 	})
 
@@ -388,7 +388,7 @@ func (t *T) QueryFilter(tkey []byte, fn func([]byte) bool, cb func(*Bitmap)) {
 	var bms []*Bitmap
 
 	Iter(t.tkey_to_tvals[tkeyn], func(tagn Id) bool {
-		if fn(tagValue(tkey, t.tag_names.Get(rwId(tagn)))) {
+		if fn(tagValue(tkey, t.tag_names.Get(RWId(tagn)))) {
 			bms = append(bms, t.tag_to_metrics[tagn])
 		}
 		return true
@@ -407,7 +407,7 @@ func (t *T) QueryFilterNot(tkey []byte, fn func([]byte) bool, cb func(*Bitmap)) 
 	var bms []*Bitmap
 
 	Iter(t.tkey_to_tvals[tkeyn], func(tagn Id) bool {
-		if !fn(tagValue(tkey, t.tag_names.Get(rwId(tagn)))) {
+		if !fn(tagValue(tkey, t.tag_names.Get(RWId(tagn)))) {
 			bms = append(bms, t.tag_to_metrics[tagn])
 		}
 		return true
@@ -472,7 +472,7 @@ func (t *T) TagKeys(input []byte, cb func(result []byte) bool) {
 	// the only way it's here and still empty is if the input query was empty
 	if mbm.IsEmpty() {
 		for i := 0; i < t.tkey_names.Len(); i++ {
-			if !cb(t.tkey_names.Get(rwId(i))) {
+			if !cb(t.tkey_names.Get(RWId(i))) {
 				return
 			}
 		}
@@ -483,7 +483,7 @@ func (t *T) TagKeys(input []byte, cb func(result []byte) bool) {
 		if mbm != nil && !mbm.Intersects(t.tkey_to_metrics[name]) {
 			return true
 		}
-		return cb(t.tkey_names.Get(rwId(name)))
+		return cb(t.tkey_names.Get(RWId(name)))
 	})
 }
 
@@ -549,7 +549,7 @@ func (t *T) TagValues(input, tkey []byte, cb func(result []byte) bool) {
 	}
 
 	Iter(tbm, func(name Id) bool {
-		tag := t.tag_names.Get(rwId(name))
+		tag := t.tag_names.Get(RWId(name))
 		if len(tag) <= len(tkey) {
 			return true
 		} else if mbm != nil && !mbm.Intersects(t.tag_to_metrics[name]) {
