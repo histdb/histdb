@@ -18,8 +18,8 @@ func upperValue(i, j, k uint32) float32 {
 }
 
 const (
-	l0Bits = 4
-	l1Bits = 4
+	l0Bits = 5
+	l1Bits = 5
 	l2Bits = 6
 
 	l0Size = 1 << l0Bits
@@ -41,20 +41,10 @@ type layer0 struct {
 	l1 [l0Size]uint32
 }
 
-const (
-	_ uintptr = unsafe.Sizeof(layer0{}) - 64
-	_ uintptr = 64 - unsafe.Sizeof(layer0{})
-)
-
 type layer1 struct {
 	_  [0]func() // no equality
 	l2 [l1Size]uint32
 }
-
-const (
-	_ uintptr = unsafe.Sizeof(layer1{}) - 64
-	_ uintptr = 64 - unsafe.Sizeof(layer1{})
-)
 
 type layer2Small struct {
 	_  [0]func() // no equality
@@ -65,6 +55,13 @@ type layer2Large struct {
 	_  [0]func() // no equality
 	cs [l2Size]uint64
 }
+
+const (
+	_ uintptr = (unsafe.Sizeof(layer0{}) - 128) * (128 - unsafe.Sizeof(layer0{}))
+	_ uintptr = (unsafe.Sizeof(layer1{}) - 128) * (128 - unsafe.Sizeof(layer1{}))
+	_ uintptr = (unsafe.Sizeof(layer2Small{}) - 256) * (256 - unsafe.Sizeof(layer2Small{}))
+	_ uintptr = (unsafe.Sizeof(layer2Large{}) - 512) * (512 - unsafe.Sizeof(layer2Large{}))
+)
 
 const (
 	lAddrMask = 1<<29 - 1

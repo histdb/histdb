@@ -140,7 +140,7 @@ func TestStore(t *testing.T) {
 		}
 
 		assert.Equal(t, s.Min(h), 0.)
-		assert.Equal(t, s.Max(h), 1000.)
+		assert.Equal(t, s.Max(h), 998.)
 	})
 
 	t.Run("Total", func(t *testing.T) {
@@ -163,10 +163,10 @@ func TestStore(t *testing.T) {
 		}
 
 		assert.Equal(t, s.Quantile(h, 0), 0.)
-		assert.Equal(t, s.Quantile(h, .25), 248.)
-		assert.Equal(t, s.Quantile(h, .5), 496.)
-		assert.Equal(t, s.Quantile(h, 1), 1000.)
-		assert.Equal(t, s.Quantile(h, 2), 1000.)
+		assert.Equal(t, s.Quantile(h, .25), 250.)
+		assert.Equal(t, s.Quantile(h, .5), 500.)
+		assert.Equal(t, s.Quantile(h, 1), 998.)
+		assert.Equal(t, s.Quantile(h, 2), 998.)
 	})
 }
 

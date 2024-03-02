@@ -2,7 +2,6 @@ package flathist
 
 import (
 	"encoding/hex"
-	"runtime"
 	"testing"
 
 	"github.com/aclements/go-perfevent/perfbench"
@@ -13,29 +12,6 @@ import (
 )
 
 func TestSerialize(t *testing.T) {
-	t.Run("WriteSingle", func(t *testing.T) {
-		rng := mwc.Rand()
-		var buf [13]byte
-		var w rwutils.W
-		var s S[any]
-
-		for i := 0; i < 10000; i++ {
-			v := rng.Float32()
-
-			h := s.New()
-			s.Observe(h, v)
-
-			WriteSingle(&buf, v)
-
-			w.Init(w.Done().Reset())
-			AppendTo(&s, h, &w)
-
-			assert.Equal(t, buf[:], w.Done().Prefix())
-		}
-
-		t.Logf("%d\n%s", len(buf), hex.Dump(buf[:]))
-	})
-
 	t.Run("Write", func(t *testing.T) {
 		rng := mwc.Rand()
 
@@ -84,20 +60,6 @@ func TestSerialize(t *testing.T) {
 }
 
 func BenchmarkSerialize(b *testing.B) {
-	b.Run("WriteSingle", func(b *testing.B) {
-		rng := mwc.Rand()
-		var buf [13]byte
-
-		perfbench.Open(b)
-		b.ReportAllocs()
-		b.ResetTimer()
-
-		for i := 0; i < b.N; i++ {
-			WriteSingle(&buf, rng.Float32())
-		}
-		runtime.KeepAlive(&buf)
-	})
-
 	b.Run("AppendTo", func(b *testing.B) {
 		rng := mwc.Rand()
 

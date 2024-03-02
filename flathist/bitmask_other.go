@@ -3,4 +3,4 @@
 
 package flathist
 
-func bitmask(data *[16]uint32) uint32 { return bitmaskFallback(data) }
+func bitmask(data *[32]uint32) uint32 { return bitmaskFallback(data) }

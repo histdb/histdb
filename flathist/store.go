@@ -42,7 +42,7 @@ type Stats struct {
 	L2L  uint32
 }
 
-func (s *S[T]) WillRealloc() bool { return s.l0.Full() }
+func (s *S[T]) Count() uint32 { return s.l0.Allocated() }
 
 func (s *S[T]) Stats() Stats {
 	return Stats{

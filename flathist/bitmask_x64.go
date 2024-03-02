@@ -4,6 +4,6 @@
 package flathist
 
 //go:noescape
-func bitmaskAVX(data *[16]uint32) uint32
+func bitmaskAVX(data *[32]uint32) uint32
 
-func bitmask(data *[16]uint32) uint32 { return bitmaskAVX(data) }
+func bitmask(data *[32]uint32) uint32 { return bitmaskAVX(data) }

@@ -2,7 +2,6 @@ package flathist
 
 import (
 	"encoding/binary"
-	"math"
 
 	"github.com/histdb/histdb/bitmap"
 	"github.com/histdb/histdb/rwutils"
@@ -19,18 +18,9 @@ import (
 //      make a l2 at least 80 bytes.
 //   3. maybe some other l2 serialization options?
 
-func WriteSingle(buf *[13]byte, v float32) {
-	bits := math.Float32bits(v)
-	bits ^= uint32(int32(bits)>>31) | (1 << 31)
-	binary.LittleEndian.PutUint16(buf[0:2], 1<<((bits>>l0Shift)%l0Size))
-	binary.LittleEndian.PutUint16(buf[2:4], 1<<((bits>>l1Shift)%l1Size))
-	binary.LittleEndian.PutUint64(buf[4:12], 1<<((bits>>l2Shift)%l2Size))
-	buf[12] = 2 // varint encoding of 1
-}
-
 const (
-	_ uint = (l0Bits - 4) * (4 - l0Bits) // assumption: l0 is 2^4 bits
-	_ uint = (l1Bits - 4) * (4 - l1Bits) // assumption: l1 is 2^4 bits
+	_ uint = (l0Bits - 5) * (5 - l0Bits) // assumption: l0 is 2^4 bits
+	_ uint = (l1Bits - 5) * (5 - l1Bits) // assumption: l1 is 2^4 bits
 	_ uint = (l2Bits - 6) * (6 - l2Bits) // assumption: l2 is 2^6 bits
 )
 
@@ -39,14 +29,14 @@ func AppendTo[T any](s *S[T], h H[T], w *rwutils.W) {
 	l0 := s.l0.Get(h.v)
 
 	bm := bitmask(&l0.l1)
-	w.Uint16(uint16(bm))
+	w.Uint32(bm)
 
 	for bm := bitmap.New32(bm); !bm.Empty(); bm.ClearLowest() {
 		i := bm.Lowest()
 		l1 := s.getL1(l0.l1[i])
 
 		bm := bitmask(&l1.l2)
-		w.Uint16(uint16(bm))
+		w.Uint32(bm)
 
 		for bm := bitmap.New32(bm); !bm.Empty(); bm.ClearLowest() {
 			i := bm.Lowest()
@@ -80,7 +70,7 @@ func AppendTo[T any](s *S[T], h H[T], w *rwutils.W) {
 func ReadFrom[T any](s *S[T], h H[T], r *rwutils.R) {
 	l0 := s.l0.Get(h.v)
 
-	for bm := bitmap.New32(uint32(r.Uint16())); !bm.Empty(); bm.ClearLowest() {
+	for bm := bitmap.New32(r.Uint32()); !bm.Empty(); bm.ClearLowest() {
 		l1i := bm.Lowest()
 
 		l1a := l0.l1[l1i]
@@ -90,7 +80,7 @@ func ReadFrom[T any](s *S[T], h H[T], r *rwutils.R) {
 		}
 		l1 := s.getL1(l1a)
 
-		for bm := bitmap.New32(uint32(r.Uint16())); !bm.Empty(); bm.ClearLowest() {
+		for bm := bitmap.New32(r.Uint32()); !bm.Empty(); bm.ClearLowest() {
 			l2i := bm.Lowest()
 
 			l2a := l1.l2[l2i]

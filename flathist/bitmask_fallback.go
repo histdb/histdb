@@ -1,9 +1,8 @@
 package flathist
 
-func bitmaskFallback(data *[16]uint32) uint32 {
-	var mask uint32
+func bitmaskFallback(data *[32]uint32) (m uint32) {
 	for i, v := range data {
-		mask |= (v >> 31) << uint(i)
+		m |= (v >> 31) << i
 	}
-	return mask
+	return
 }
