@@ -3,7 +3,7 @@ module github.com/histdb/histdb
 go 1.22.0
 
 require (
-	github.com/RoaringBitmap/roaring v1.7.0
+	github.com/RoaringBitmap/roaring v1.9.0
 	github.com/aclements/go-perfevent v0.0.0-20240226150523-a53be9569332
 	github.com/klauspost/cpuid/v2 v2.2.6
 	github.com/zeebo/assert v1.3.1

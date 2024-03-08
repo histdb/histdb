@@ -30,12 +30,12 @@ func TestMemindex(t *testing.T) {
 
 		{
 			n, _ := idx.AppendMetricName(0, nil)
-			assert.Equal(t, n, "a=b,foo")
+			assert.Equal(t, n, bs("a=b,foo"))
 		}
 
 		{
 			n, _ := idx.AppendMetricName(1, nil)
-			assert.Equal(t, n, "a=c,foo=a")
+			assert.Equal(t, n, bs("a=c,foo=a"))
 		}
 	})
 
