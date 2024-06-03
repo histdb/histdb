@@ -9,6 +9,7 @@ import (
 	"runtime/pprof"
 	"time"
 
+	"github.com/histdb/histdb/card"
 	"github.com/histdb/histdb/rwutils"
 )
 
@@ -50,7 +51,7 @@ func init() {
 	count := 0
 
 	lstats := start
-	lcard := 0
+	lcard := uint64(0)
 	lcount := 0
 
 	stats := func() {
@@ -78,15 +79,15 @@ func init() {
 		lcount = count
 	}
 
+	var cf card.Fixer
+	cf.DropTagKey([]byte("inst"))
+
 	scanner := bufio.NewScanner(gzfh)
 	for scanner.Scan() {
-		idx.Add(bytes.TrimSpace(scanner.Bytes()), nil, nil)
+		idx.Add(bytes.TrimSpace(scanner.Bytes()), nil, &cf)
 		count++
 		if count%statEvery == 0 {
 			stats()
-			// if idx.Cardinality() >= 1e6 {
-			// 	break
-			// }
 		}
 	}
 

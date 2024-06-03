@@ -44,6 +44,9 @@ func Consume(buf buffer.T) (uint64, buffer.T, bool) {
 	rem := buf.Remaining()
 	if rem == 0 {
 		return 0, buf, false
+	} else if rem >= 9 {
+		nbytes, out := FastConsume(buf.Front9())
+		return out, buf.Advance(nbytes), true
 	}
 
 	// slow path: can't create or use any pointers past the end of the buf

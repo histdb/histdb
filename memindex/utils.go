@@ -108,8 +108,7 @@ func addSet[T comparable](l []T, s map[T]struct{}, v T) ([]T, map[T]struct{}, bo
 	return l, s, true
 }
 
-func Iter(bm *Bitmap, cb func(Id) bool) {
-	var buf [64]Id
+func IterUsing(bm *Bitmap, buf []Id, cb func(Id) bool) {
 	it := bm.ManyIterator()
 	for {
 		n := it.NextMany(buf[:])
@@ -122,4 +121,9 @@ func Iter(bm *Bitmap, cb func(Id) bool) {
 			}
 		}
 	}
+}
+
+func Iter(bm *Bitmap, cb func(Id) bool) {
+	var buf [64]Id
+	IterUsing(bm, buf[:], cb)
 }

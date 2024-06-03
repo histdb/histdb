@@ -41,16 +41,17 @@ func TestMemindex(t *testing.T) {
 		idx.Add(bs("a=b,foo="), nil, nil)
 		idx.Add(bs("a=b,foo"), nil, nil)
 		idx.Add(bs("a=c,foo=a"), nil, nil)
+		idx.Add(bs("a=b,a=c"), nil, nil)
 
-		{
-			n, _ := idx.AppendMetricName(0, nil)
-			assert.Equal(t, n, bs("a=b,foo"))
+		check := func(n Id, s string) {
+			name, ok := idx.AppendMetricName(n, nil)
+			assert.That(t, ok)
+			assert.Equal(t, string(name), s)
 		}
 
-		{
-			n, _ := idx.AppendMetricName(1, nil)
-			assert.Equal(t, n, bs("a=c,foo=a"))
-		}
+		check(0, "a=b,foo")
+		check(1, "a=c,foo=a")
+		check(2, "a=b,a=c")
 	})
 
 	t.Run("Add", func(t *testing.T) {
@@ -61,38 +62,13 @@ func TestMemindex(t *testing.T) {
 		}
 	})
 
-	t.Run("EncodeInto", func(t *testing.T) {
-		var idx T
-
-		idx.Add(bs("foo1=bar1,foo2=bar2,foo3=bar3"), nil, nil)
-
-		tagis, ok := idx.EncodeInto(bs("foo1=bar1,foo3=bar3"), nil)
-		assert.That(t, ok)
-		assert.Equal(t, tagis, []Id{0, 2})
-
-		_, ok = idx.EncodeInto(bs("foo1=bar1,foo4=bar4"), nil)
-		assert.That(t, !ok)
-	})
-
-	t.Run("DecodeInto", func(t *testing.T) {
-		var idx T
-
-		idx.Add(bs("foo1=bar1,foo2=bar2,foo3=bar3"), nil, nil)
-
-		metric := idx.DecodeInto([]Id{0, 2}, nil)
-		assert.Equal(t, string(metric), "foo1=bar1,foo3=bar3")
-
-		metric = idx.DecodeInto([]Id{0, 3}, nil)
-		assert.Equal(t, string(metric), "foo1=bar1")
-	})
-
 	t.Run("Duplicate Tags", func(t *testing.T) {
 		var idx T
 
 		assert.That(t, fth(idx.Add(bs("foo=bar"), nil, nil)))
 		assert.That(t, !fth(idx.Add(bs("foo=bar"), nil, nil)))
 		assert.That(t, !fth(idx.Add(bs("foo=bar,foo=bar"), nil, nil)))
-		assert.That(t, !fth(idx.Add(bs("foo=bar,foo=baz"), nil, nil)))
+		assert.That(t, fth(idx.Add(bs("foo=bar,foo=baz"), nil, nil)))
 	})
 
 	t.Run("Empty Value", func(t *testing.T) {
@@ -112,8 +88,8 @@ func TestMemindex(t *testing.T) {
 		assert.Equal(t, fst(idx.Add(bs("k0=v0,k1=v1"), nil, nil)), metrics.Hash(bs("k0=v0,k1=v1")))
 		assert.NotEqual(t, fst(idx.Add(bs("k0=v0,k1=v1"), nil, nil)), metrics.Hash(bs("k0=v0,k1=v2")))
 		assert.Equal(t, fst(idx.Add(bs("k0=v0,k0=v1"), nil, nil)), metrics.Hash(bs("k0=v0,k0=v1")))
-		assert.Equal(t, fst(idx.Add(bs("k0=v0,k0=v1"), nil, nil)), metrics.Hash(bs("k0=v0")))
-		assert.Equal(t, fst(idx.Add(bs("k0=v0"), nil, nil)), metrics.Hash(bs("k0=v0,k0=v1")))
+		assert.Equal(t, fst(idx.Add(bs("k0=v0,k0=v0"), nil, nil)), metrics.Hash(bs("k0=v0")))
+		assert.Equal(t, fst(idx.Add(bs("k0=v0"), nil, nil)), metrics.Hash(bs("k0=v0,k0=v0")))
 	})
 
 	t.Run("QueryFilter", func(t *testing.T) {
@@ -124,8 +100,8 @@ func TestMemindex(t *testing.T) {
 		idx.Add(bs("k0=v2"), nil, nil)
 
 		idx.QueryFilter(bs("k0"),
-			func(b []byte) bool { t.Logf("%s", b); return string(b) != "k0=v1" },
-			func(bm *Bitmap) { t.Logf("%s", bm) },
+			func(b []byte) bool { return string(b) != "v1" },
+			func(bm *Bitmap) { assert.Equal(t, bm.String(), "{0,2}") },
 		)
 	})
 
@@ -144,7 +120,6 @@ func TestMemindex(t *testing.T) {
 		_, err := r.Done()
 		assert.NoError(t, err)
 
-		assert.Equal(t, idx.metrics, idx2.metrics)
 		assert.Equal(t, idx.tag_names, idx2.tag_names)
 		assert.Equal(t, idx.tkey_names, idx2.tkey_names)
 
@@ -171,40 +146,20 @@ func BenchmarkMemindex(b *testing.B) {
 	_, err := r.Done()
 	assert.NoError(b, err)
 
-	var (
-		query = bs("app=storagenode-release,inst=12XzWDW7Nb496enKo4epRmpQamMe3cw7G3TUuhPrkoqoLb76rHK")
-		// tkey  = bs("name")
-		// mquery = bs(string(query) + "," + string(tkey))
-		// mquery = bs(`name,field,app`)
-	)
+	b.Run("AppendMetricName", func(b *testing.B) {
+		var buf []byte
+		buf, _ = idx.AppendMetricName(10, buf)
 
-	b.Run("EncodeInto", func(b *testing.B) {
 		b.ReportAllocs()
-
-		tagis, ok := idx.EncodeInto(query, nil)
-		assert.That(b, ok)
-
 		b.ResetTimer()
+
 		for i := 0; i < b.N; i++ {
-			_, _ = idx.EncodeInto(query, tagis[:0])
-		}
-	})
-
-	b.Run("DecodeInto", func(b *testing.B) {
-		b.ReportAllocs()
-
-		tagis, ok := idx.EncodeInto(query, nil)
-		assert.That(b, ok)
-		buf := idx.DecodeInto(tagis, nil)
-
-		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
-			_ = idx.DecodeInto(tagis, buf[:0])
+			_, _ = idx.AppendMetricName(10, buf[:0])
 		}
 	})
 
 	b.Run("AddExisting", func(b *testing.B) {
-		var m = bs("foo=bar,baz=bif,foo=bar,a=b,c=d,e=f,g=h")
+		var m = bs("foo=bar,baz=bif,a=b,c=d,e=f,g=h")
 
 		var idx T
 		idx.Add(m, nil, nil)
@@ -220,10 +175,10 @@ func BenchmarkMemindex(b *testing.B) {
 		b.ReportMetric(float64(b.N)/time.Since(start).Seconds()/1e6, "Mm/sec")
 	})
 
-	b.Run("Add1KNew", func(b *testing.B) {
+	b.Run("AddUnique1K", func(b *testing.B) {
 		metrics := make([][]byte, 1000)
 		for i := range metrics {
-			metrics[i] = bs(fmt.Sprintf("foo=%d,bar=fixed", i))
+			metrics[i] = bs(fmt.Sprintf("foo=%d,baz=bif,a=b,c=d,e=f,g=h", i))
 		}
 
 		start := time.Now()

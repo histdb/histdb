@@ -5,8 +5,8 @@ import (
 )
 
 func Hash(metric []byte) histdb.Hash {
-	tkeyis := make([]histdb.TagKeyHash, 0, 8)
-	var tkeyus map[histdb.TagKeyHash]struct{}
+	tagis := make([]histdb.TagHash, 0, 8)
+	var tagus map[histdb.TagHash]struct{}
 	var hash histdb.Hash
 
 	mhp := hash.TagHashPtr()
@@ -21,13 +21,12 @@ func Hash(metric []byte) histdb.Hash {
 		}
 
 		tkeyh := histdb.NewTagKeyHash(tkey)
+		tagh := histdb.NewTagHash(tag)
 
 		var ok bool
-		tkeyis, tkeyus, ok = addSet(tkeyis, tkeyus, tkeyh)
+		tagis, tagus, ok = addSet(tagis, tagus, tagh)
 
 		if ok {
-			tagh := histdb.NewTagHash(tag)
-
 			thp.Add(tkeyh)
 			mhp.Add(tagh)
 		}

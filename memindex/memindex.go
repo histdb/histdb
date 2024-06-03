@@ -4,23 +4,24 @@ import (
 	"bytes"
 
 	"github.com/histdb/histdb"
+	"github.com/histdb/histdb/buffer"
 	"github.com/histdb/histdb/card"
 	"github.com/histdb/histdb/hashtbl"
 	"github.com/histdb/histdb/metrics"
 	"github.com/histdb/histdb/pdqsort"
 	"github.com/histdb/histdb/petname"
+	"github.com/histdb/histdb/varint"
 )
-
-// TODO: we can have an LRU cache of common bitmaps based on tag hashes. for example we always
-// compute the tag_to_metrics intersection bitmap. if we do it smart, we can keep track of the
-// "path" along the way. this would make subsequent queries that have the same prefix faster.
 
 type T struct {
 	_ [0]func() // no equality
 
-	metrics    hashtbl.T[histdb.Hash, RWId]
-	tag_names  petname.T[histdb.TagHash, RWId]
-	tkey_names petname.T[histdb.TagKeyHash, RWId]
+	card RWId
+
+	metrics      hashtbl.T[histdb.Hash, RWId] // for dedupe
+	metric_names petname.B[RWId]              // to quickly append name
+	tag_names    petname.T[histdb.TagHash, RWId]
+	tkey_names   petname.T[histdb.TagKeyHash, RWId]
 
 	tag_to_metrics  []*Bitmap // what metrics include this tag
 	tkey_to_metrics []*Bitmap // what metrics include this tag key
@@ -29,7 +30,8 @@ type T struct {
 
 func (t *T) Size() uint64 {
 	return 0 +
-		/* hash_set        */ t.metrics.Size() +
+		/* metrics         */ t.metrics.Size() +
+		/* metric_names    */ t.metric_names.Size() +
 		/* tag_names       */ t.tag_names.Size() +
 		/* tkey_names      */ t.tkey_names.Size() +
 		/* tag_to_metrics  */ sliceSize(t.tag_to_metrics) +
@@ -38,8 +40,12 @@ func (t *T) Size() uint64 {
 		0
 }
 
-func (t *T) Cardinality() int { return t.metrics.Len() }
+func (t *T) Cardinality() uint64 { return uint64(t.card) }
 
+// Add includes the metric in to the index. It returns the hash of the metric,
+// the id of the metric, the normalized metric (if the incoming normalized buf
+// if not nil), and a boolean indicating if the metric was newly added to the
+// index.
 func (t *T) Add(metric, normalized []byte, cf *card.Fixer) (histdb.Hash, Id, []byte, bool) {
 	if len(metric) == 0 {
 		return histdb.Hash{}, 0, metric, false
@@ -47,7 +53,7 @@ func (t *T) Add(metric, normalized []byte, cf *card.Fixer) (histdb.Hash, Id, []b
 
 	tkeyis := make([]Id, 0, 8)
 	tagis := make([]Id, 0, 8)
-	var tkeyus map[Id]struct{}
+	var tagus map[Id]struct{}
 	var hash histdb.Hash
 
 	mhp := hash.TagHashPtr()
@@ -66,17 +72,17 @@ func (t *T) Add(metric, normalized []byte, cf *card.Fixer) (histdb.Hash, Id, []b
 		tkeyh := histdb.NewTagKeyHash(tkey)
 		tkeyi := t.tkey_names.Put(tkeyh, tkey)
 
+		tagh := histdb.NewTagHash(tag)
+		tagi := t.tag_names.Put(tagh, tag)
+
 		var ok bool
-		tkeyis, tkeyus, ok = addSet(tkeyis, tkeyus, Id(tkeyi))
+		tagis, tagus, ok = addSet(tagis, tagus, Id(tagi))
 
 		if ok {
-			tagh := histdb.NewTagHash(tag)
-
 			thp.Add(tkeyh)
 			mhp.Add(tagh)
 
-			tagi := t.tag_names.Put(tagh, tag)
-			tagis = append(tagis, Id(tagi))
+			tkeyis = append(tkeyis, Id(tkeyi))
 		}
 	}
 
@@ -84,26 +90,22 @@ func (t *T) Add(metric, normalized []byte, cf *card.Fixer) (histdb.Hash, Id, []b
 		return histdb.Hash{}, 0, metric, false
 	}
 
-	// TODO: why was this check here? i'm forget and i don't know what it's for so i'm spooked lol
-	// if t.metrics.Len() > 1<<31-1 {
-	// 	return hash, false
-	// }
-
 	metrici, ok := t.metrics.Insert(hash, RWId(t.metrics.Len()))
 	if !ok {
-		for i := range tagis {
-			tagi := tagis[i]
-			tkeyi := tkeyis[i]
+		t.card++
 
-			bitmapIndex(&t.tag_to_metrics, tagi).Add(Id(metrici))   // tagis[i] should know about metric
-			bitmapIndex(&t.tkey_to_tvals, tkeyi).Add(tagis[i])      // tkeys[i] should know about tagis[i]
-			bitmapIndex(&t.tkey_to_metrics, tkeyi).Add(Id(metrici)) // tkeys[i] should know about metric
+		for i, tagi := range tagis {
+			tkeyi := tkeyis[i]
+			bitmapIndex(&t.tag_to_metrics, tagi).Add(Id(metrici))
+			bitmapIndex(&t.tkey_to_tvals, tkeyi).Add(tagi)
+			bitmapIndex(&t.tkey_to_metrics, tkeyi).Add(Id(metrici))
 		}
 	}
 
-	if normalized != nil {
-		// we have to sort after adding to the bitmaps if necessary because we assume that the values
-		// are added in numeric order so we can append a single bitmap to the slice at a time.
+	if normalized != nil || !ok {
+		// we have to sort after adding to the bitmaps if necessary because we
+		// assume that the values are added in numeric order so we can append a
+		// single bitmap to the slice at a time.
 		pdqsort.Sort(pdqsort.T{
 			Less: func(i, j int) bool {
 				tagi := t.tag_names.Get(RWId(tagis[i]))
@@ -115,95 +117,53 @@ func (t *T) Add(metric, normalized []byte, cf *card.Fixer) (histdb.Hash, Id, []b
 				tkeyis[i], tkeyis[j] = tkeyis[j], tkeyis[i]
 			},
 		}, len(tagis))
+	}
 
-		normalized = t.DecodeInto(tagis, normalized[:0])
+	if !ok {
+		buf := make([]byte, 0, 2*len(tagis))
+		for _, tagi := range tagis {
+			var tmp [9]byte
+			n := varint.Append(&tmp, uint64(tagi))
+			buf = append(buf, tmp[:n]...)
+		}
+		t.metric_names.Append(buf)
+	}
+
+	if normalized != nil {
+		for i, tagi := range tagis {
+			if i > 0 {
+				normalized = append(normalized, ',')
+			}
+			normalized = append(normalized, t.tag_names.Get(RWId(tagi))...)
+		}
 	}
 
 	return hash, Id(metrici), normalized, !ok
 }
 
-func (t *T) EncodeInto(metric []byte, out []Id) ([]Id, bool) {
-	if len(metric) == 0 {
+func (t *T) AppendMetricName(id Id, buf []byte) ([]byte, bool) {
+	tagis := buffer.OfLen(t.metric_names.Get(RWId(id)))
+	if tagis.Cap() == 0 {
 		return nil, false
 	}
 
-	tkeyis := make([]Id, 0, 8)
-	var tkeyus map[Id]struct{}
+	var (
+		tagi uint64
+		ok   bool
+	)
 
-	for rest := metric; len(rest) > 0; {
-		var tkey, tag []byte
-		tkey, tag, rest = metrics.PopTag(rest)
-		if len(tag) == 0 {
-			continue
-		}
-
-		tkeyh := histdb.NewTagKeyHash(tkey)
-		tkeyi, ok := t.tkey_names.Find(tkeyh)
+	for i := 0; tagis.Remaining() > 0; i++ {
+		tagi, tagis, ok = varint.Consume(tagis)
 		if !ok {
 			return nil, false
-		}
-
-		tkeyis, tkeyus, ok = addSet(tkeyis, tkeyus, Id(tkeyi))
-
-		if ok {
-			tagh := histdb.NewTagHash(tag)
-			tagi, ok := t.tag_names.Find(tagh)
-			if !ok {
-				return nil, false
-			}
-
-			out = append(out, Id(tagi))
-		}
-	}
-
-	if len(out) >= 256 {
-		return nil, false
-	}
-
-	return out, true
-}
-
-func (t *T) DecodeInto(tagis []Id, buf []byte) []byte {
-	for i, tagi := range tagis {
-		tag := t.tag_names.Get(RWId(tagi))
-		if tag == nil {
-			continue
 		}
 		if i > 0 {
 			buf = append(buf, ',')
 		}
-		buf = append(buf, tag...)
-	}
-	return buf
-}
-
-func (t *T) AppendMetricName(id Id, buf []byte) ([]byte, bool) {
-	tagis := make([]Id, 0, 8)
-
-	for tkeyn, tkeybm := range t.tkey_to_metrics {
-		if !tkeybm.Contains(id) {
-			continue
-		}
-
-		Iter(t.tkey_to_tvals[tkeyn], func(tagn Id) bool {
-			if t.tag_to_metrics[tagn].Contains(id) {
-				tagis = append(tagis, tagn)
-			}
-			return true
-		})
+		buf = append(buf, t.tag_names.Get(RWId(tagi))...)
 	}
 
-	if len(tagis) == 0 {
-		return nil, false
-	}
-
-	pdqsort.Less(tagis, func(i, j int) bool {
-		tagi := t.tag_names.Get(RWId(tagis[i]))
-		tagj := t.tag_names.Get(RWId(tagis[j]))
-		return string(tagi) < string(tagj)
-	})
-
-	return t.DecodeInto(tagis, buf), true
+	return buf, true
 }
 
 func (t *T) LowCardinalityTags(under int, cb func([]byte) bool) {

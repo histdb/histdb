@@ -20,14 +20,16 @@ func AppendTo(t *T, w *rwutils.W) {
 	w.Uint64(0) // version
 
 	hashtbl.AppendTo(&t.metrics, w)
-	petname.AppendTo(&t.tag_names, w)
-	petname.AppendTo(&t.tkey_names, w)
+	petname.AppendBTo(&t.metric_names, w)
+	petname.AppendTTo(&t.tag_names, w)
+	petname.AppendTTo(&t.tkey_names, w)
 
 	var buf bytes.Buffer
 	appendBitmaps := func(bms []*Bitmap) {
 		w.Varint(uint64(len(bms)))
 		for _, bm := range bms {
 			buf.Reset()
+			bm.RunOptimize()
 			bm.WriteTo(&buf)
 			w.Varint(uint64(buf.Len()))
 			w.Bytes(buf.Bytes())
@@ -47,8 +49,9 @@ func ReadFrom(t *T, r *rwutils.R) {
 	}
 
 	hashtbl.ReadFrom(&t.metrics, r)
-	petname.ReadFrom(&t.tag_names, r)
-	petname.ReadFrom(&t.tkey_names, r)
+	petname.ReadBFrom(&t.metric_names, r)
+	petname.ReadTFrom(&t.tag_names, r)
+	petname.ReadTFrom(&t.tkey_names, r)
 
 	readBitmaps := func() []*Bitmap {
 		n := r.Varint()

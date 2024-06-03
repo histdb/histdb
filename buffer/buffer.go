@@ -1,7 +1,6 @@
 package buffer
 
 import (
-	"reflect"
 	"unsafe"
 )
 
@@ -24,7 +23,7 @@ type T struct {
 
 func OfCap(n []byte) T {
 	return T{
-		base: *(*ptr)(ptr(&n)),
+		base: ptr(unsafe.SliceData(n)),
 		pos:  0,
 		cap:  uptr(cap(n)),
 	}
@@ -32,7 +31,7 @@ func OfCap(n []byte) T {
 
 func OfLen(n []byte) T {
 	return T{
-		base: *(*ptr)(ptr(&n)),
+		base: ptr(unsafe.SliceData(n)),
 		pos:  0,
 		cap:  uptr(len(n)),
 	}
@@ -65,7 +64,7 @@ func (buf T) SetPos(pos uintptr) T {
 }
 
 func (buf T) Prefix() []byte {
-	return *(*[]byte)(unsafe.Pointer(&buf))
+	return unsafe.Slice((*byte)(buf.base), buf.pos)
 }
 
 func (buf T) At(n uptr) ptr {
@@ -78,51 +77,43 @@ func (buf T) Reset() T {
 }
 
 func (buf T) Front() *byte {
-	return (*byte)(ptr(uptr(buf.base) + buf.pos))
+	return (*byte)(unsafe.Add(buf.base, buf.pos))
 }
 
 func (buf T) Front2() *[2]byte {
-	return (*[2]byte)(ptr(uptr(buf.base) + buf.pos))
+	return (*[2]byte)(unsafe.Add(buf.base, buf.pos))
 }
 
 func (buf T) Front4() *[4]byte {
-	return (*[4]byte)(ptr(uptr(buf.base) + buf.pos))
+	return (*[4]byte)(unsafe.Add(buf.base, buf.pos))
 }
 
 func (buf T) Front8() *[8]byte {
-	return (*[8]byte)(ptr(uptr(buf.base) + buf.pos))
+	return (*[8]byte)(unsafe.Add(buf.base, buf.pos))
 }
 
 func (buf T) Front9() *[9]byte {
-	return (*[9]byte)(ptr(uptr(buf.base) + buf.pos))
+	return (*[9]byte)(unsafe.Add(buf.base, buf.pos))
 }
 
 func (buf T) Front12() *[12]byte {
-	return (*[12]byte)(ptr(uptr(buf.base) + buf.pos))
+	return (*[12]byte)(unsafe.Add(buf.base, buf.pos))
 }
 
 func (buf T) Front16() *[16]byte {
-	return (*[16]byte)(ptr(uptr(buf.base) + buf.pos))
+	return (*[16]byte)(unsafe.Add(buf.base, buf.pos))
 }
 
 func (buf T) Front20() *[20]byte {
-	return (*[20]byte)(ptr(uptr(buf.base) + buf.pos))
+	return (*[20]byte)(unsafe.Add(buf.base, buf.pos))
 }
 
 func (buf T) FrontN(n int) (x []byte) {
-	xh := (*reflect.SliceHeader)(ptr(&x))
-	xh.Data = uptr(buf.At(0))
-	xh.Cap = n
-	xh.Len = n
-	return
+	return unsafe.Slice((*byte)(buf.At(0)), n)
 }
 
 func (buf T) Suffix() (x []byte) {
-	xh := (*reflect.SliceHeader)(ptr(&x))
-	xh.Data = uptr(buf.At(0))
-	xh.Cap = int(buf.Remaining())
-	xh.Len = int(buf.Remaining())
-	return
+	return unsafe.Slice((*byte)(buf.At(0)), buf.Remaining())
 }
 
 func (buf T) Remaining() uptr {
@@ -150,23 +141,23 @@ func (buf T) Grow(n uintptr) T {
 }
 
 func (buf T) Index(n uintptr) *byte {
-	return (*byte)(ptr(uptr(buf.base) + n))
+	return (*byte)(unsafe.Add(buf.base, n))
 }
 
 func (buf T) Index2(n uintptr) *[2]byte {
-	return (*[2]byte)(ptr(uptr(buf.base) + n))
+	return (*[2]byte)(unsafe.Add(buf.base, n))
 }
 
 func (buf T) Index4(n uintptr) *[4]byte {
-	return (*[4]byte)(ptr(uptr(buf.base) + n))
+	return (*[4]byte)(unsafe.Add(buf.base, n))
 }
 
 func (buf T) Index8(n uintptr) *[8]byte {
-	return (*[8]byte)(ptr(uptr(buf.base) + n))
+	return (*[8]byte)(unsafe.Add(buf.base, n))
 }
 
 func (buf T) Index9(n uintptr) *[9]byte {
-	return (*[9]byte)(ptr(uptr(buf.base) + n))
+	return (*[9]byte)(unsafe.Add(buf.base, n))
 }
 
 func (buf T) Advance(n uptr) T {

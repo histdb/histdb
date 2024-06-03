@@ -13,15 +13,49 @@ type span struct {
 	end   uint32
 }
 
-type T[K hashtbl.Key[K], V num.T] struct {
+type B[V num.T] struct {
 	_ [0]func() // no equality
 
 	buf   []byte
-	idxs  hashtbl.T[K, V]
 	spans []span
 }
 
-func (t *T[K, V]) Buf() []byte { return t.buf }
+func (b *B[V]) Size() uint64 {
+	return 0 +
+		/* buf   */ sizeof.Slice(b.buf) +
+		/* spans */ sizeof.Slice(b.spans) +
+		0
+}
+
+func (b *B[V]) Len() int { return len(b.spans) }
+
+func (b *B[V]) Append(v []byte) {
+	b.spans = append(b.spans, span{
+		begin: uint32(len(b.buf)),
+		end:   uint32(len(b.buf) + len(v)),
+	})
+	b.buf = append(b.buf, v...)
+}
+
+func (b *B[V]) Get(n V) []byte {
+	if uint64(n) < uint64(len(b.spans)) {
+		s := b.spans[n]
+		be, ed := uint64(s.begin), uint64(s.end)
+		if be < uint64(len(b.buf)) && ed <= uint64(len(b.buf)) && be <= ed {
+			return b.buf[be:ed]
+		}
+	}
+	return nil
+}
+
+type T[K hashtbl.Key[K], V num.T] struct {
+	_ [0]func() // no equality
+
+	idxs hashtbl.T[K, V]
+	buf  B[V]
+}
+
+func (t *T[K, V]) Buf() []byte { return t.buf.buf }
 
 func (t *T[K, V]) Len() int {
 	if t == nil {
@@ -29,35 +63,22 @@ func (t *T[K, V]) Len() int {
 	}
 	return t.idxs.Len()
 }
+
 func (t *T[K, V]) Size() uint64 {
 	return 0 +
-		/* buf   */ sizeof.Slice(t.buf) +
-		/* idxs  */ t.idxs.Size() +
-		/* spans */ sizeof.Slice(t.spans) +
+		/* idxs */ t.idxs.Size() +
+		/* buf  */ t.buf.Size() +
 		0
 }
 
 func (t *T[K, V]) Put(h K, v []byte) V {
-	n, ok := t.idxs.Insert(h, V(len(t.spans)))
-	if !ok && len(v) > 0 {
-		t.spans = append(t.spans, span{
-			begin: uint32(len(t.buf)),
-			end:   uint32(len(t.buf) + len(v)),
-		})
-		t.buf = append(t.buf, v...)
+	n, ok := t.idxs.Insert(h, V(t.buf.Len()))
+	if !ok {
+		t.buf.Append(v)
 	}
 	return n
 }
 
 func (t *T[K, V]) Find(h K) (V, bool) { return t.idxs.Find(h) }
 
-func (t *T[K, V]) Get(n V) []byte {
-	if uint64(n) < uint64(len(t.spans)) {
-		s := t.spans[n]
-		b, e := uint64(s.begin), uint64(s.end)
-		if b < uint64(len(t.buf)) && e <= uint64(len(t.buf)) && b <= e {
-			return t.buf[b:e]
-		}
-	}
-	return nil
-}
+func (t *T[K, V]) Get(n V) []byte { return t.buf.Get(n) }

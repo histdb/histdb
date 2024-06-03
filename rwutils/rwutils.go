@@ -135,16 +135,10 @@ func (r *R) Remaining() uintptr {
 }
 
 func (r *R) Varint() (x uint64) {
-	if r.buf.Remaining() >= 9 {
-		var n uintptr
-		n, x = varint.FastConsume(r.buf.Front9())
-		r.buf = r.buf.Advance(n)
-	} else {
-		var ok bool
-		x, r.buf, ok = varint.Consume(r.buf)
-		if !ok {
-			r.Invalid(errs.Errorf("short buffer: varint truncated"))
-		}
+	var ok bool
+	x, r.buf, ok = varint.Consume(r.buf)
+	if !ok {
+		r.Invalid(errs.Errorf("short buffer: varint truncated"))
 	}
 	return
 }
