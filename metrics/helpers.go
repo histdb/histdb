@@ -4,7 +4,7 @@ import (
 	"bytes"
 )
 
-func PopTag(tags []byte) (tkey, tag []byte, isKey bool, rest []byte) {
+func PopTag(tags []byte) (tkey, tag []byte, rest []byte) {
 	// find the first unescaped ','
 	for j := uint(0); j < uint(len(tags)); {
 		i := bytes.IndexByte(tags[j:], ',')
@@ -30,7 +30,7 @@ func PopTag(tags []byte) (tkey, tag []byte, isKey bool, rest []byte) {
 	}
 
 	// if there's no =, then the tag key is the tag
-	tkey, isKey = tags, true
+	tkey = tags
 
 	// find the first unescaped '='
 	for j := uint(0); j < uint(len(tkey)); {
@@ -51,17 +51,17 @@ func PopTag(tags []byte) (tkey, tag []byte, isKey bool, rest []byte) {
 			continue
 		}
 
-		tkey, isKey = tkey[:uint(i)+j], false
+		tkey = tkey[:uint(i)+j]
 		break
 	}
 
 	// if the tag has an empty string value, then drop the trailing =
 	// this is so that `foo=` and `foo` are the same.
 	if len(tags) == len(tkey)+1 && tags[len(tags)-1] == '=' {
-		tags, isKey = tags[:len(tags)-1], false
+		tags = tags[:len(tags)-1]
 	}
 
-	return tkey, tags, isKey, rest
+	return tkey, tags, rest
 }
 
 func addSet[T comparable](l []T, s map[T]struct{}, v T) ([]T, map[T]struct{}, bool) {

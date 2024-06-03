@@ -11,22 +11,14 @@ type parseState struct {
 	_ [0]func() // no equality
 
 	query []byte
-
-	tokn uint
-	toks []token
-
+	tokn  uint
 	tlock bool
-	tkeys bytesSet
-
-	prog []inst
-	strs bytesSet
-	vals valueSet
-	mchs []matcher
+	into  *Query
 }
 
 func (ps *parseState) pushOp(op byte) { ps.pushInst(op, -1, -1) }
 func (ps *parseState) pushInst(op byte, v1, v2 int16) {
-	ps.prog = append(ps.prog, inst{
+	ps.into.prog = append(ps.into.prog, inst{
 		op: op,
 		s:  v1,
 		v:  v2,
@@ -35,72 +27,75 @@ func (ps *parseState) pushInst(op byte, v1, v2 int16) {
 
 func (ps *parseState) tkey(s []byte) bool {
 	if ps.tlock {
-		if _, ok := ps.tkeys.lookup(s); !ok {
+		if _, ok := ps.into.tkeys.lookup(s); !ok {
 			return false
 		}
 	}
-	_ = ps.tkeys.add(s)
+	_ = ps.into.tkeys.add(s)
 	return true
 }
 
 func (ps *parseState) peek() token {
-	if ps.tokn < uint(len(ps.toks)) {
-		return ps.toks[ps.tokn]
+	if ps.tokn < uint(len(ps.into.toks)) {
+		return ps.into.toks[ps.tokn]
 	}
 	return token_invalid
 }
 
 func (ps *parseState) next() token {
-	if ps.tokn < uint(len(ps.toks)) {
-		s := ps.toks[ps.tokn]
+	if ps.tokn < uint(len(ps.into.toks)) {
+		s := ps.into.toks[ps.tokn]
 		ps.tokn++
 		return s
 	}
 	return token_invalid
 }
 
-func Parse(query []byte) (Query, error) {
-	toks := make([]token, 1, 32)
-	toks[0] = token_lbrace
+func Parse(query []byte, into *Query) error {
+	if cap(into.toks) < 32 {
+		into.toks = make([]token, 0, 32)
+	}
+	into.toks = append(into.toks[:0], token_lbrace)
 
 	var braces bool
 	err := tokens(query, func(t token) {
-		toks = append(toks, t)
+		into.toks = append(into.toks, t)
 		braces = braces || (t == token_lbrace || t == token_rbrace)
 	})
 	if err != nil {
-		return Query{}, err
+		return err
 	}
 
 	// if we had no braces, infer add the right one. otherwise,
 	// remove the prefix left one we already added.
 	if !braces {
-		toks = append(toks, token_rbrace)
+		into.toks = append(into.toks, token_rbrace)
 	} else {
-		toks = toks[1:]
+		into.toks = into.toks[1:]
 	}
+
+	// preallocate some capacity in the query
+	if cap(into.prog) < 32 {
+		into.prog = make([]inst, 0, 32)
+	}
+	into.prog = into.prog[:0]
+	into.strs.reset()
+	into.vals.reset()
+	into.mchs = into.mchs[:0]
 
 	ps := &parseState{
 		query: query,
-
-		toks: toks,
-
-		prog: make([]inst, 0, 32),
+		into:  into,
 	}
 
-	if ok := ps.parseCompoundSel(); !ok || ps.tokn != uint(len(ps.toks)) {
-		return Query{}, errs.Errorf("bad parse: %q", query)
+	if ok := ps.parseCompoundSel(); !ok || ps.tokn != uint(len(ps.into.toks)) {
+		return errs.Errorf("bad parse: %q", query)
 	}
 
 	// TODO: escaping values is problematic. {name = \(*Dir\).Commit} vs {name = "\(*Dir\).Commit"}
 	// TODO: escaping tkeys is problematic.  {foo\= = 'bar'}
 
-	return Query{
-		prog: ps.prog,
-		strs: ps.strs.list,
-		vals: ps.vals.list,
-		mchs: ps.mchs,
-	}, nil
+	return nil
 }
 
 func (ps *parseState) parseCompoundSel() bool {
@@ -199,8 +194,8 @@ done:
 	ps.tlock = false
 
 	// store and reset tags for next selection
-	tn := ps.strs.add(bytes.Join(ps.tkeys.list, []byte{','}))
-	ps.tkeys = bytesSet{}
+	tn := ps.into.strs.add(bytes.Join(ps.into.tkeys.list, []byte{','}))
+	ps.into.tkeys.reset()
 
 	// push the intersection of the tagset for the metrics
 	ps.pushInst(inst_true, tn, -1)
@@ -300,15 +295,6 @@ func (ps *parseState) parseCompComparison() (op byte) {
 	case token_neq:
 		return inst_neq
 
-	case token_gt:
-		return inst_gt
-	case token_gte:
-		return inst_gte
-	case token_lt:
-		return inst_lt
-	case token_lte:
-		return inst_lte
-
 	case token_re:
 		return inst_re
 	case token_nre:
@@ -357,13 +343,13 @@ func (ps *parseState) parseGlob() (int16, bool) {
 		return 0, false
 	}
 
-	ps.mchs = append(ps.mchs, matcher{
+	ps.into.mchs = append(ps.into.mchs, matcher{
 		fn: glob,
 		k:  "glob",
 		q:  lits,
 	})
 
-	return int16(len(ps.mchs) - 1), true
+	return int16(len(ps.into.mchs) - 1), true
 }
 
 func (ps *parseState) parseRegexp() (int16, bool) {
@@ -383,13 +369,13 @@ func (ps *parseState) parseRegexp() (int16, bool) {
 		return 0, false
 	}
 
-	ps.mchs = append(ps.mchs, matcher{
+	ps.into.mchs = append(ps.into.mchs, matcher{
 		fn: re.Match,
 		k:  "re",
 		q:  lits,
 	})
 
-	return int16(len(ps.mchs) - 1), true
+	return int16(len(ps.into.mchs) - 1), true
 }
 
 func (ps *parseState) parseValue() (int16, bool) {
@@ -406,14 +392,14 @@ func (ps *parseState) parseValue() (int16, bool) {
 	// numeric values
 	if ('0' <= lit[0] && lit[0] <= '9') || lit[0] == '-' {
 		if num, ok := parseInt(lit); ok {
-			return ps.vals.add(valInt(num)), true
+			return ps.into.vals.add(valInt(num)), true
 		}
 		if num, ok := parseFloat(lit); ok {
-			return ps.vals.add(valFloat(num)), true
+			return ps.into.vals.add(valFloat(num)), true
 		}
 	}
 
-	return ps.vals.add(valBytes(lit)), true
+	return ps.into.vals.add(valBytes(lit)), true
 }
 
 func (ps *parseState) peekIdent() (int16, bool) {
@@ -431,5 +417,5 @@ func (ps *parseState) peekIdent() (int16, bool) {
 		return 0, false
 	}
 
-	return ps.strs.add(lit), true
+	return ps.into.strs.add(lit), true
 }

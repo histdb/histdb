@@ -72,6 +72,8 @@ type H[T any] struct {
 // It is obviously very unsafe and should only be used when you know what's up.
 func UnsafeRawH[T any](x uint32) H[T] { return H[T]{v: arena.Raw[layer0](x)} }
 
+func (h H[T]) Raw() uint32 { return h.v.Raw() }
+
 // New allocates a new histogram and returns a handle.
 func (s *S[T]) New() H[T] { return H[T]{v: s.l0.New()} }
 

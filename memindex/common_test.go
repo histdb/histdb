@@ -29,8 +29,6 @@ func loadRandom(idx *T) {
 		for n := 0; n < 5; n++ {
 			mbuf = append(mbuf, tags[rng.Uint32n(uint32(len(tags)))])
 		}
-		idx.Add(bytes.Join(mbuf, []byte(",")))
+		idx.Add(bytes.Join(mbuf, []byte(",")), nil, nil)
 	}
-
-	idx.Fix()
 }

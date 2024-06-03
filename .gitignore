@@ -3,5 +3,6 @@
 *.svg
 *.png
 *.txt
+*.txt.gz
 *.idx
 *.l?

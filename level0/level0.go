@@ -3,13 +3,13 @@ package level0
 import (
 	"encoding/binary"
 	"io"
-	"sort"
 	"sync"
 
 	"github.com/zeebo/errs/v2"
 
 	"github.com/histdb/histdb"
 	"github.com/histdb/histdb/filesystem"
+	"github.com/histdb/histdb/pdqsort"
 )
 
 const (
@@ -31,12 +31,6 @@ type keyPos struct {
 	pos uint16
 }
 
-type keyPoss []keyPos
-
-func (k keyPoss) Len() int               { return len(k) }
-func (k keyPoss) Less(i int, j int) bool { return string(k[i].key[:]) < string(k[j].key[:]) }
-func (k keyPoss) Swap(i int, j int)      { k[i], k[j] = k[j], k[i] }
-
 type T struct {
 	_ [0]func() // no equality
 
@@ -44,7 +38,7 @@ type T struct {
 	fh    filesystem.Handle
 	len   uint32
 	wrote int64
-	keys  keyPoss
+	keys  []keyPos
 	err   error
 	done  bool
 	ro    bool // readonly
@@ -216,7 +210,9 @@ func (t *T) finish() error {
 	}
 	buf := t.buf[:0]
 
-	sort.Sort(&t.keys)
+	pdqsort.Less(t.keys, func(i, j int) bool {
+		return string(t.keys[i].key[:]) < string(t.keys[j].key[:])
+	})
 
 	for _, ent := range t.keys {
 		kp := binary.BigEndian.Uint16(ent.key[0:2])

@@ -3,8 +3,6 @@ package query
 import (
 	"testing"
 
-	"github.com/zeebo/assert"
-
 	"github.com/histdb/histdb/memindex"
 )
 
@@ -14,12 +12,12 @@ func FuzzParseQuery(f *testing.F) {
 	f.Add(b(`|`))
 
 	var idx memindex.T
+	var q Query
 
 	f.Fuzz(func(t *testing.T, query []byte) {
-		q, err := Parse(query)
+		err := Parse(query, &q)
 		if err == nil {
-			_, err := q.Eval(&idx)
-			assert.NoError(t, err)
+			_ = q.Eval(&idx)
 		}
 	})
 }

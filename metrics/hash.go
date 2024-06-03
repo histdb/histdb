@@ -15,7 +15,7 @@ func Hash(metric []byte) histdb.Hash {
 	for rest := metric; len(rest) > 0; {
 		var tag []byte
 		var tkey []byte
-		tkey, tag, _, rest = PopTag(rest)
+		tkey, tag, rest = PopTag(rest)
 		if len(tag) == 0 {
 			continue
 		}

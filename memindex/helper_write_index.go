@@ -6,21 +6,35 @@ import (
 	"compress/gzip"
 	"fmt"
 	"os"
+	"runtime/pprof"
 	"time"
 
 	"github.com/histdb/histdb/rwutils"
 )
 
-var reload = false
+const reload = false
 
 func init() {
 	if !reload {
 		return
 	}
 
+	{
+		fh, err := os.Create("memindex-load.pprof")
+		if err != nil {
+			panic(err)
+		}
+		defer fh.Close()
+
+		if err := pprof.StartCPUProfile(fh); err != nil {
+			panic(err)
+		}
+		defer pprof.StopCPUProfile()
+	}
+
 	var idx T
 
-	fh, err := os.Open("metrics.txt")
+	fh, err := os.Open("metrics.txt.gz")
 	if err != nil {
 		panic(err)
 	}
@@ -40,11 +54,10 @@ func init() {
 	lcount := 0
 
 	stats := func() {
-		msize := float64(idx.metrics.Size())
 		size := float64(idx.Size())
 		card := idx.Cardinality()
 
-		fmt.Printf("Added (%-8d m) (%-8d um) | total (%0.2f%% unique) (%0.2f m/sec) (%0.2f um/sec) | recently (%0.2f%% unique) (%0.2f m/sec) (%0.2f um/sec) | index size (%0.2f MiB) (%0.2f b/m) | metric size (%0.2f MiB) (%0.2f MiB) (%0.2f b/m)\n",
+		fmt.Printf("Added (%-8d m) (%-8d um) | total (%0.2f%% unique) (%0.2f m/sec) (%0.2f um/sec) | recently (%0.2f%% unique) (%0.2f m/sec) (%0.2f um/sec) | index size (%0.2f MiB) (%0.2f b/m)\n",
 			count,
 			card,
 
@@ -58,10 +71,6 @@ func init() {
 
 			size/1024/1024,
 			size/float64(card),
-
-			msize/1024/1024,
-			(size-msize)/1024/1024,
-			(size-msize)/float64(card),
 		)
 
 		lstats = time.Now()
@@ -71,7 +80,7 @@ func init() {
 
 	scanner := bufio.NewScanner(gzfh)
 	for scanner.Scan() {
-		idx.Add(bytes.TrimSpace(scanner.Bytes()))
+		idx.Add(bytes.TrimSpace(scanner.Bytes()), nil, nil)
 		count++
 		if count%statEvery == 0 {
 			stats()
@@ -81,7 +90,6 @@ func init() {
 		}
 	}
 
-	idx.Fix()
 	stats()
 
 	var w rwutils.W

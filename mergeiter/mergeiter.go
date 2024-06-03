@@ -25,6 +25,8 @@ type T struct {
 	err   error
 }
 
+func compare(i, j histdb.Key) int { return bytes.Compare(i[:], j[:]) }
+
 func (m *T) Init(iters []Iterator) {
 	leaves := 1 << uint(bits.Len(uint(len(iters)-1)))
 	trn := append(m.trn[:0], make([]int, leaves-1)...)
@@ -42,8 +44,6 @@ func (m *T) Init(iters []Iterator) {
 			}
 		}
 	}
-
-	compare := func(i, j histdb.Key) int { return bytes.Compare(i[:], j[:]) }
 
 	for i := range trn {
 		l, r := wins[2*i], wins[2*i+1]
@@ -131,7 +131,7 @@ func (m *T) Next() bool {
 			goto noSwap
 		} else if ckey = iters[chal].Key(); uint(win) >= uint(len(iters)) || iters[win] == nil {
 			// swap
-		} else if cmp := bytes.Compare(ckey[:], wkey[:]); cmp == -1 || (cmp == 0 && chal < win) {
+		} else if cmp := compare(ckey, wkey); cmp == -1 || (cmp == 0 && chal < win) {
 			// swap
 		} else {
 			goto noSwap

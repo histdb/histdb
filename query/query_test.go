@@ -13,9 +13,9 @@ func TestQuery(t *testing.T) {
 	var now time.Time
 	var idx memindex.T
 
-	idx.Add([]byte("foo=bar,bif=bar"))
-	idx.Add([]byte("foo=a,bif=a"))
-	idx.Add([]byte("foo=b,bif=c"))
+	idx.Add([]byte("foo=bar,bif=bar"), nil, nil)
+	idx.Add([]byte("foo=a,bif=a"), nil, nil)
+	idx.Add([]byte("foo=b,bif=c"), nil, nil)
 
 	// data, _ := os.ReadFile("../memindex/metrics.idx")
 	// var r rwutils.R
@@ -27,16 +27,17 @@ func TestQuery(t *testing.T) {
 	// _, err := r.Done()
 	// assert.NoError(t, err)
 
-	q, err := Parse(b(`inst !* 12z & name='(*Dir).Commit' & field=successes`))
+	q := new(Query)
+	err := Parse(b(`inst !* 12z & name='(*Dir).Commit' & field=successes`), q)
 	assert.NoError(t, err)
 
 	t.Log("prog:", q.prog)
-	t.Logf("strs: %q", q.strs)
-	t.Log("vals:", q.vals)
+	t.Logf("strs: %q", q.strs.list)
+	t.Log("vals:", q.vals.list)
 	t.Logf("mchs: %q", q.mchs)
 
 	now = time.Now()
-	bm, err := q.Eval(&idx)
+	bm := q.Eval(&idx)
 	dur := time.Since(now)
 	t.Log("query ran in", dur)
 	assert.NoError(t, err)
@@ -63,13 +64,14 @@ func BenchmarkQuery(b *testing.B) {
 	// _, err := r.Done()
 	// assert.NoError(b, err)
 
-	q, err := Parse([]byte(`inst !* 12z & name='(*Dir).Commit' & field=successes`))
+	q := new(Query)
+	err := Parse([]byte(`inst !* 12z & name='(*Dir).Commit' & field=successes`), q)
 	assert.NoError(b, err)
 
 	b.ResetTimer()
 	b.ReportAllocs()
 
 	for i := 0; i < b.N; i++ {
-		_, _ = q.Eval(&idx)
+		_ = q.Eval(&idx)
 	}
 }

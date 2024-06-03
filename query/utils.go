@@ -30,6 +30,12 @@ func newBytesSet() bytesSet {
 	return bytesSet{}
 }
 
+func (s *bytesSet) reset() {
+	clear(s.set)
+	clear(s.list)
+	s.list = s.list[:0]
+}
+
 func (s *bytesSet) lookup(x []byte) (n int16, ok bool) {
 	if s.set != nil {
 		n, ok = s.set[string(x)]
@@ -61,11 +67,11 @@ func (s *bytesSet) add(x []byte) (n int16) {
 	}
 
 	n = int16(len(s.list))
-	if n == 0 {
+	if cap(s.list) == 0 {
 		s.list = make([][]byte, 0, 8)
 	}
 	s.list = append(s.list, x)
-	if len(s.list) == cap(s.list) {
+	if len(s.list) == 8 {
 		s.set = make(map[string]int16)
 		for n, u := range s.list {
 			s.set[string(u)] = int16(n)
@@ -86,6 +92,12 @@ func newValueSet(cap int) valueSet {
 	return valueSet{list: make([]value, 0, cap)}
 }
 
+func (s *valueSet) reset() {
+	clear(s.set)
+	clear(s.list)
+	s.list = s.list[:0]
+}
+
 func (s *valueSet) add(x value) (n int16) {
 	if s.set != nil {
 		if n, ok := s.set[x]; ok {
@@ -104,11 +116,11 @@ func (s *valueSet) add(x value) (n int16) {
 	}
 
 	n = int16(len(s.list))
-	if n == 0 {
+	if cap(s.list) == 0 {
 		s.list = make([]value, 0, 8)
 	}
 	s.list = append(s.list, x)
-	if len(s.list) == cap(s.list) {
+	if len(s.list) == 8 {
 		s.set = make(map[value]int16)
 		for n, u := range s.list {
 			s.set[u] = int16(n)

@@ -11,19 +11,21 @@ import (
 const parseQuery = `inst !* 12z & name='(*Dir).Commit' & field=successes`
 
 func TestParse(t *testing.T) {
-	e, err := Parse(b(parseQuery))
+	q := new(Query)
+	err := Parse(b(parseQuery), q)
 	assert.NoError(t, err)
-	fmt.Printf("prog: %v\n", e.prog)
-	fmt.Printf("strs: %q\n", e.strs)
-	fmt.Printf("vals: %v\n", e.vals)
-	fmt.Printf("mchs: %v\n", e.mchs)
+	fmt.Printf("prog: %v\n", q.prog)
+	fmt.Printf("strs: %q\n", q.strs.list)
+	fmt.Printf("vals: %v\n", q.vals.list)
+	fmt.Printf("mchs: %v\n", q.mchs)
 }
 
 func BenchmarkParse(b *testing.B) {
 	query := []byte(parseQuery)
+	into := new(Query)
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _ = Parse(query)
+		_ = Parse(query, into)
 	}
 }

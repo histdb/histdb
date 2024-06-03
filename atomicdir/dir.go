@@ -145,11 +145,14 @@ func (d *Dir) Close() error {
 	for _, fh := range d.fhs {
 		eg.Add(fh.Handle.Close())
 	}
+
 	clear(d.fhs)
-	d.fhs = d.fhs[:0]
 	clear(d.l0s)
-	d.l0s = d.l0s[:0]
 	clear(d.lns)
+
+	d.fhs = d.fhs[:0]
+	d.l0s = d.l0s[:0]
 	d.lns = d.lns[:0]
+
 	return eg.Err()
 }

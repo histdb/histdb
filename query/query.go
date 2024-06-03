@@ -1,8 +1,6 @@
 package query
 
 import (
-	"strconv"
-
 	"github.com/histdb/histdb/memindex"
 )
 
@@ -10,13 +8,17 @@ type Query struct {
 	_ [0]func() // no equality
 
 	prog []inst
-	strs [][]byte
-	vals []value
+	strs bytesSet
+	vals valueSet
 	mchs []matcher
+
+	// memory cache for parsing
+	toks  []token
+	tkeys bytesSet
 }
 
-func (q Query) Eval(m *memindex.T) (*memindex.Bitmap, error) {
-	buf := make([]byte, 0, 16)
+func (q *Query) Eval(m *memindex.T) *memindex.Bitmap {
+	buf := make([]byte, 0, 32)
 	stack := make([]*memindex.Bitmap, 1, 8)
 	stack[0] = new(memindex.Bitmap)
 
@@ -55,85 +57,20 @@ func (q Query) Eval(m *memindex.T) (*memindex.Bitmap, error) {
 		case inst_nop:
 
 		case inst_true:
-			m.QueryTrue(q.strs[i.s], push().Or)
+			m.QueryTrue(q.strs.list[i.s], push().Or)
 
 		case inst_eq:
-			buf = appendTag(buf[:0], q.strs[i.s], q.vals[i.v].AsString())
+			buf = appendTag(buf[:0], q.strs.list[i.s], q.vals.list[i.v].AsString())
 			m.QueryEqual(buf, push().Or)
 
 		case inst_neq:
-			buf = appendTag(buf[:0], q.strs[i.s], q.vals[i.v].AsString())
-			m.QueryNotEqual(q.strs[i.s], buf, push().Or)
+			buf = appendTag(buf[:0], q.strs.list[i.s], q.vals.list[i.v].AsString())
+			m.QueryNotEqual(q.strs.list[i.s], buf, push().Or)
 
 		case inst_re, inst_glob:
-			m.QueryFilter(q.strs[i.s], q.mchs[i.v].fn, push().Or)
+			m.QueryFilter(q.strs.list[i.s], q.mchs[i.v].fn, push().Or)
 		case inst_nre, inst_nglob:
-			m.QueryFilterNot(q.strs[i.s], q.mchs[i.v].fn, push().Or)
-
-		// TODO: these could be directly supported by the memindex so that it
-		// doesn't need to do the more expensive QueryFilter. it would have to
-		// to do some sort of ordered index binary search. that requires maintaining
-		// orders in the memindex, which it currently does not do at all.
-
-		case inst_gt, inst_gte, inst_lt, inst_lte:
-			v := q.vals[i.v]
-			var vi, vf, vb value
-
-			// prepare stringified versions of the value
-			switch v.Tag() {
-			case tagInt:
-				buf = strconv.AppendInt(buf[:0], v.AsInt(), 10)
-				vi = valBytes(buf)
-			case tagFloat:
-				buf = strconv.AppendFloat(buf[:0], v.AsFloat(), 'f', -1, 64)
-				vf = valBytes(buf)
-			case tagBool:
-				if v.AsBool() {
-					vb = valStr("true")
-				} else {
-					vb = valStr("false")
-				}
-			}
-
-			// determine which comparison function to use
-			var cmp func(x, y value) bool
-			switch i.op {
-			case inst_gt:
-				cmp = valueGT
-			case inst_gte:
-				cmp = valueGTE
-			case inst_lt:
-				cmp = valueLT
-			case inst_lte:
-				cmp = valueLTE
-			}
-
-			m.QueryFilter(q.strs[i.s], func(b []byte) bool {
-				vv := v
-				bv := valBytes(b)
-
-				switch v.Tag() {
-				case tagStr:
-				case tagInt:
-					if bi, ok := parseInt(b); ok {
-						bv = valInt(bi)
-					} else {
-						vv = vi
-					}
-				case tagFloat:
-					if bf, ok := parseFloat(b); ok {
-						bv = valFloat(bf)
-					} else {
-						vv = vf
-					}
-				case tagBool:
-					vv = vb
-				default:
-					return false
-				}
-
-				return cmp(bv, vv)
-			}, push().Or)
+			m.QueryFilterNot(q.strs.list[i.s], q.mchs[i.v].fn, push().Or)
 
 		case inst_union:
 			b := pop()
@@ -153,5 +90,5 @@ func (q Query) Eval(m *memindex.T) (*memindex.Bitmap, error) {
 		}
 	}
 
-	return top(), nil
+	return top()
 }

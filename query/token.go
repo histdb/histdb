@@ -17,8 +17,6 @@ const (
 
 	token_and2  token = '&'<<8 | '&'
 	token_or2   token = '|'<<8 | '|'
-	token_gte   token = '>'<<8 | '='
-	token_lte   token = '<'<<8 | '='
 	token_eq2   token = '='<<8 | '='
 	token_neq   token = '!'<<8 | '='
 	token_re    token = '='<<8 | '~'
@@ -29,8 +27,6 @@ const (
 	token_lparen token = '('
 	token_rparen token = ')'
 	token_eq1    token = '='
-	token_gt     token = '>'
-	token_lt     token = '<'
 	token_and1   token = '&'
 	token_or1    token = '|'
 	token_lbrace token = '{'
@@ -125,7 +121,6 @@ func nextToken(pos uint, x []byte) (t token, l uint) {
 		switch u := uint16(x[0])<<8 | uint16(x[1]); u {
 		case
 			'&'<<8 | '&', '|'<<8 | '|', // conjunctives
-			'>'<<8 | '=', '<'<<8 | '=', // comparison
 			'='<<8 | '=', '!'<<8 | '=', // equality
 			'='<<8 | '~', '!'<<8 | '~', // regex
 			'='<<8 | '*', '!'<<8 | '*': // glob
@@ -138,7 +133,6 @@ func nextToken(pos uint, x []byte) (t token, l uint) {
 	case
 		'(', ')', // sel/expr grouping
 		'=',      // expr     equality
-		'>', '<', // expr     comparison
 		'&', '|', // sel      conjunctives
 		'{', '}', // sel      selection delims
 		'%', '^', // sel      sel operators
@@ -188,7 +182,6 @@ func isSpecial(x byte) bool {
 	case
 		' ', '\t', // whitespace
 		'&', '|', // conjunctives
-		'>', '<', // comparison
 		'=', '!', // equality/regex/glob (first char only)
 		'{', '}', // selection
 		'(', ')', // grouping

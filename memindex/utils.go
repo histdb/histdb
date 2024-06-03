@@ -22,40 +22,40 @@ type (
 	RWId   = num.U32
 )
 
-func newBitmap() *Bitmap           { return roaring.New() }
-func parOr(bms ...*Bitmap) *Bitmap { return roaring.ParOr(0, bms...) }
-func parAnd(bms ...*Bitmap) *Bitmap {
-	return roaring.ParAnd(0, bms...)
+func newBitmap() *Bitmap               { return roaring.New() }
+func bitmapOr(bms ...*Bitmap) *Bitmap  { return roaring.ParOr(0, bms...) }
+func bitmapAnd(bms ...*Bitmap) *Bitmap { return roaring.ParAnd(0, bms...) }
 
-	// if len(bms) == 0 {
-	// 	return newBitmap()
-	// }
-	// o := bms[0].Clone()
-	// for _, bm := range bms[1:] {
-	// 	o.And(bm)
-	// }
-	// return o
+// func bitmapAnd(bms ...*Bitmap) *Bitmap {
+// 	if len(bms) == 0 {
+// 		return newBitmap()
+// 	}
+// 	o := bms[0].Clone()
+// 	for _, bm := range bms[1:] {
+// 		o.And(bm)
+// 	}
+// 	return o
+// }
+
+//
+//
+//
+
+var bitmapPool = sync.Pool{New: func() interface{} { return newBitmap() }}
+
+func bitmapReplace(m *Bitmap) {
+	bitmapPool.Put(m)
 }
 
-//
-//
-//
-
-var queryPool = sync.Pool{New: func() interface{} { return newBitmap() }}
-
-func replaceBitmap(m *Bitmap) {
-	queryPool.Put(m)
-}
-
-func acquireBitmap() *Bitmap {
-	bm := queryPool.Get().(*Bitmap)
+func bitmapAcquire() *Bitmap {
+	bm := bitmapPool.Get().(*Bitmap)
 	if !bm.IsEmpty() {
 		bm.Clear()
 	}
 	return bm
 }
 
-func getBitmap(bmsp *[]*Bitmap, n Id) (bm *Bitmap) {
+func bitmapIndex(bmsp *[]*Bitmap, n Id) (bm *Bitmap) {
 	if bms := *bmsp; n < Id(len(bms)) {
 		bm = bms[n]
 	} else if n == Id(len(bms)) {
@@ -72,6 +72,13 @@ func sliceSize(m []*Bitmap) (n uint64) {
 		n += bm.GetSizeInBytes()
 	}
 	return sizeof.Slice(m) + n
+}
+
+func tagValue(tkey, tag []byte) []byte {
+	if len(tag) > len(tkey) {
+		return tag[len(tkey)+1:]
+	}
+	return nil
 }
 
 func addSet[T comparable](l []T, s map[T]struct{}, v T) ([]T, map[T]struct{}, bool) {

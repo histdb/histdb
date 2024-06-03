@@ -9,18 +9,30 @@ import (
 type Ops struct {
 	_ [0]func() // no equality
 
+	ops []op
+
 	fs     *filesystem.T
-	err    error
 	id     uint32
 	closed bool
 }
 
+type op struct {
+	dir *Dir
+	sz  int64
+	f   File
+	in  bool
+}
+
 func (ops *Ops) close(fs *filesystem.T) error {
-	ops.closed = true
-	if ops.err == nil && fs != ops.fs {
-		ops.err = errs.Errorf("invalid operation return value")
+	if ops.closed {
+		return nil
 	}
-	return ops.err
+	ops.closed = true
+	if fs != ops.fs {
+		return errs.Errorf("invalid operation return value")
+	}
+
+	return nil
 }
 
 func (ops *Ops) getPath(tid uint32, f File) string {
@@ -29,42 +41,20 @@ func (ops *Ops) getPath(tid uint32, f File) string {
 	return string(buf[:])
 }
 
-func (ops *Ops) done() bool {
-	return ops.closed || ops.err != nil
+func (ops *Ops) IncludeAll(txn *Dir) {
+	for _, fh := range txn.fhs {
+		ops.Include(txn, fh.File)
+	}
 }
 
-func (ops *Ops) store(err error) {
-	if ops.err == nil && err != nil {
-		ops.err = errs.Wrap(err)
-	}
+func (ops *Ops) Exclude(txn *Dir, f File) {
+	ops.ops = append(ops.ops, op{in: false, dir: txn, f: f})
 }
 
 func (ops *Ops) Include(txn *Dir, f File) {
-	if ops.done() {
-		return
-	}
-
-	src := ops.getPath(txn.id, f)
-	dst := ops.getPath(ops.id, f)
-
-	err := ops.fs.Link(src, dst)
-	ops.store(err)
+	ops.ops = append(ops.ops, op{in: true, dir: txn, f: f})
 }
 
 func (ops *Ops) Allocate(f File, size int64) {
-	if ops.done() {
-		return
-	}
-
-	dst := ops.getPath(ops.id, f)
-
-	fh, err := ops.fs.Create(dst)
-	ops.store(err)
-
-	if err == nil {
-		if size > 0 {
-			ops.store(fh.Fallocate(size))
-		}
-		ops.store(fh.Close())
-	}
+	ops.ops = append(ops.ops, op{f: f, sz: size})
 }

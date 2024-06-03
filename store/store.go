@@ -35,8 +35,9 @@ type T struct {
 		mi  mergeiter.T
 	}
 
-	l0  level0.T
-	l0m memindex.T // all l0s share memindex
+	l0   level0.T
+	l0m  memindex.T // all l0s share memindex
+	norm []byte
 }
 
 func (t *T) Init(fs *filesystem.T) (err error) {
@@ -68,7 +69,9 @@ func (t *T) Init(fs *filesystem.T) (err error) {
 		}
 	}()
 
-	addIndex := func(key histdb.Key, name, value []byte) { t.l0m.Add(name) }
+	addIndex := func(key histdb.Key, name, value []byte) {
+		t.l0m.Add(name, nil, nil)
+	}
 
 	l0s := t.cdir.L0s()
 
@@ -82,7 +85,10 @@ func (t *T) Init(fs *filesystem.T) (err error) {
 }
 
 func (t *T) Write(ts uint32, name, value []byte) (err error) {
-	hash, _, _ := t.l0m.Add(name)
+	if t.norm == nil {
+		t.norm = make([]byte, 0, 64)
+	}
+	hash, _, name, _ := t.l0m.Add(name, t.norm[:0], nil)
 
 	var key histdb.Key
 	*key.HashPtr() = hash
