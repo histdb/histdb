@@ -56,8 +56,8 @@ func (t *T) Add(metric, normalized []byte, cf *card.Fixer) (histdb.Hash, Id, []b
 	var tagus map[Id]struct{}
 	var hash histdb.Hash
 
-	mhp := hash.TagHashPtr()
-	thp := hash.TagKeyHashPtr()
+	tagPtr := hash.TagHashPtr()
+	tkeyPtr := hash.TagKeyHashPtr()
 
 	for rest := metric; len(rest) > 0; {
 		var tkey, tag []byte
@@ -79,8 +79,8 @@ func (t *T) Add(metric, normalized []byte, cf *card.Fixer) (histdb.Hash, Id, []b
 		tagis, tagus, ok = addSet(tagis, tagus, Id(tagi))
 
 		if ok {
-			thp.Add(tkeyh)
-			mhp.Add(tagh)
+			tkeyPtr.Add(tkeyh)
+			tagPtr.Add(tagh)
 
 			tkeyis = append(tkeyis, Id(tkeyi))
 		}
@@ -90,19 +90,19 @@ func (t *T) Add(metric, normalized []byte, cf *card.Fixer) (histdb.Hash, Id, []b
 		return histdb.Hash{}, 0, metric, false
 	}
 
-	metrici, ok := t.metrics.Insert(hash, RWId(t.metrics.Len()))
-	if !ok {
+	id, ok := t.metrics.Insert(hash, RWId(t.metrics.Len()))
+	if ok {
 		t.card++
 
 		for i, tagi := range tagis {
 			tkeyi := tkeyis[i]
-			bitmapIndex(&t.tag_to_metrics, tagi).Add(Id(metrici))
+			bitmapIndex(&t.tag_to_metrics, tagi).Add(Id(id))
 			bitmapIndex(&t.tkey_to_tvals, tkeyi).Add(tagi)
-			bitmapIndex(&t.tkey_to_metrics, tkeyi).Add(Id(metrici))
+			bitmapIndex(&t.tkey_to_metrics, tkeyi).Add(Id(id))
 		}
 	}
 
-	if normalized != nil || !ok {
+	if normalized != nil || ok {
 		// we have to sort after adding to the bitmaps if necessary because we
 		// assume that the values are added in numeric order so we can append a
 		// single bitmap to the slice at a time.
@@ -119,8 +119,9 @@ func (t *T) Add(metric, normalized []byte, cf *card.Fixer) (histdb.Hash, Id, []b
 		}, len(tagis))
 	}
 
-	if !ok {
-		buf := make([]byte, 0, 2*len(tagis))
+	if ok {
+		buf := make([]byte, histdb.HashSize, histdb.HashSize+2*len(tagis))
+		*(*[histdb.HashSize]byte)(buf) = hash
 		for _, tagi := range tagis {
 			var tmp [9]byte
 			n := varint.Append(&tmp, uint64(tagi))
@@ -138,14 +139,23 @@ func (t *T) Add(metric, normalized []byte, cf *card.Fixer) (histdb.Hash, Id, []b
 		}
 	}
 
-	return hash, Id(metrici), normalized, !ok
+	return hash, Id(id), normalized, ok
+}
+
+func (t *T) GetHash(id Id) (hash histdb.Hash, ok bool) {
+	buf := t.metric_names.Get(RWId(id))
+	if len(buf) < histdb.HashSize {
+		return histdb.Hash{}, false
+	}
+	return histdb.Hash(buf[0:histdb.HashSize]), true
 }
 
 func (t *T) AppendMetricName(id Id, buf []byte) ([]byte, bool) {
 	tagis := buffer.OfLen(t.metric_names.Get(RWId(id)))
-	if tagis.Cap() == 0 {
+	if tagis.Cap() < histdb.HashSize {
 		return nil, false
 	}
+	tagis = tagis.Advance(histdb.HashSize)
 
 	var (
 		tagi uint64

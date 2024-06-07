@@ -96,6 +96,10 @@ func (buf T) Front9() *[9]byte {
 	return (*[9]byte)(unsafe.Add(buf.base, buf.pos))
 }
 
+func (buf T) Front10() *[10]byte {
+	return (*[10]byte)(unsafe.Add(buf.base, buf.pos))
+}
+
 func (buf T) Front12() *[12]byte {
 	return (*[12]byte)(unsafe.Add(buf.base, buf.pos))
 }
@@ -104,8 +108,16 @@ func (buf T) Front16() *[16]byte {
 	return (*[16]byte)(unsafe.Add(buf.base, buf.pos))
 }
 
+func (buf T) Front18() *[18]byte {
+	return (*[18]byte)(unsafe.Add(buf.base, buf.pos))
+}
+
 func (buf T) Front20() *[20]byte {
 	return (*[20]byte)(unsafe.Add(buf.base, buf.pos))
+}
+
+func (buf T) Front24() *[24]byte {
+	return (*[24]byte)(unsafe.Add(buf.base, buf.pos))
 }
 
 func (buf T) FrontN(n int) (x []byte) {

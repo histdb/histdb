@@ -28,8 +28,9 @@ type keyReader struct {
 
 func (k *keyReader) Init(fh filesystem.Handle) {
 	*k = keyReader{
-		fh:   fh,
-		root: ^uint32(0),
+		fh:    fh,
+		root:  ^uint32(0),
+		cache: k.cache[:0],
 	}
 }
 

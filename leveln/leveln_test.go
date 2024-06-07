@@ -23,7 +23,7 @@ func TestLevelNWriterReader(t *testing.T) {
 	lnw.Init(keys, values)
 
 	for i := 0; i < 1000; i++ {
-		key := testhelp.KeyFrom(uint32(i)/8, 0, uint32(i))
+		key := testhelp.KeyFrom(uint32(i)/8, 0, uint32(i), 0)
 		assert.NoError(t, lnw.Append(key, key[:4], []byte{byte(i >> 8), byte(i)}))
 	}
 	assert.NoError(t, lnw.Finish())

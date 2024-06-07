@@ -52,7 +52,7 @@ func TestLevel0(t *testing.T) {
 		const maxEntries = L0DataSize / l0EntryAlignment
 
 		for i := uint32(0); i < maxEntries/2; i++ {
-			ok, err := l0.Append(testhelp.KeyFrom(0, 0, i+1), nil, nil)
+			ok, err := l0.Append(testhelp.KeyFrom(0, 0, i+1, 0), nil, nil)
 			assert.NoError(t, err)
 			assert.That(t, ok)
 		}
@@ -63,12 +63,12 @@ func TestLevel0(t *testing.T) {
 		}))
 
 		for i := ts; i < maxEntries-1; i++ {
-			ok, err := l0.Append(testhelp.KeyFrom(0, 0, i+1), nil, nil)
+			ok, err := l0.Append(testhelp.KeyFrom(0, 0, i+1, 0), nil, nil)
 			assert.NoError(t, err)
 			assert.That(t, ok)
 		}
 
-		ok, err := l0.Append(testhelp.KeyFrom(0, 0, 1), nil, nil)
+		ok, err := l0.Append(testhelp.KeyFrom(0, 0, 1, 0), nil, nil)
 		assert.NoError(t, err)
 		assert.That(t, !ok)
 

@@ -144,7 +144,7 @@ func (t *T[K, V]) Insert(k K, v V) (V, bool) {
 	}
 	for {
 		if s := si.slot(); s.k.Equal(k) {
-			return s.v, true
+			return s.v, false
 		}
 		ji := si.jump()
 		if ji == 0 {
@@ -159,7 +159,7 @@ func (t *T[K, V]) insertDirectHit(si slotIndex[K, V], k K, v V) (V, bool) {
 		si.setSlot(slot[K, V]{k: k, v: v})
 		si.setMeta(flagsHit)
 		t.eles++
-		return v, false
+		return v, true
 	}
 
 	parent := t.findParent(si)
@@ -194,7 +194,7 @@ func (t *T[K, V]) insertDirectHit(si slotIndex[K, V], k K, v V) (V, bool) {
 	si.setSlot(slot[K, V]{k: k, v: v})
 	si.setMeta(flagsHit)
 	t.eles++
-	return v, false
+	return v, true
 }
 
 func (t *T[K, V]) insertNew(si slotIndex[K, V], k K, v V) (V, bool) {
@@ -208,7 +208,7 @@ func (t *T[K, V]) insertNew(si slotIndex[K, V], k K, v V) (V, bool) {
 	free.setMeta(flagsHit | flagsList)
 	si.setJump(ji)
 	t.eles++
-	return v, false
+	return v, true
 }
 
 func (t *T[K, V]) isFull() bool {

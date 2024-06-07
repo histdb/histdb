@@ -2,74 +2,60 @@ package atomicdir
 
 import (
 	"encoding/binary"
-	"path/filepath"
 
 	"github.com/histdb/histdb/hexx"
 )
 
 var be = binary.BigEndian
 
+const (
+	Kind_Level0 uint8 = iota
+	Kind_LevelN_Keys
+	Kind_LevelN_Values
+	Kind_LevelN_Memidx
+)
+
 type File struct {
-	Generation uint32
-	Level      uint8
-	Kind       uint8
+	GenLow  uint32
+	GenHigh uint32
+	Level   uint8
+	Kind    uint8
 }
 
 func (f File) String() string {
-	var buf [16]byte
+	var buf [24]byte
 	writeFile(&buf, f)
 	return string(buf[:])
 }
 
-func writeFile(buf *[16]byte, f File) {
+func writeFile(buf *[24]byte, f File) {
 	*buf = [...]byte{
-		'0', '0', '0', '0', '0', '0', '0', '0',
-		'-', 'L', '0', '0',
-		'-', 'K', '0', '0',
+		'L', 'X', 'X',
+		'K', 'X', 'X',
+		'G', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X',
+		'-', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X',
 	}
-	be.PutUint64(buf[0:8], hexx.Put32(f.Generation))
-	be.PutUint16(buf[10:12], hexx.Put8(f.Level))
-	be.PutUint16(buf[14:16], hexx.Put8(f.Kind))
+
+	be.PutUint16(buf[1:3], hexx.Put8(f.Level))
+	be.PutUint16(buf[4:6], hexx.Put8(f.Kind))
+	be.PutUint64(buf[7:15], hexx.Put32(f.GenLow))
+	be.PutUint64(buf[16:24], hexx.Put32(f.GenHigh))
 }
 
-func parseFile(name string) (f File, ok bool) {
-	if len(name) == 16 {
-		f.Generation = hexx.Get32(readUint64(name[0:8]))
-		f.Level = hexx.Get8(readUint16(name[10:12]))
-		f.Kind = hexx.Get8(readUint16(name[14:16]))
-		ok = true
+func ParseFile(name string) (f File, ok bool) {
+	if len(name) != 24 {
+		return
 	}
-	return
-}
-
-func writeDirectoryName(buf *[8]byte, tid uint32) string {
-	*buf = [...]byte{'0', '0', '0', '0', '0', '0', '0', '0'}
-	be.PutUint64(buf[0:8], hexx.Put32(tid))
-	return string(buf[:])
-}
-
-func parseDirectoryName(name string) (tid uint32, ok bool) {
-	if len(name) == 8 {
-		tid = hexx.Get32(readUint64(name[0:8]))
-		ok = true
-	}
-	return
-}
-
-func writeDirectoryFile(buf *[25]byte, tid uint32, f File) {
-	*buf = [...]byte{
-		'0', '0', '0', '0', '0', '0', '0', '0',
-		filepath.Separator,
-		'0', '0', '0', '0', '0', '0', '0', '0',
-		'-', 'L',
-		'0', '0',
-		'-', 'K',
-		'0', '0',
-	}
-	be.PutUint64(buf[0:8], hexx.Put32(tid))
-	be.PutUint64(buf[9:17], hexx.Put32(f.Generation))
-	be.PutUint16(buf[19:21], hexx.Put8(f.Level))
-	be.PutUint16(buf[23:25], hexx.Put8(f.Kind))
+	return File{
+			GenLow:  hexx.Get32(readUint64(name[7:15])),
+			GenHigh: hexx.Get32(readUint64(name[16:24])),
+			Level:   hexx.Get8(readUint16(name[1:3])),
+			Kind:    hexx.Get8(readUint16(name[4:6])),
+		}, true &&
+			name[0] == 'L' &&
+			name[3] == 'K' &&
+			name[6] == 'G' &&
+			name[15] == '-'
 }
 
 //
@@ -77,14 +63,29 @@ func writeDirectoryFile(buf *[25]byte, tid uint32, f File) {
 //
 
 func readUint64(b string) uint64 {
-	return uint64(b[7]) | uint64(b[6])<<8 | uint64(b[5])<<16 | uint64(b[4])<<24 |
-		uint64(b[3])<<32 | uint64(b[2])<<40 | uint64(b[1])<<48 | uint64(b[0])<<56
+	if len(b) < 8 {
+		return 0
+	}
+	return 0 |
+		uint64(b[7])<<0x00 | uint64(b[6])<<0x08 |
+		uint64(b[5])<<0x10 | uint64(b[4])<<0x18 |
+		uint64(b[3])<<0x20 | uint64(b[2])<<0x28 |
+		uint64(b[1])<<0x30 | uint64(b[0])<<0x38
 }
 
-// func readUint32(b string) uint32 {
-// 	return uint32(b[3]) | uint32(b[2])<<8 | uint32(b[1])<<16 | uint32(b[0])<<24
-// }
+func readUint32(b string) uint32 {
+	if len(b) < 4 {
+		return 0
+	}
+	return 0 |
+		uint32(b[3])<<0x00 | uint32(b[2])<<0x08 |
+		uint32(b[1])<<0x10 | uint32(b[0])<<0x18
+}
 
 func readUint16(b string) uint16 {
-	return uint16(b[1]) | uint16(b[0])<<8
+	if len(b) < 2 {
+		return 0
+	}
+	return 0 |
+		uint16(b[1])<<0x00 | uint16(b[0])<<0x08
 }

@@ -22,7 +22,7 @@ func TestTable(t *testing.T) {
 	rng := mwc.New(1, 1)
 	for i := 0; i < iters; i++ {
 		_, ok := tb.Insert(num.U64(rng.Uint64()), num.U32(i))
-		assert.That(t, !ok)
+		assert.That(t, ok)
 	}
 
 	rng = mwc.New(1, 1)
@@ -35,7 +35,7 @@ func TestTable(t *testing.T) {
 	rng = mwc.New(1, 1)
 	for i := 0; i < iters; i++ {
 		n, ok := tb.Insert(num.U64(rng.Uint64()), num.U32(i+1))
-		assert.That(t, ok)
+		assert.That(t, !ok)
 		assert.Equal(t, i, n)
 	}
 
@@ -52,7 +52,7 @@ func TestTableSerialize(t *testing.T) {
 
 	for i := uint64(0); i < 1000; i++ {
 		val, ok := tb.Insert(num.U64(i), num.U32(i))
-		assert.That(t, !ok)
+		assert.That(t, ok)
 		assert.Equal(t, val, i)
 	}
 
@@ -76,7 +76,7 @@ func TestTableSerialize(t *testing.T) {
 
 	for i := uint64(0); i < 1000; i++ {
 		val, ok := tb2.Insert(num.U64(i), ^num.U32(0))
-		assert.That(t, ok)
+		assert.That(t, !ok)
 		assert.Equal(t, val, i)
 	}
 }

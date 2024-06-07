@@ -1,7 +1,6 @@
 package store
 
 import (
-	"fmt"
 	"testing"
 	"time"
 
@@ -14,8 +13,6 @@ func BenchmarkStore(b *testing.B) {
 	fs, cleanup := testhelp.FS(b)
 	// defer cleanup()
 	_ = cleanup
-
-	fmt.Println(fs.Base)
 
 	names := make([][]byte, b.N)
 	values := make([][]byte, b.N)
@@ -34,7 +31,7 @@ func BenchmarkStore(b *testing.B) {
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		assert.NoError(b, s.Write(uint32(i), names[i], values[i]))
+		assert.NoError(b, s.Write(names[i], values[i], uint32(i), uint16(i)))
 	}
 	b.ReportMetric(float64(b.N)/time.Since(now).Seconds(), "keys/sec")
 }

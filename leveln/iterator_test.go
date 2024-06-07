@@ -26,7 +26,7 @@ func TestIteratorSeek(t *testing.T) {
 	lnw.Init(keys, values)
 
 	for i := 0; i < count; i++ {
-		key := testhelp.KeyFrom(uint32(i)/8, 0, uint32(i))
+		key := testhelp.KeyFrom(uint32(i)/8, 0, uint32(i), 0)
 		assert.NoError(t, lnw.Append(key, key[:4], []byte{byte(i >> 8), byte(i)}))
 	}
 	assert.NoError(t, lnw.Finish())
@@ -35,7 +35,7 @@ func TestIteratorSeek(t *testing.T) {
 	it.Init(keys, values, nil)
 
 	for i := 0; i < count; i++ {
-		key := testhelp.KeyFrom(uint32(i)/8, 0, uint32(i))
+		key := testhelp.KeyFrom(uint32(i)/8, 0, uint32(i), 0)
 
 		assert.That(t, it.Seek(key))
 		assert.Equal(t, key, it.Key())
@@ -43,8 +43,8 @@ func TestIteratorSeek(t *testing.T) {
 		assert.Equal(t, it.Value()[1], byte(i))
 
 		if i%8 == 7 && i != count-1 {
-			assert.That(t, it.Seek(testhelp.KeyFrom(uint32(i)/8, 0, uint32(i+1))))
-			key := testhelp.KeyFrom(uint32(i+1)/8, 0, uint32(i+1))
+			assert.That(t, it.Seek(testhelp.KeyFrom(uint32(i)/8, 0, uint32(i+1), 0)))
+			key := testhelp.KeyFrom(uint32(i+1)/8, 0, uint32(i+1), 0)
 			assert.Equal(t, key.String(), it.Key().String())
 			assert.Equal(t, it.Value()[0], byte((i+1)>>8))
 			assert.Equal(t, it.Value()[1], byte(i+1))
@@ -115,7 +115,7 @@ func BenchmarkIterator(b *testing.B) {
 		lnw.Init(keys, values)
 
 		for i := uint32(0); i < n; i++ {
-			key := testhelp.KeyFrom(i/512, 0, uint32(i))
+			key := testhelp.KeyFrom(i/512, 0, uint32(i), 0)
 			assert.NoError(b, lnw.Append(key, nil, nil))
 		}
 		assert.NoError(b, lnw.Finish())
@@ -127,7 +127,7 @@ func BenchmarkIterator(b *testing.B) {
 		b.ResetTimer()
 
 		for i := 0; i < b.N; i++ {
-			key := testhelp.KeyFrom(rng.Uint32n(n)/512, 0, uint32(n))
+			key := testhelp.KeyFrom(rng.Uint32n(n)/512, 0, uint32(n), 0)
 			it.Seek(key)
 		}
 	}

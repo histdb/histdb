@@ -54,6 +54,22 @@ func TestMemindex(t *testing.T) {
 		check(2, "a=b,a=c")
 	})
 
+	t.Run("GetHash", func(t *testing.T) {
+		var idx T
+
+		for _, metric := range [][]byte{
+			bs("a=b,foo"),
+			bs("a=c,foo=a"),
+			bs("a=b,a=c"),
+		} {
+			exp, id, _, ok := idx.Add(metric, nil, nil)
+			assert.That(t, ok)
+			got, ok := idx.GetHash(id)
+			assert.That(t, ok)
+			assert.Equal(t, got, exp)
+		}
+	})
+
 	t.Run("Add", func(t *testing.T) {
 		var idx T
 
@@ -146,6 +162,16 @@ func BenchmarkMemindex(b *testing.B) {
 	_, err := r.Done()
 	assert.NoError(b, err)
 
+	b.Run("GetHash", func(b *testing.B) {
+		b.ReportAllocs()
+		b.ResetTimer()
+
+		for i := 0; i < b.N; i++ {
+			_, ok := idx.GetHash(10)
+			assert.That(b, ok)
+		}
+	})
+
 	b.Run("AppendMetricName", func(b *testing.B) {
 		var buf []byte
 		buf, _ = idx.AppendMetricName(10, buf)
@@ -154,7 +180,8 @@ func BenchmarkMemindex(b *testing.B) {
 		b.ResetTimer()
 
 		for i := 0; i < b.N; i++ {
-			_, _ = idx.AppendMetricName(10, buf[:0])
+			_, ok := idx.AppendMetricName(10, buf[:0])
+			assert.That(b, ok)
 		}
 	})
 

@@ -33,6 +33,8 @@ type valueWriter struct {
 
 func (v *valueWriter) Init(fh filesystem.Handle) {
 	v.fh = fh
+	v.n = 0
+	v.sn = 0
 }
 
 func (v *valueWriter) CanAppend(value []byte) []byte {

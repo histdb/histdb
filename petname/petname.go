@@ -38,11 +38,11 @@ func (b *B[V]) Append(v []byte) {
 }
 
 func (b *B[V]) Get(n V) []byte {
-	if uint64(n) < uint64(len(b.spans)) {
-		s := b.spans[n]
+	if spans := b.spans; uint64(n) < uint64(len(spans)) {
+		s := spans[n]
 		be, ed := uint64(s.begin), uint64(s.end)
-		if be < uint64(len(b.buf)) && ed <= uint64(len(b.buf)) && be <= ed {
-			return b.buf[be:ed]
+		if buf := b.buf; be < uint64(len(buf)) && ed <= uint64(len(buf)) && be <= ed {
+			return buf[be:ed]
 		}
 	}
 	return nil
@@ -73,7 +73,7 @@ func (t *T[K, V]) Size() uint64 {
 
 func (t *T[K, V]) Put(h K, v []byte) V {
 	n, ok := t.idxs.Insert(h, V(t.buf.Len()))
-	if !ok {
+	if ok {
 		t.buf.Append(v)
 	}
 	return n

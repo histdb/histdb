@@ -72,7 +72,7 @@ func BenchmarkKeyReader(b *testing.B) {
 
 		for i := uint32(0); i < n; i++ {
 			var ent kwEntry
-			ent.Set(testhelp.KeyFrom(i, 0, 0), uint32(i), uint8(i))
+			ent.Set(testhelp.KeyFrom(i, 0, 0, 0), uint32(i), uint8(i))
 			kw.Append(ent)
 		}
 		assert.NoError(b, kw.Finish())
@@ -84,7 +84,7 @@ func BenchmarkKeyReader(b *testing.B) {
 		b.ResetTimer()
 
 		for i := 0; i < b.N; i++ {
-			key := testhelp.KeyFrom(rng.Uint32n(n), 0, 0)
+			key := testhelp.KeyFrom(rng.Uint32n(n), 0, 0, 0)
 			_, _, _ = kr.Search(key)
 		}
 

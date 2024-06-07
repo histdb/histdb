@@ -4,35 +4,27 @@ import (
 	"bufio"
 	"bytes"
 	"compress/gzip"
+	"flag"
 	"fmt"
 	"os"
-	"runtime/pprof"
+	"testing"
 	"time"
 
 	"github.com/histdb/histdb/card"
 	"github.com/histdb/histdb/rwutils"
 )
 
-const reload = false
+var reload = flag.Bool("reload", false, "reload metrics.txt.gz into metrics.idx")
 
-func init() {
-	if !reload {
-		return
+func TestMain(m *testing.M) {
+	flag.Parse()
+	if *reload {
+		doReload()
 	}
+	os.Exit(m.Run())
+}
 
-	{
-		fh, err := os.Create("memindex-load.pprof")
-		if err != nil {
-			panic(err)
-		}
-		defer fh.Close()
-
-		if err := pprof.StartCPUProfile(fh); err != nil {
-			panic(err)
-		}
-		defer pprof.StopCPUProfile()
-	}
-
+func doReload() {
 	var idx T
 
 	fh, err := os.Open("metrics.txt.gz")

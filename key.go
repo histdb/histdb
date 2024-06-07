@@ -15,7 +15,6 @@ func (k Key) Digest() uint64 {
 		le.Uint64(k[0:8]) +
 		le.Uint64(k[8:16]) +
 		le.Uint64(k[16:24]) +
-		// uint64(le.Uint32(k[16:20])) +
 		0
 }
 
@@ -37,30 +36,12 @@ func (k *Key) HashPtr() *Hash {
 	return (*Hash)(unsafe.Pointer(&k[HashStart]))
 }
 
-func (k *Key) SetTagKeyHash(th TagKeyHash) {
-	copy(k[TagHashStart:TagHashEnd], th[0:TagKeyHashSize])
-}
-
-func (k Key) TagKeyHash() (th TagKeyHash) {
-	copy(th[0:TagKeyHashSize], k[TagHashStart:TagHashEnd])
-	return th
-}
-
 func (k *Key) TagKeyHashPtr() (th *TagKeyHash) {
-	return (*TagKeyHash)(unsafe.Pointer(&k[TagHashStart]))
-}
-
-func (k *Key) SetTagHash(mh TagHash) {
-	copy(k[MetricHashStart:MetricHashEnd], mh[0:TagHashSize])
-}
-
-func (k Key) TagHash() (mh TagHash) {
-	copy(mh[0:TagHashSize], k[MetricHashStart:MetricHashEnd])
-	return mh
+	return (*TagKeyHash)(unsafe.Pointer(&k[TagKeyHashStart]))
 }
 
 func (k *Key) TagHashPtr() (mh *TagHash) {
-	return (*TagHash)(unsafe.Pointer(&k[MetricHashStart]))
+	return (*TagHash)(unsafe.Pointer(&k[TagHashStart]))
 }
 
 func (k *Key) SetTimestamp(ts uint32) {
@@ -71,6 +52,10 @@ func (k Key) Timestamp() uint32 {
 	return binary.BigEndian.Uint32(k[TimestampStart:TimestampEnd])
 }
 
-func (k *Key) TimestampPtr() (ts *uint32) {
-	return (*uint32)(unsafe.Pointer(&k[TimestampStart]))
+func (k *Key) SetDuration(dur uint16) {
+	binary.BigEndian.PutUint16(k[DurationStart:DurationEnd], dur)
+}
+
+func (k Key) Duration() uint16 {
+	return binary.BigEndian.Uint16(k[DurationStart:DurationEnd])
 }
