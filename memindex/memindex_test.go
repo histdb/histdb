@@ -1,7 +1,6 @@
 package memindex
 
 import (
-	"fmt"
 	"os"
 	"testing"
 	"time"
@@ -23,6 +22,57 @@ func trd[T, U, V, W any](_ T, _ U, v V, _ W) V { return v }
 func fth[T, U, V, W any](_ T, _ U, _ V, w W) W { return w }
 
 func TestMemindex(t *testing.T) {
+	t.Run("GetIdByHash", func(t *testing.T) {
+		var idx T
+
+		for range 1000 {
+			hash, exp, _, ok := idx.Add(testhelp.Metric(5), nil, nil)
+			assert.That(t, ok)
+			got, ok := idx.GetIdByHash(hash)
+			assert.That(t, ok)
+			assert.Equal(t, got, exp)
+		}
+
+		_, ok := idx.GetIdByHash(testhelp.Key().Hash())
+		assert.That(t, !ok)
+	})
+
+	t.Run("AppendNameByHash", func(t *testing.T) {
+		var idx T
+
+		for range 1000 {
+			hash, _, exp, ok := idx.Add(testhelp.Metric(5), []byte{}, nil)
+			assert.That(t, ok)
+			got, ok := idx.AppendNameByHash(hash, nil)
+			assert.That(t, ok)
+			assert.Equal(t, string(got), string(exp))
+		}
+	})
+
+	t.Run("GetHashById", func(t *testing.T) {
+		var idx T
+
+		for range 1000 {
+			exp, id, _, ok := idx.Add(testhelp.Metric(5), nil, nil)
+			assert.That(t, ok)
+			got, ok := idx.GetHashById(id)
+			assert.That(t, ok)
+			assert.Equal(t, got, exp)
+		}
+	})
+
+	t.Run("AppendNameById", func(t *testing.T) {
+		var idx T
+
+		for range 1000 {
+			_, id, exp, ok := idx.Add(testhelp.Metric(5), []byte{}, nil)
+			assert.That(t, ok)
+			got, ok := idx.AppendNameById(id, nil)
+			assert.That(t, ok)
+			assert.Equal(t, string(got), string(exp))
+		}
+	})
+
 	t.Run("CardFix", func(t *testing.T) {
 		var idx T
 		var cf card.Fixer
@@ -33,49 +83,6 @@ func TestMemindex(t *testing.T) {
 		_, _, norm, ok := idx.Add(bs(`interface=foo,error_name=Node\ ID: blah,field=error`), []byte{}, &cf)
 		assert.That(t, ok)
 		assert.Equal(t, string(norm), "error_name=fixed,field=error")
-	})
-
-	t.Run("AppendMetricName", func(t *testing.T) {
-		var idx T
-
-		idx.Add(bs("a=b,foo="), nil, nil)
-		idx.Add(bs("a=b,foo"), nil, nil)
-		idx.Add(bs("a=c,foo=a"), nil, nil)
-		idx.Add(bs("a=b,a=c"), nil, nil)
-
-		check := func(n Id, s string) {
-			name, ok := idx.AppendMetricName(n, nil)
-			assert.That(t, ok)
-			assert.Equal(t, string(name), s)
-		}
-
-		check(0, "a=b,foo")
-		check(1, "a=c,foo=a")
-		check(2, "a=b,a=c")
-	})
-
-	t.Run("GetHash", func(t *testing.T) {
-		var idx T
-
-		for _, metric := range [][]byte{
-			bs("a=b,foo"),
-			bs("a=c,foo=a"),
-			bs("a=b,a=c"),
-		} {
-			exp, id, _, ok := idx.Add(metric, nil, nil)
-			assert.That(t, ok)
-			got, ok := idx.GetHash(id)
-			assert.That(t, ok)
-			assert.Equal(t, got, exp)
-		}
-	})
-
-	t.Run("Add", func(t *testing.T) {
-		var idx T
-
-		for i := 0; i < 1e5; i++ {
-			idx.Add(testhelp.Name(3), nil, nil)
-		}
 	})
 
 	t.Run("Duplicate Tags", func(t *testing.T) {
@@ -123,7 +130,9 @@ func TestMemindex(t *testing.T) {
 
 	t.Run("Serialize", func(t *testing.T) {
 		var idx T
-		loadRandom(&idx)
+		for range 1000 {
+			idx.Add(testhelp.Metric(5), nil, nil)
+		}
 
 		var w rwutils.W
 		AppendTo(&idx, &w)
@@ -136,6 +145,8 @@ func TestMemindex(t *testing.T) {
 		_, err := r.Done()
 		assert.NoError(t, err)
 
+		assert.Equal(t, idx.metrics, idx2.metrics)
+		assert.Equal(t, idx.metric_names, idx2.metric_names)
 		assert.Equal(t, idx.tag_names, idx2.tag_names)
 		assert.Equal(t, idx.tkey_names, idx2.tkey_names)
 
@@ -153,50 +164,87 @@ func TestMemindex(t *testing.T) {
 }
 
 func BenchmarkMemindex(b *testing.B) {
-	data, _ := os.ReadFile("metrics.idx")
+	data, err := os.ReadFile("metrics.idx")
+	if err != nil {
+		doReload()
+		data, err = os.ReadFile("metrics.idx")
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+
 	var r rwutils.R
 	r.Init(buffer.OfLen(data))
 
 	var idx T
 	ReadFrom(&idx, &r)
-	_, err := r.Done()
+	_, err = r.Done()
 	assert.NoError(b, err)
 
-	b.Run("GetHash", func(b *testing.B) {
+	b.Run("GetIdByHash", func(b *testing.B) {
+		hash, ok := idx.GetHashById(10)
+		assert.That(b, ok)
+
 		b.ReportAllocs()
 		b.ResetTimer()
 
-		for i := 0; i < b.N; i++ {
-			_, ok := idx.GetHash(10)
+		for range b.N {
+			_, ok := idx.GetIdByHash(hash)
 			assert.That(b, ok)
 		}
 	})
 
-	b.Run("AppendMetricName", func(b *testing.B) {
-		var buf []byte
-		buf, _ = idx.AppendMetricName(10, buf)
+	b.Run("AppendNameByHash", func(b *testing.B) {
+		hash, ok := idx.GetHashById(10)
+		assert.That(b, ok)
+
+		buf, ok := idx.AppendNameByHash(hash, nil)
+		assert.That(b, ok)
+		buf = buf[:0]
 
 		b.ReportAllocs()
 		b.ResetTimer()
 
-		for i := 0; i < b.N; i++ {
-			_, ok := idx.AppendMetricName(10, buf[:0])
+		for range b.N {
+			_, ok = idx.AppendNameByHash(hash, buf[:0])
+			assert.That(b, ok)
+		}
+	})
+
+	b.Run("GetHashById", func(b *testing.B) {
+		b.ReportAllocs()
+		b.ResetTimer()
+
+		for range b.N {
+			_, ok := idx.GetHashById(10)
+			assert.That(b, ok)
+		}
+	})
+
+	b.Run("AppendNameById", func(b *testing.B) {
+		buf, ok := idx.AppendNameById(10, nil)
+		assert.That(b, ok)
+		buf = buf[:0]
+
+		b.ReportAllocs()
+		b.ResetTimer()
+
+		for range b.N {
+			_, ok := idx.AppendNameById(10, buf)
 			assert.That(b, ok)
 		}
 	})
 
 	b.Run("AddExisting", func(b *testing.B) {
-		var m = bs("foo=bar,baz=bif,a=b,c=d,e=f,g=h")
-
-		var idx T
-		idx.Add(m, nil, nil)
+		buf, ok := idx.AppendNameById(10, nil)
+		assert.That(b, ok)
 
 		start := time.Now()
 		b.ResetTimer()
 		b.ReportAllocs()
 
-		for i := 0; i < b.N; i++ {
-			idx.Add(m, nil, nil)
+		for range b.N {
+			idx.Add(buf, nil, nil)
 		}
 
 		b.ReportMetric(float64(b.N)/time.Since(start).Seconds()/1e6, "Mm/sec")
@@ -205,14 +253,14 @@ func BenchmarkMemindex(b *testing.B) {
 	b.Run("AddUnique1K", func(b *testing.B) {
 		metrics := make([][]byte, 1000)
 		for i := range metrics {
-			metrics[i] = bs(fmt.Sprintf("foo=%d,baz=bif,a=b,c=d,e=f,g=h", i))
+			metrics[i] = testhelp.Metric(0)
 		}
 
 		start := time.Now()
 		b.ResetTimer()
 		b.ReportAllocs()
 
-		for i := 0; i < b.N; i++ {
+		for range b.N {
 			var idx T
 			for _, m := range metrics {
 				idx.Add(m, nil, nil)
@@ -230,7 +278,7 @@ func BenchmarkMemindex(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 
-		for i := 0; i < b.N; i++ {
+		for range b.N {
 			w.Init(w.Done().Reset())
 			AppendTo(&idx, &w)
 		}
@@ -241,7 +289,7 @@ func BenchmarkMemindex(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 
-		for i := 0; i < b.N; i++ {
+		for range b.N {
 			var r rwutils.R
 			r.Init(buffer.OfLen(data))
 

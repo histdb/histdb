@@ -87,7 +87,7 @@ func TestIterator(t *testing.T) {
 
 		var it Iterator
 		assert.NoError(t, l0.InitIterator(&it))
-		assert.Equal(t, count(&it), 65535)
+		assert.Equal(t, count(&it), 32767)
 	})
 
 	t.Run("Short", func(t *testing.T) {
@@ -99,7 +99,7 @@ func TestIterator(t *testing.T) {
 
 		var it Iterator
 		assert.NoError(t, l0.InitIterator(&it))
-		assert.Equal(t, count(&it), 3855)
+		assert.Equal(t, count(&it), 3640)
 	})
 }
 
@@ -119,7 +119,7 @@ func BenchmarkIterator(b *testing.B) {
 			b.ReportAllocs()
 			b.ResetTimer()
 
-			for i := 0; i < b.N; i++ {
+			for range b.N {
 				if !it.Next() {
 					it.SeekFirst()
 				}
@@ -144,7 +144,7 @@ func BenchmarkIterator(b *testing.B) {
 			b.ReportAllocs()
 			b.ResetTimer()
 
-			for i := 0; i < b.N; i++ {
+			for range b.N {
 				it.Seek(testhelp.Key())
 			}
 		})

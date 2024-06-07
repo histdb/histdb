@@ -142,7 +142,20 @@ func (t *T) Add(metric, normalized []byte, cf *card.Fixer) (histdb.Hash, Id, []b
 	return hash, Id(id), normalized, ok
 }
 
-func (t *T) GetHash(id Id) (hash histdb.Hash, ok bool) {
+func (t *T) GetIdByHash(hash histdb.Hash) (Id, bool) {
+	id, ok := t.metrics.Find(hash)
+	return Id(id), ok
+}
+
+func (t *T) AppendNameByHash(hash histdb.Hash, buf []byte) ([]byte, bool) {
+	id, ok := t.metrics.Find(hash)
+	if !ok {
+		return buf, false
+	}
+	return t.AppendNameById(Id(id), buf)
+}
+
+func (t *T) GetHashById(id Id) (hash histdb.Hash, ok bool) {
 	buf := t.metric_names.Get(RWId(id))
 	if len(buf) < histdb.HashSize {
 		return histdb.Hash{}, false
@@ -150,10 +163,10 @@ func (t *T) GetHash(id Id) (hash histdb.Hash, ok bool) {
 	return histdb.Hash(buf[0:histdb.HashSize]), true
 }
 
-func (t *T) AppendMetricName(id Id, buf []byte) ([]byte, bool) {
+func (t *T) AppendNameById(id Id, buf []byte) ([]byte, bool) {
 	tagis := buffer.OfLen(t.metric_names.Get(RWId(id)))
 	if tagis.Cap() < histdb.HashSize {
-		return nil, false
+		return buf, false
 	}
 	tagis = tagis.Advance(histdb.HashSize)
 
@@ -165,7 +178,7 @@ func (t *T) AppendMetricName(id Id, buf []byte) ([]byte, bool) {
 	for i := 0; tagis.Remaining() > 0; i++ {
 		tagi, tagis, ok = varint.Consume(tagis)
 		if !ok {
-			return nil, false
+			return buf, false
 		}
 		if i > 0 {
 			buf = append(buf, ',')

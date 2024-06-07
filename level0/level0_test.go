@@ -22,7 +22,7 @@ func TestLevel0(t *testing.T) {
 		size, err := l0.fh.Size()
 		assert.NoError(t, err)
 
-		assert.Equal(t, size, L0Size)
+		assert.Equal(t, size, 2228224)
 
 		// TODO: some better checks
 	})
@@ -49,7 +49,7 @@ func TestLevel0(t *testing.T) {
 		var l0 T
 		assert.NoError(t, l0.Init(fh, nil))
 
-		const maxEntries = L0DataSize / l0EntryAlignment
+		const maxEntries = 32767
 
 		for i := uint32(0); i < maxEntries/2; i++ {
 			ok, err := l0.Append(testhelp.KeyFrom(0, 0, i+1, 0), nil, nil)
@@ -62,7 +62,7 @@ func TestLevel0(t *testing.T) {
 			ts = key.Timestamp()
 		}))
 
-		for i := ts; i < maxEntries-1; i++ {
+		for i := ts; i < maxEntries; i++ {
 			ok, err := l0.Append(testhelp.KeyFrom(0, 0, i+1, 0), nil, nil)
 			assert.NoError(t, err)
 			assert.That(t, ok)
@@ -97,7 +97,7 @@ func BenchmarkLevel0(b *testing.B) {
 			b.ReportAllocs()
 			b.ResetTimer()
 
-			for i := 0; i < b.N; i++ {
+			for range b.N {
 				assert.NoError(b, l0.fh.Truncate(0))
 				assert.NoError(b, l0.Init(l0.fh, nil))
 				for _, ent := range entries {
@@ -129,7 +129,7 @@ func BenchmarkLevel0(b *testing.B) {
 			b.ReportAllocs()
 			b.ResetTimer()
 
-			for i := 0; i < b.N; i++ {
+			for range b.N {
 				assert.NoError(b, l0.Init(l0.fh, func(key histdb.Key, name, value []byte) {
 					keys++
 				}))

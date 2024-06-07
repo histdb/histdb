@@ -3,7 +3,6 @@ package histdb
 import (
 	"encoding/binary"
 	"fmt"
-	"unsafe"
 
 	"github.com/histdb/histdb/rwutils"
 )
@@ -33,15 +32,15 @@ func (k Key) Hash() (h Hash) {
 }
 
 func (k *Key) HashPtr() *Hash {
-	return (*Hash)(unsafe.Pointer(&k[HashStart]))
+	return (*Hash)(k[HashStart:HashEnd])
 }
 
 func (k *Key) TagKeyHashPtr() (th *TagKeyHash) {
-	return (*TagKeyHash)(unsafe.Pointer(&k[TagKeyHashStart]))
+	return (*TagKeyHash)(k[TagKeyHashStart:TagKeyHashEnd])
 }
 
 func (k *Key) TagHashPtr() (mh *TagHash) {
-	return (*TagHash)(unsafe.Pointer(&k[TagHashStart]))
+	return (*TagHash)(k[TagHashStart:TagHashEnd])
 }
 
 func (k *Key) SetTimestamp(ts uint32) {
@@ -52,10 +51,10 @@ func (k Key) Timestamp() uint32 {
 	return binary.BigEndian.Uint32(k[TimestampStart:TimestampEnd])
 }
 
-func (k *Key) SetDuration(dur uint16) {
-	binary.BigEndian.PutUint16(k[DurationStart:DurationEnd], dur)
+func (k *Key) SetDuration(dur uint32) {
+	binary.BigEndian.PutUint32(k[DurationStart:DurationEnd], dur)
 }
 
-func (k Key) Duration() uint16 {
-	return binary.BigEndian.Uint16(k[DurationStart:DurationEnd])
+func (k Key) Duration() uint32 {
+	return binary.BigEndian.Uint32(k[DurationStart:DurationEnd])
 }

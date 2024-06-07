@@ -16,7 +16,7 @@ func BenchmarkStore(b *testing.B) {
 
 	names := make([][]byte, b.N)
 	values := make([][]byte, b.N)
-	for i := 0; i < b.N; i++ {
+	for i := range b.N {
 		names[i] = testhelp.Name(3)
 		values[i] = testhelp.Value(256)
 	}
@@ -30,7 +30,7 @@ func BenchmarkStore(b *testing.B) {
 	now := time.Now()
 	b.ResetTimer()
 
-	for i := 0; i < b.N; i++ {
+	for i := range b.N {
 		assert.NoError(b, s.Write(names[i], values[i], uint32(i), uint16(i)))
 	}
 	b.ReportMetric(float64(b.N)/time.Since(now).Seconds(), "keys/sec")

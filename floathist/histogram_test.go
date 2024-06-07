@@ -111,7 +111,7 @@ func BenchmarkHistogram(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 
-		for i := 0; i < b.N; i++ {
+		for range b.N {
 			h.Observe(1)
 		}
 	})
@@ -143,7 +143,7 @@ func BenchmarkHistogram(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 
-		for i := 0; i < b.N; i++ {
+		for range b.N {
 			his.Min()
 		}
 	})
@@ -160,7 +160,7 @@ func BenchmarkHistogram(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 
-		for i := 0; i < b.N; i++ {
+		for range b.N {
 			his.Max()
 		}
 	})
@@ -177,7 +177,7 @@ func BenchmarkHistogram(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 
-		for i := 0; i < b.N; i++ {
+		for range b.N {
 			his.Total()
 		}
 	})
@@ -195,7 +195,7 @@ func BenchmarkHistogram(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 
-		for i := 0; i < b.N; i++ {
+		for range b.N {
 			his.Total()
 		}
 	})
@@ -213,7 +213,7 @@ func BenchmarkHistogram(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 
-		for i := 0; i < b.N; i++ {
+		for range b.N {
 			his.Quantile(.95)
 		}
 	})
@@ -231,7 +231,7 @@ func BenchmarkHistogram(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 
-		for i := 0; i < b.N; i++ {
+		for range b.N {
 			his.Quantile(rng.Float64())
 		}
 	})
@@ -249,7 +249,7 @@ func BenchmarkHistogram(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 
-		for i := 0; i < b.N; i++ {
+		for range b.N {
 			his.CDF(rng.Float32())
 		}
 	})
@@ -267,7 +267,7 @@ func BenchmarkHistogram(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 
-		for i := 0; i < b.N; i++ {
+		for range b.N {
 			his.CDF(rng.Float32())
 		}
 	})
@@ -285,7 +285,7 @@ func BenchmarkHistogram(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 
-		for i := 0; i < b.N; i++ {
+		for range b.N {
 			_, _, _, _ = his.Summary()
 		}
 	})

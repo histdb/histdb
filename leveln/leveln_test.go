@@ -5,7 +5,6 @@ import (
 
 	"github.com/zeebo/assert"
 
-	"github.com/histdb/histdb"
 	"github.com/histdb/histdb/testhelp"
 )
 
@@ -22,9 +21,15 @@ func TestLevelNWriterReader(t *testing.T) {
 	var lnw Writer
 	lnw.Init(keys, values)
 
-	for i := 0; i < 1000; i++ {
-		key := testhelp.KeyFrom(uint32(i)/8, 0, uint32(i), 0)
-		assert.NoError(t, lnw.Append(key, key[:4], []byte{byte(i >> 8), byte(i)}))
+	const amount = 50000
+
+	for i := 0; i < amount; i++ {
+		key := testhelp.KeyFrom(uint64(i)/8, 0, uint32(i), 0)
+		assert.NoError(t, lnw.Append(
+			key,
+			[]byte{byte(i) / 8},
+			[]byte{byte(i >> 8), byte(i)},
+		))
 	}
 	assert.NoError(t, lnw.Finish())
 
@@ -33,15 +38,13 @@ func TestLevelNWriterReader(t *testing.T) {
 
 	i := 0
 	for ; it.Next(); i++ {
-		var key histdb.Key
-		be.PutUint32(key.TagKeyHashPtr()[:], uint32(i)/8)
-		key.SetTimestamp(uint32(i))
+		key := testhelp.KeyFrom(uint64(i)/8, 0, uint32(i), 0)
 
-		assert.Equal(t, key, it.Key())
-		assert.Equal(t, it.Name(), key[:4])
+		assert.Equal(t, it.Key(), key)
+		assert.Equal(t, it.Name()[0], byte(i)/8)
 		assert.Equal(t, it.Value()[0], i/256)
 		assert.Equal(t, it.Value()[1], i%256)
 	}
 	assert.NoError(t, it.Err())
-	assert.Equal(t, i, 1000)
+	assert.Equal(t, i, amount)
 }

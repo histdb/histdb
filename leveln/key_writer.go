@@ -27,7 +27,7 @@ const (
 	// The memory usage is because we keep a page per depth in both the reader and writer.
 	kwPageSize   = 4096 * 4
 	kwEntrySize  = histdb.KeySize + 4 + 1
-	kwHeaderSize = 28 // 11 used
+	kwHeaderSize = 30 // 11 used
 	kwEntries    = (kwPageSize - kwHeaderSize) / kwEntrySize
 
 	_ uintptr = (kwHeaderSize + kwEntries*kwEntrySize) - kwPageSize

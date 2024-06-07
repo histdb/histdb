@@ -23,9 +23,11 @@ func TestParse(t *testing.T) {
 func BenchmarkParse(b *testing.B) {
 	query := []byte(parseQuery)
 	into := new(Query)
+
 	b.ReportAllocs()
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for range b.N {
 		_ = Parse(query, into)
 	}
 }

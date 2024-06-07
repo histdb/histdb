@@ -99,7 +99,7 @@ func BenchmarkLFHT(b *testing.B) {
 		rng := mwc.Rand()
 		b.ReportAllocs()
 
-		for i := 0; i < b.N; i++ {
+		for range b.N {
 			var t T[int, int]
 			for i := 0; i < kSize; i++ {
 				n := rng.Uint32n(kSize)
@@ -113,7 +113,7 @@ func BenchmarkLFHT(b *testing.B) {
 		var t T[int, int]
 		b.ReportAllocs()
 
-		for i := 0; i < b.N; i++ {
+		for range b.N {
 			n := rng.Uint32n(kSize)
 			t.Insert(getKey(n), getHash(n), getValue)
 		}
@@ -131,7 +131,7 @@ func BenchmarkLFHT(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 
-		for i := 0; i < b.N; i++ {
+		for range b.N {
 			n := rng.Uint32n(kSize)
 			sink1, sink2 = t.Find(getKey(n), getHash(n))
 		}
@@ -159,7 +159,7 @@ func BenchmarkLFHT(b *testing.B) {
 		iters := kSize / procs
 		b.ReportAllocs()
 
-		for i := 0; i < b.N; i++ {
+		for range b.N {
 			var t T[int, int]
 			var wg sync.WaitGroup
 
@@ -187,7 +187,7 @@ func BenchmarkLFHT(b *testing.B) {
 		b.ResetTimer()
 
 		iter := t.Iterator()
-		for i := 0; i < b.N; i++ {
+		for range b.N {
 			if !iter.Next() {
 				iter = t.Iterator()
 			}

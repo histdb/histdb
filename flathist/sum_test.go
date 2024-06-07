@@ -71,7 +71,7 @@ func runBenchSum[T any](b *testing.B, tc testSumCase[T]) {
 	b.ReportAllocs()
 	b.ResetTimer()
 
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		tc.sum(l2)
 	}
 }

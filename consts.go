@@ -6,10 +6,10 @@ var le = binary.LittleEndian
 
 const (
 	TagKeyHashSize = 8
-	TagHashSize    = 10
+	TagHashSize    = 16
 	HashSize       = TagKeyHashSize + TagHashSize
 	TimestampSize  = 4
-	DurationSize   = 2
+	DurationSize   = 4
 
 	KeySize = HashSize + TimestampSize + DurationSize
 

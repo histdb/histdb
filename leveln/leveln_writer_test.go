@@ -22,7 +22,7 @@ func BenchmarkLevelNAppend(b *testing.B) {
 
 		b.ReportAllocs()
 
-		for i := 0; i < b.N; i++ {
+		for i := range b.N {
 			func(fs *filesystem.T, n, i int) {
 				rng := mwc.Rand()
 
@@ -37,7 +37,7 @@ func BenchmarkLevelNAppend(b *testing.B) {
 				ln.Init(keys, values)
 
 				for j := 0; j < n; j++ {
-					key = testhelp.KeyFrom(uint32(j)/32, 0, uint32(j), 0)
+					key = testhelp.KeyFrom(uint64(j)/32, 0, uint32(j), 0)
 					_ = ln.Append(key, key[:4], value[0:256+rng.Uint32()%256])
 				}
 				_ = ln.Finish()

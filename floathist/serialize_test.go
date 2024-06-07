@@ -85,7 +85,7 @@ func BenchmarkSerialize(b *testing.B) {
 		rng := mwc.Rand()
 		var buf [13]byte
 
-		for i := 0; i < b.N; i++ {
+		for range b.N {
 			WriteSingle(&buf, rng.Float32())
 		}
 		runtime.KeepAlive(&buf)
@@ -109,7 +109,7 @@ func BenchmarkSerialize(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 
-		for i := 0; i < b.N; i++ {
+		for range b.N {
 			w.Init(w.Done().Reset())
 			AppendTo(&h, &w)
 		}
@@ -133,7 +133,7 @@ func BenchmarkSerialize(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 
-		for i := 0; i < b.N; i++ {
+		for range b.N {
 			var r rwutils.R
 			r.Init(w.Done().Reset())
 

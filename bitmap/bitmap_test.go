@@ -44,7 +44,7 @@ func BenchmarkBitmap64(b *testing.B) {
 	b.Run("Next", func(b *testing.B) {
 		var bm T64
 		idx := uint(0)
-		for i := 0; i < b.N; i++ {
+		for range b.N {
 			idx = bm.Lowest()
 			bm.ClearLowest()
 		}
@@ -53,7 +53,7 @@ func BenchmarkBitmap64(b *testing.B) {
 	})
 
 	b.Run("NextAll", func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
+		for range b.N {
 			b := T64{math.MaxUint64}
 			for !b.Empty() {
 				b.ClearLowest()
@@ -66,7 +66,7 @@ func BenchmarkBitmap32(b *testing.B) {
 	b.Run("Next", func(b *testing.B) {
 		var bm T32
 		idx := uint(0)
-		for i := 0; i < b.N; i++ {
+		for range b.N {
 			idx = bm.Lowest()
 			bm.ClearLowest()
 		}
@@ -75,7 +75,7 @@ func BenchmarkBitmap32(b *testing.B) {
 	})
 
 	b.Run("NextAll", func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
+		for range b.N {
 			b := T32{math.MaxUint32}
 			for !b.Empty() {
 				b.ClearLowest()

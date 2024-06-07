@@ -90,7 +90,7 @@ func BenchmarkTable(b *testing.B) {
 		b.ResetTimer()
 
 		var tb T[num.U64, num.U32]
-		for i := 0; i < b.N; i++ {
+		for range b.N {
 			tb = T[num.U64, num.U32]{}
 			for j := 0; j < n; j++ {
 				tb.Insert(num.U64(rng.Uint64()), num.U32(0))
@@ -119,7 +119,7 @@ func BenchmarkStdlib(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 
-		for i := 0; i < b.N; i++ {
+		for range b.N {
 			tb := make(map[num.U64]uint32)
 
 			for j := 0; j < n; j++ {
@@ -162,7 +162,7 @@ func BenchmarkTableSerialize(b *testing.B) {
 			b.ReportAllocs()
 			b.ResetTimer()
 
-			for i := 0; i < b.N; i++ {
+			for range b.N {
 				w.Init(w.Done())
 				AppendTo(tb, &w)
 			}
@@ -192,7 +192,7 @@ func BenchmarkTableSerialize(b *testing.B) {
 			b.ReportAllocs()
 			b.ResetTimer()
 
-			for i := 0; i < b.N; i++ {
+			for range b.N {
 				r.Init(w.Done().Reset())
 				ReadFrom(tb, &r)
 			}

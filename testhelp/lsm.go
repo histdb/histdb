@@ -16,8 +16,8 @@ func Key() (key histdb.Key) {
 	return key
 }
 
-func KeyFrom(tkh uint32, th uint64, ts uint32, dur uint16) (k histdb.Key) {
-	binary.BigEndian.PutUint32(k.TagKeyHashPtr()[:], tkh)
+func KeyFrom(tkh uint64, th uint64, ts uint32, dur uint32) (k histdb.Key) {
+	binary.BigEndian.PutUint64(k.TagKeyHashPtr()[:], tkh)
 	binary.BigEndian.PutUint64(k.TagHashPtr()[:], th)
 	k.SetTimestamp(ts)
 	k.SetDuration(dur)
@@ -25,6 +25,24 @@ func KeyFrom(tkh uint32, th uint64, ts uint32, dur uint16) (k histdb.Key) {
 }
 
 func Timestamp() uint32 { return mwc.Uint32() }
+
+func Metric(n int) (v []byte) {
+	if n <= 0 {
+		n = mwc.Intn(10) + 1
+	}
+	v = make([]byte, 0, n*5-1)
+	for i := range n {
+		if i > 0 {
+			v = append(v, ',')
+		}
+		for range 2 {
+			v = append(v, 'a'+byte(mwc.Uint64n(26)))
+		}
+		v = append(v, '=')
+		v = append(v, '0'+byte(mwc.Uint64n(10)))
+	}
+	return v
+}
 
 func Name(n int) []byte {
 	if n < 0 {

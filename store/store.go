@@ -9,6 +9,14 @@ import (
 	"github.com/histdb/histdb/memindex"
 )
 
+// design: each level n has an assocaited memindex used for name lookups/queries
+// there's a top level memindex for the level0s? but how to clean out during
+// compaction the property could be that the level0 memindex has a superset of
+// the level0 keys. the full names aren't stored anywhere then, though. is that
+// a problem? maybe they go into the levelns as well? ugh. nah just rely on the
+// memindex. it's the same thing. we don't actually need to store the name then
+// because the hash identifies it.
+
 type Config struct {
 	_ [0]func() // no equality
 
