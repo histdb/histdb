@@ -10,16 +10,10 @@ import (
 const (
 	vwSpanSize = 4096 * 4
 
-	vwSpanHashStart = 0
-	vwSpanHashEnd   = vwSpanHashStart + histdb.HashSize
-
-	vwSpanNameLengthIdx = vwSpanHashEnd
-	vwSpanNameStart     = vwSpanNameLengthIdx + 1
-
 	vwSpanAlignBits   = 8
 	vwSpanAlign       = 1 << vwSpanAlignBits
 	vwSpanMask        = vwSpanAlign - 1
-	vwEntryHeaderSize = 6
+	vwEntryHeaderSize = 2 + 4 + 4
 )
 
 type valueWriter struct {
@@ -47,30 +41,22 @@ func (v *valueWriter) CanAppend(value []byte) []byte {
 	return nil
 }
 
-func (v *valueWriter) Append(buf []byte, ts uint32, value []byte) {
+func (v *valueWriter) Append(buf []byte, ts, dur uint32, value []byte) {
 	if vwEntryHeaderSize <= len(buf) {
 		elen := vwEntryHeaderSize + uint(len(value))
 
 		be.PutUint16(buf[0:2], uint16(elen))
 		be.PutUint32(buf[2:6], uint32(ts))
+		be.PutUint32(buf[6:10], uint32(dur))
 		copy(buf[vwEntryHeaderSize:], value)
 
 		v.sn += elen
 	}
 }
 
-func (v *valueWriter) BeginSpan(key histdb.Key, name []byte) bool {
-	sn := vwSpanNameStart + uint(len(name))
-	if span := v.span[:]; uint(len(name)) < 256 && vwSpanNameStart <= sn && sn <= uint(len(span)) {
-		copy(span[vwSpanHashStart:vwSpanHashEnd], key[:histdb.HashSize])
-		span[vwSpanNameLengthIdx] = byte(len(name))
-		copy(span[vwSpanNameStart:sn], name)
-
-		v.sn = sn
-		return true
-	}
-
-	return false
+func (v *valueWriter) BeginSpan(key histdb.Key) {
+	*(*histdb.Hash)(v.span[0:histdb.HashSize]) = key.Hash()
+	v.sn = histdb.HashSize
 }
 
 func (v *valueWriter) FinishSpan() (offset uint32, length uint8, err error) {

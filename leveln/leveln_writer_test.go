@@ -38,7 +38,7 @@ func BenchmarkLevelNAppend(b *testing.B) {
 
 				for j := 0; j < n; j++ {
 					key = testhelp.KeyFrom(uint64(j)/32, 0, uint32(j), 0)
-					_ = ln.Append(key, key[:4], value[0:256+rng.Uint32()%256])
+					_ = ln.Append(key, value[0:256+rng.Uint32()%256])
 				}
 				_ = ln.Finish()
 

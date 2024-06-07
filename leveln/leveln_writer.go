@@ -36,18 +36,16 @@ func (w *Writer) storeErr(err error) error {
 	return w.err
 }
 
-func (w *Writer) Append(key histdb.Key, name, value []byte) error {
+func (w *Writer) Append(key histdb.Key, value []byte) error {
 	if w.err != nil {
 		return w.err
-	} else if len(name) >= 256 {
-		return w.storeErr(errs.Errorf("name too large: %d", len(name)))
 	}
 
 	// if not first, we may either append or finish an old span
 	if !w.first {
 		if key.Hash() == w.key.Hash() {
 			if buf := w.vw.CanAppend(value); buf != nil {
-				w.vw.Append(buf, key.Timestamp(), value)
+				w.vw.Append(buf, key.Timestamp(), key.Duration(), value)
 				return nil
 			}
 		}
@@ -70,13 +68,11 @@ func (w *Writer) Append(key histdb.Key, name, value []byte) error {
 	}
 
 	// start the new span, and since it's new, the value must fit
-	if !w.vw.BeginSpan(key, name) {
-		return w.storeErr(errs.Errorf("name too large: %d", len(name)))
-	}
+	w.vw.BeginSpan(key)
 	w.key = key
 
 	if buf := w.vw.CanAppend(value); buf != nil {
-		w.vw.Append(buf, key.Timestamp(), value)
+		w.vw.Append(buf, key.Timestamp(), key.Duration(), value)
 		return nil
 	}
 

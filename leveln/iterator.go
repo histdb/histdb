@@ -34,6 +34,7 @@ type Iterator struct {
 
 func (it *Iterator) Init(keys, values filesystem.Handle, idx *memindex.T) {
 	*it = Iterator{
+		idx:    idx,
 		values: values,
 	}
 	it.kr.Init(keys)
@@ -58,6 +59,7 @@ func (it *Iterator) Next() bool {
 
 	vend = uint(be.Uint16(span[0:2]))
 	it.skey.SetTimestamp(be.Uint32(span[2:6]))
+	it.skey.SetDuration(be.Uint32(span[6:10]))
 
 	if vwEntryHeaderSize <= vend && vend < uint(len(span)) {
 		it.value = span[vwEntryHeaderSize:vend]
@@ -82,7 +84,7 @@ func (it *Iterator) readNextSpan() {
 	// read a span into the buffer
 	it.stats.valueReads++
 	n, err := it.values.ReadAt(it.sbuf[:], int64(it.offset)*vwSpanAlign)
-	if n >= vwSpanNameStart && n <= cap(it.sbuf) {
+	if n > 0 && n <= cap(it.sbuf) {
 		it.size = n
 		it.span = it.sbuf[:n:n]
 	} else if err != nil {
@@ -93,19 +95,20 @@ func (it *Iterator) readNextSpan() {
 		return
 	}
 
-	if span := it.span; vwSpanNameLengthIdx < len(it.span) {
-		copy(it.skey.HashPtr()[:], span[vwSpanHashStart:vwSpanHashEnd])
-		nlen := uint(span[vwSpanNameLengthIdx])
-		nend := vwSpanNameStart + nlen
-
-		if vwSpanNameStart <= nend && nend <= uint(len(span)) {
-			it.name = span[vwSpanNameStart:nend]
-			it.span = span[nend:]
-			return
-		}
+	if len(it.span) < histdb.HashSize {
+		it.err = errs.Errorf("iterator data corruption: span too short")
+		return
 	}
 
-	it.err = errs.Errorf("iterator data corruption: span too short")
+	*it.skey.HashPtr() = (histdb.Hash)(it.span[0:histdb.HashSize])
+	it.span = it.span[histdb.HashSize:]
+
+	var ok bool
+	it.name, ok = it.idx.AppendNameByHash(it.skey.Hash(), it.name)
+	if !ok {
+		it.err = errs.Errorf("iterator data corruption: name not found")
+		return
+	}
 }
 
 func (it *Iterator) Key() histdb.Key { return it.skey }
