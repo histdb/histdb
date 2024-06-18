@@ -1,7 +1,6 @@
 package store
 
 import (
-	"fmt"
 	"io"
 
 	"github.com/zeebo/errs/v2"
@@ -122,8 +121,6 @@ func (ln *levelN) Index() (*memindex.T, error) {
 }
 
 func (ln *levelN) Query(hash histdb.Hash, after uint32, cb func(key histdb.Key, val []byte) (bool, error)) (bool, error) {
-	fmt.Println("levelnquery     ", hash, after)
-
 	if ln.it == nil {
 		ln.it = new(leveln.Iterator)
 		ln.it.Init(ln.keys, ln.vals)
@@ -134,9 +131,6 @@ func (ln *levelN) Query(hash histdb.Hash, after uint32, cb func(key histdb.Key, 
 	key.SetTimestamp(after)
 
 	ln.it.Seek(key)
-
-	fmt.Println("levelnseek ", key)
-	fmt.Println("seekedto   ", ln.it.Key())
 
 	for ln.it.Err() == nil {
 		if ln.it.Key().Hash() != hash {

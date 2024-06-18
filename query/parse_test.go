@@ -1,7 +1,6 @@
 package query
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/zeebo/assert"
@@ -14,9 +13,9 @@ func TestParse(t *testing.T) {
 	q := new(Q)
 	err := Parse(b(parseQuery), q)
 	assert.NoError(t, err)
-	fmt.Printf("prog: %v\n", q.prog)
-	fmt.Printf("strs: %q\n", q.strs.list)
-	fmt.Printf("mchs: %v\n", q.mchs)
+	t.Logf("prog: %v\n", q.prog)
+	t.Logf("strs: %q\n", q.strs.list)
+	t.Logf("mchs: %v\n", q.mchs)
 }
 
 func BenchmarkParse(b *testing.B) {

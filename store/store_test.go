@@ -1,7 +1,6 @@
 package store
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/zeebo/assert"
@@ -49,7 +48,7 @@ func TestStore(t *testing.T) {
 
 	ok, err := st.Query(&q, 0, func(key histdb.Key, name []byte, st *flathist.S, h flathist.H) bool {
 		total, sum, avg, vari := st.Summary(h)
-		fmt.Println(key, string(name), total, sum, avg, vari)
+		t.Log(key, string(name), total, sum, avg, vari)
 		return true
 	})
 	assert.NoError(t, err)

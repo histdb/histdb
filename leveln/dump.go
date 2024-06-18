@@ -26,7 +26,7 @@ func dump(fh filesystem.H) { //nolint
 	_, err := fh.Seek(0, io.SeekStart)
 	check(err)
 
-	fmt.Println("digraph btree { node[shape=box]; spline=line;")
+	fmt.Fprintln(fh, "digraph btree { node[shape=box]; spline=line;")
 
 	for i := 0; ; i++ {
 		_, err := io.ReadFull(fh, buf[:])
@@ -36,20 +36,20 @@ func dump(fh filesystem.H) { //nolint
 		check(err)
 
 		copy(hdr[:], buf[0:kwHeaderSize])
-		fmt.Printf("node%d [label=\"n%d (%d)\"]\n", i, i, hdr.Count())
+		fmt.Fprintf(fh, "node%d [label=\"n%d (%d)\"]\n", i, i, hdr.Count())
 
 		if !hdr.Leaf() {
 			for j := uint16(0); j < hdr.Count(); j++ {
 				// TODO: what are these constants?
 				child := binary.BigEndian.Uint32(buf[16+24*j+20:])
-				fmt.Printf("node%d -> node%d;\n", i, child)
+				fmt.Fprintf(fh, "node%d -> node%d;\n", i, child)
 			}
 		} else {
-			fmt.Printf("{rank=same node%d node%d}\n", i, hdr.Next())
+			fmt.Fprintf(fh, "{rank=same node%d node%d}\n", i, hdr.Next())
 		}
 
-		fmt.Printf("node%d -> node%d;\n", i, hdr.Next())
+		fmt.Fprintf(fh, "node%d -> node%d;\n", i, hdr.Next())
 	}
 
-	fmt.Println("}")
+	fmt.Fprintln(fh, "}")
 }
