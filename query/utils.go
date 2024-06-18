@@ -2,7 +2,7 @@ package query
 
 import "fmt"
 
-func appendTag(buf, tkey []byte, tval string) []byte {
+func appendTag(buf, tkey, tval []byte) []byte {
 	buf = append(buf, tkey...)
 	buf = append(buf, '=')
 	buf = append(buf, tval...)
@@ -75,55 +75,6 @@ func (s *bytesSet) add(x []byte) (n int16) {
 		s.set = make(map[string]int16)
 		for n, u := range s.list {
 			s.set[string(u)] = int16(n)
-		}
-	}
-
-	return n
-}
-
-type valueSet struct {
-	_ [0]func() // no equality
-
-	set  map[value]int16
-	list []value
-}
-
-func newValueSet(cap int) valueSet {
-	return valueSet{list: make([]value, 0, cap)}
-}
-
-func (s *valueSet) reset() {
-	clear(s.set)
-	clear(s.list)
-	s.list = s.list[:0]
-}
-
-func (s *valueSet) add(x value) (n int16) {
-	if s.set != nil {
-		if n, ok := s.set[x]; ok {
-			return n
-		}
-		n := int16(len(s.list))
-		s.list = append(s.list, x)
-		s.set[x] = n
-		return n
-	}
-
-	for n, u := range s.list {
-		if x == u {
-			return int16(n)
-		}
-	}
-
-	n = int16(len(s.list))
-	if cap(s.list) == 0 {
-		s.list = make([]value, 0, 8)
-	}
-	s.list = append(s.list, x)
-	if len(s.list) == 8 {
-		s.set = make(map[value]int16)
-		for n, u := range s.list {
-			s.set[u] = int16(n)
 		}
 	}
 

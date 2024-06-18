@@ -17,21 +17,20 @@ type krPage struct {
 type keyReader struct {
 	_ [0]func() // no equality
 
-	fh    filesystem.Handle
-	root  uint32
-	cache []krPage
-
 	stats struct {
 		reads int64
 	}
+
+	fh    filesystem.H
+	root  uint32
+	cache []krPage
 }
 
-func (k *keyReader) Init(fh filesystem.Handle) {
-	*k = keyReader{
-		fh:    fh,
-		root:  ^uint32(0),
-		cache: k.cache[:0],
-	}
+func (k *keyReader) Init(fh filesystem.H) {
+	k.stats.reads = 0
+	k.fh = fh
+	k.root = ^uint32(0)
+	k.cache = k.cache[:0]
 }
 
 func (k *keyReader) cachePage(depth uint, id uint32) (*kwPage, error) {
@@ -91,8 +90,6 @@ func (k *keyReader) Search(key histdb.Key) (ent kwEntry, ok bool, err error) {
 			}
 			ent := &page.ents[h]
 
-			// LessPtr does a call into the runtime when the first 8 bytes will
-			// frequently be enough to compare unequal, so try that first.
 			if keyhp := be.Uint64(ent[0:8]); keyhp < keyp {
 				i = h
 			} else if keyhp > keyp {

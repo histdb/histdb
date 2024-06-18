@@ -1,4 +1,4 @@
-package query
+package val
 
 import (
 	"fmt"
@@ -15,11 +15,11 @@ type (
 var tags [4]byte
 
 var (
-	tagInvalid = ptr(nil)
-	tagInt     = ptr(&tags[0])
-	tagBool    = ptr(&tags[1])
-	tagFloat   = ptr(&tags[2])
-	tagStr     = ptr(&tags[3])
+	TagInvalid = ptr(nil)
+	TagInt     = ptr(&tags[0])
+	TagBool    = ptr(&tags[1])
+	TagFloat   = ptr(&tags[2])
+	TagStr     = ptr(&tags[3])
 )
 
 var emptyStrPtr = func() ptr {
@@ -27,130 +27,130 @@ var emptyStrPtr = func() ptr {
 	return ptr(unsafe.StringData("\x00\x00\x00\x00\x00\x00\x00\x00"))
 }()
 
-type value struct {
+type T struct {
 	p ptr
 	v u64
 }
 
-func (v value) Tag() ptr {
-	if v.p == nil || uintptr(v.p)-uintptr(tagInt) < 3 {
+func (v T) Tag() ptr {
+	if v.p == nil || uintptr(v.p)-uintptr(TagInt) < 3 {
 		return v.p
 	}
-	return tagStr
+	return TagStr
 }
 
-func valInt(val i64) value {
-	return value{p: tagInt, v: u64(val)}
+func Int(val i64) T {
+	return T{p: TagInt, v: u64(val)}
 }
 
-func (v value) AsInt() i64 {
-	if uintptr(v.p)-uintptr(tagInt) < 2 {
+func (v T) AsInt() i64 {
+	if uintptr(v.p)-uintptr(TagInt) < 2 {
 		return i64(v.v)
 	}
 	return 0
 }
 
-func (v value) AsUint() u64 {
-	if uintptr(v.p)-uintptr(tagInt) < 2 {
+func (v T) AsUint() u64 {
+	if uintptr(v.p)-uintptr(TagInt) < 2 {
 		return v.v
 	}
 	return 0
 }
 
-func valBool(val bool) value {
+func Bool(val bool) T {
 	var v uint64
 	if val {
 		v = 1
 	}
-	return value{p: tagBool, v: v}
+	return T{p: TagBool, v: v}
 }
 
-func (v value) AsBool() bool { return v.v != 0 }
+func (v T) AsBool() bool { return v.v != 0 }
 
-func valFloat(val float64) value {
-	return value{p: tagFloat, v: math.Float64bits(val)}
+func Float(val float64) T {
+	return T{p: TagFloat, v: math.Float64bits(val)}
 }
 
-func (v value) AsFloat() float64 { return math.Float64frombits(v.v) }
+func (v T) AsFloat() float64 { return math.Float64frombits(v.v) }
 
-func valStr(val string) value {
-	v := value{p: ptr(unsafe.StringData(val)), v: u64(len(val))}
+func Str(val string) T {
+	v := T{p: ptr(unsafe.StringData(val)), v: u64(len(val))}
 	if v.p == nil {
 		v.p = emptyStrPtr
 	}
 	return v
 }
 
-func valBytes(val []byte) value {
-	v := value{p: ptr(unsafe.SliceData(val)), v: u64(len(val))}
+func Bytes(val []byte) T {
+	v := T{p: ptr(unsafe.SliceData(val)), v: u64(len(val))}
 	if v.p == nil {
 		v.p = emptyStrPtr
 	}
 	return v
 }
 
-func (v value) AsString() (x string) {
-	if v.Tag() == tagStr {
+func (v T) AsString() (x string) {
+	if v.Tag() == TagStr {
 		x = unsafe.String((*byte)(v.p), int(v.v))
 	}
 	return x
 }
 
-func (v value) String() string {
+func (v T) String() string {
 	switch v.Tag() {
-	case tagInvalid:
+	case TagInvalid:
 		return "invalid"
-	case tagInt:
+	case TagInt:
 		return fmt.Sprintf("int(%d)", v.AsInt())
-	case tagBool:
+	case TagBool:
 		return fmt.Sprintf("bool(%t)", v.AsBool())
-	case tagFloat:
+	case TagFloat:
 		return fmt.Sprintf("float(%f)", v.AsFloat())
-	case tagStr:
+	case TagStr:
 		return fmt.Sprintf("str(%q)", v.AsString())
 	default:
 		return "unknown"
 	}
 }
 
-func valueGT(x, y value) bool {
+func GT(x, y T) bool {
 	switch x.Tag() {
-	case tagInt:
+	case TagInt:
 		return x.AsInt() > y.AsInt()
-	case tagFloat:
+	case TagFloat:
 		return x.AsFloat() > y.AsFloat()
 	default:
 		return x.AsString() > y.AsString()
 	}
 }
 
-func valueGTE(x, y value) bool {
+func GTE(x, y T) bool {
 	switch x.Tag() {
-	case tagInt:
+	case TagInt:
 		return x.AsInt() >= y.AsInt()
-	case tagFloat:
+	case TagFloat:
 		return x.AsFloat() >= y.AsFloat()
 	default:
 		return x.AsString() >= y.AsString()
 	}
 }
 
-func valueLT(x, y value) bool {
+func LT(x, y T) bool {
 	switch x.Tag() {
-	case tagInt:
+	case TagInt:
 		return x.AsInt() < y.AsInt()
-	case tagFloat:
+	case TagFloat:
 		return x.AsFloat() < y.AsFloat()
 	default:
 		return x.AsString() < y.AsString()
 	}
 }
 
-func valueLTE(x, y value) bool {
+func LTE(x, y T) bool {
 	switch x.Tag() {
-	case tagInt:
+	case TagInt:
 		return x.AsInt() <= y.AsInt()
-	case tagFloat:
+	case TagFloat:
 		return x.AsFloat() <= y.AsFloat()
 	default:
 		return x.AsString() <= y.AsString()

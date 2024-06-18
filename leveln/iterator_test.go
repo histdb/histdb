@@ -8,9 +8,35 @@ import (
 	"github.com/zeebo/mwc"
 
 	"github.com/histdb/histdb"
-	"github.com/histdb/histdb/memindex"
 	"github.com/histdb/histdb/testhelp"
 )
+
+func TestLevelNWriter(t *testing.T) {
+	fs, cleanup := testhelp.FS(t)
+	defer cleanup()
+
+	keys, cleanup := testhelp.Tempfile(t, fs)
+	defer cleanup()
+
+	values, cleanup := testhelp.Tempfile(t, fs)
+	defer cleanup()
+
+	metrics := createMetrics(100)
+
+	var ln Writer
+	ln.Init(keys, values)
+
+	for _, metric := range metrics {
+		var key histdb.Key
+		*key.HashPtr() = metric.hash
+
+		for ts := range uint32(100) {
+			key.SetTimestamp(ts)
+			assert.NoError(t, ln.Append(key, testhelp.Value(mwc.Intn(1000))))
+		}
+	}
+	assert.NoError(t, ln.Finish())
+}
 
 func BenchmarkIterator(b *testing.B) {
 	run := func(b *testing.B, n uint64) {
@@ -26,8 +52,7 @@ func BenchmarkIterator(b *testing.B) {
 
 		start := time.Now()
 
-		var idx memindex.T
-		metrics := insertMetrics(&idx, n)
+		metrics := createMetrics(n)
 
 		var lnw Writer
 		lnw.Init(keys, values)
@@ -42,7 +67,7 @@ func BenchmarkIterator(b *testing.B) {
 		setup := time.Since(start).Seconds()
 
 		var it Iterator
-		it.Init(keys, values, &idx)
+		it.Init(keys, values)
 
 		vsize, _ := values.Size()
 		ksize, _ := keys.Size()
@@ -60,7 +85,6 @@ func BenchmarkIterator(b *testing.B) {
 		b.ReportMetric(setup, "sec/setup")
 		b.ReportMetric(float64(vsize)/1024/1024, "mb/values")
 		b.ReportMetric(float64(ksize)/1024/1024, "mb/keys")
-		b.ReportMetric(float64(idx.Size())/1024/1024, "mb/idx")
 	}
 
 	b.Run("1e2", func(b *testing.B) { run(b, 1e2) })

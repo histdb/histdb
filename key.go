@@ -23,7 +23,7 @@ func (k *Key) ReadFrom(r *rwutils.R) { copy(k[:], r.Bytes(len(k))) }
 func (k Key) Zero() bool { return k == Key{} }
 
 func (k Key) String() string {
-	return fmt.Sprintf("(key %s %08x)", k.Hash(), k.Timestamp())
+	return fmt.Sprintf("(key %s %08x %08x)", k.Hash(), k.Timestamp(), k.Duration())
 }
 
 func (k Key) Hash() (h Hash) {

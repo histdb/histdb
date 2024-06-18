@@ -20,7 +20,7 @@ func FS(tb testing.TB) (*filesystem.T, func()) {
 	return fs, func() { assert.NoError(tb, fs.RemoveAll(".")) }
 }
 
-func Tempfile(tb testing.TB, fs *filesystem.T) (filesystem.Handle, func()) {
+func Tempfile(tb testing.TB, fs *filesystem.T) (filesystem.H, func()) {
 	name := fmt.Sprint(time.Now().UnixNano())
 	fh, err := fs.Create(name)
 	assert.NoError(tb, err)
@@ -29,7 +29,7 @@ func Tempfile(tb testing.TB, fs *filesystem.T) (filesystem.Handle, func()) {
 	}
 }
 
-func ReadFile(tb testing.TB, fh filesystem.Handle) []byte {
+func ReadFile(tb testing.TB, fh filesystem.H) []byte {
 	pos, err := fh.Seek(0, io.SeekCurrent)
 	assert.NoError(tb, err)
 	_, err = fh.Seek(0, io.SeekStart)

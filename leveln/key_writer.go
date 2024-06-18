@@ -62,7 +62,10 @@ func (k *kwEntry) Child() uint32        { return le.Uint32(k[valOffsetStart:valO
 func (k *kwEntry) SetChild(next uint32) { le.PutUint32(k[valOffsetStart:valOffsetend], next) }
 
 // Key returns a pointer to the key portion of the entry.
-func (k *kwEntry) Key() *histdb.Key { return (*histdb.Key)(unsafe.Pointer(k)) }
+func (k *kwEntry) Key() *histdb.Key { return (*histdb.Key)(k[0:histdb.KeySize]) }
+
+// TODO: value files can only be up to 1TB? that doesn't seem like enough. we
+// need more. maybe 6 bytes instead of 4?
 
 // ValOffset returns the value offset encoded into the entry.
 func (k *kwEntry) ValOffset() uint32 { return le.Uint32(k[valOffsetStart:valOffsetend]) }
@@ -106,7 +109,8 @@ type kwPage struct {
 	ents [kwEntries]kwEntry
 }
 
-// Ensure the offsets of the page fields are what we expect
+// Ensure the offsets of the page fields are what we expect and the full size
+// is exactly kwPageSize.
 const (
 	_ uintptr = unsafe.Offsetof(kwPage{}.hdr) - 0
 	_ uintptr = 0 - unsafe.Offsetof(kwPage{}.hdr)
@@ -126,7 +130,7 @@ func (k *kwPage) Buf() *[kwPageSize]byte { return (*[kwPageSize]byte)(unsafe.Poi
 type keyWriter struct {
 	_ [0]func() // no equality
 
-	fh    filesystem.Handle
+	fh    filesystem.H
 	pages []*kwPage
 	id    uint32
 	count uint16
@@ -134,7 +138,7 @@ type keyWriter struct {
 }
 
 // Init resets the keyWriter to write to the provided file handle.
-func (k *keyWriter) Init(fh filesystem.Handle) {
+func (k *keyWriter) Init(fh filesystem.H) {
 	k.fh = fh
 	k.pages = nil
 	k.id = 0

@@ -19,13 +19,13 @@ const (
 type valueWriter struct {
 	_ [0]func() // no equality
 
-	fh   filesystem.Handle
+	fh   filesystem.H
 	n    uint64
 	sn   uint
 	span [vwSpanSize]byte
 }
 
-func (v *valueWriter) Init(fh filesystem.Handle) {
+func (v *valueWriter) Init(fh filesystem.H) {
 	v.fh = fh
 	v.n = 0
 	v.sn = 0
@@ -54,8 +54,8 @@ func (v *valueWriter) Append(buf []byte, ts, dur uint32, value []byte) {
 	}
 }
 
-func (v *valueWriter) BeginSpan(key histdb.Key) {
-	*(*histdb.Hash)(v.span[0:histdb.HashSize]) = key.Hash()
+func (v *valueWriter) BeginSpan(hash histdb.Hash) {
+	*(*histdb.Hash)(v.span[0:histdb.HashSize]) = hash
 	v.sn = histdb.HashSize
 }
 
@@ -69,19 +69,21 @@ func (v *valueWriter) FinishSpan() (offset uint32, length uint8, err error) {
 	// check for overflow
 	if uint64(offset)*vwSpanAlign != v.n {
 		return 0, 0, errs.Errorf("values file too large")
-	} else if sn/vwSpanAlign > 255 {
+	} else if sn > vwSpanSize || sn/vwSpanAlign > 256 {
 		return 0, 0, errs.Errorf("values span too large")
 	}
 
 	v.n += uint64(sn)
 
 	// add a zero entry to mark end of span
-	if span, vsn := v.span, v.sn; vsn < uint(len(span)) && vsn+1 < uint(len(span)) && sn < uint(len(span)) {
-		v.span[vsn] = 0
-		v.span[vsn+1] = 0
-		_, err = v.fh.Write(span[:sn])
+	if vsn := v.sn; vsn <= uint(len(v.span)) && sn <= uint(len(v.span)) && vsn < sn {
+		r := v.span[vsn:sn]
+		for i := range r {
+			r[i] = 0
+		}
+		_, err = v.fh.Write(v.span[:sn])
 	} else {
-		err = errs.Errorf("value writer corruption")
+		err = errs.Errorf("value writer corruption: vsn:%d sn:%d", vsn, sn)
 	}
 
 	return offset, uint8(sn / vwSpanAlign), errs.Wrap(err)

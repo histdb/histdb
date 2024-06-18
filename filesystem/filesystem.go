@@ -18,25 +18,25 @@ func (t *T) child(path string) string {
 	return filepath.Join(t.Base, path)
 }
 
-func (t *T) Create(path string) (fh Handle, err error) {
+func (t *T) Create(path string) (fh H, err error) {
 	path = t.child(path)
 
 	f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0644)
-	return Handle{fs: t, fh: f}, errs.Wrap(err)
+	return H{fs: t, fh: f}, errs.Wrap(err)
 }
 
-func (t *T) OpenWrite(path string) (fh Handle, err error) {
+func (t *T) OpenWrite(path string) (fh H, err error) {
 	path = t.child(path)
 
 	f, err := os.OpenFile(path, os.O_RDWR, 0644)
-	return Handle{fs: t, fh: f}, errs.Wrap(err)
+	return H{fs: t, fh: f}, errs.Wrap(err)
 }
 
-func (t *T) OpenRead(path string) (fh Handle, err error) {
+func (t *T) OpenRead(path string) (fh H, err error) {
 	path = t.child(path)
 
 	f, err := os.Open(path)
-	return Handle{fs: t, fh: f}, errs.Wrap(err)
+	return H{fs: t, fh: f}, errs.Wrap(err)
 }
 
 func (t *T) Rename(old, new string) error {

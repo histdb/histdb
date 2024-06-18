@@ -1,37 +1,57 @@
 package store
 
 import (
+	"fmt"
 	"testing"
-	"time"
 
 	"github.com/zeebo/assert"
+	"github.com/zeebo/mwc"
 
+	"github.com/histdb/histdb"
+	"github.com/histdb/histdb/flathist"
+	"github.com/histdb/histdb/query"
 	"github.com/histdb/histdb/testhelp"
 )
 
-func BenchmarkStore(b *testing.B) {
-	fs, cleanup := testhelp.FS(b)
-	// defer cleanup()
-	_ = cleanup
+func TestStore(t *testing.T) {
+	fs, cleanup := testhelp.FS(t)
+	defer cleanup()
 
-	names := make([][]byte, b.N)
-	values := make([][]byte, b.N)
-	for i := range b.N {
-		names[i] = testhelp.Name(3)
-		values[i] = testhelp.Value(256)
+	var st T
+	var q query.Q
+	var m []byte
+
+	assert.NoError(t, st.Init(fs, Config{}))
+
+	for range 1000 {
+		m = testhelp.Metric(5)
+		for range 100 {
+			st.Observe(m, mwc.Float32())
+		}
+
+		for i, v := range m {
+			if v == ',' {
+				m[i] = '&'
+			}
+		}
+
+		assert.NoError(t, query.Parse(m, &q))
+
+		called := false
+		st.Latest(&q, func(metric []byte, st *flathist.S, h flathist.H) bool {
+			called = true
+			return true
+		})
+		assert.That(t, called)
 	}
 
-	var s T
-	assert.NoError(b, s.Init(fs))
+	assert.NoError(t, st.WriteLevel(1000, 1))
 
-	b.SetBytes(256)
-	b.ReportAllocs()
-
-	now := time.Now()
-	b.ResetTimer()
-
-	for i := range b.N {
-		assert.NoError(b, s.Write(names[i], values[i], uint32(i), uint16(i)))
-	}
-	b.ReportMetric(float64(b.N)/time.Since(now).Seconds(), "keys/sec")
+	ok, err := st.Query(&q, 0, func(key histdb.Key, name []byte, st *flathist.S, h flathist.H) bool {
+		total, sum, avg, vari := st.Summary(h)
+		fmt.Println(key, string(name), total, sum, avg, vari)
+		return true
+	})
+	assert.NoError(t, err)
+	assert.That(t, ok)
 }

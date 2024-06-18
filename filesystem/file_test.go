@@ -1,4 +1,4 @@
-package atomicdir
+package filesystem
 
 import (
 	"testing"
@@ -11,24 +11,21 @@ func TestFileName(t *testing.T) {
 		Expect string
 		File   File
 	}{
-		{"L00K00G00000001-00000000", File{GenLow: 1}},
-		{"L00K00GFFFFFFFF-00000000", File{GenLow: ^uint32(0)}},
+		{"00000001-00000000.xxxx", File{Low: 1}},
+		{"FFFFFFFF-00000000.xxxx", File{Low: ^uint32(0)}},
 
-		{"L00K00G00000000-00000001", File{GenHigh: 1}},
-		{"L00K00G00000000-FFFFFFFF", File{GenHigh: ^uint32(0)}},
+		{"00000000-00000001.xxxx", File{High: 1}},
+		{"00000000-FFFFFFFF.xxxx", File{High: ^uint32(0)}},
 
-		{"L01K00G00000000-00000000", File{Level: 1}},
-		{"LFFK00G00000000-00000000", File{Level: ^uint8(0)}},
+		{"00000000-00000000.indx", File{Kind: KindIndx}},
+		{"00000000-00000000.keys", File{Kind: KindKeys}},
+		{"00000000-00000000.vals", File{Kind: KindVals}},
 
-		{"L00K01G00000000-00000000", File{Kind: 1}},
-		{"L00KFFG00000000-00000000", File{Kind: ^uint8(0)}},
-
-		{"L00K00G00000000-00000000", File{}},
-		{"LFFKFFGFFFFFFFF-FFFFFFFF", File{
-			GenLow:  ^uint32(0),
-			GenHigh: ^uint32(0),
-			Level:   ^uint8(0),
-			Kind:    ^uint8(0),
+		{"00000000-00000000.xxxx", File{}},
+		{"FFFFFFFF-FFFFFFFF.vals", File{
+			Low:  ^uint32(0),
+			High: ^uint32(0),
+			Kind: KindVals,
 		}},
 	}
 
@@ -53,10 +50,9 @@ func BenchmarkFileName(b *testing.B) {
 			b.ReportAllocs()
 			for range b.N {
 				_ = File{
-					GenLow:  ^uint32(0),
-					GenHigh: ^uint32(0),
-					Level:   ^uint8(0),
-					Kind:    ^uint8(0),
+					Low:  ^uint32(0),
+					High: ^uint32(0),
+					Kind: 3,
 				}.String()
 			}
 		})
@@ -73,10 +69,9 @@ func BenchmarkFileName(b *testing.B) {
 
 		b.Run("Hard", func(b *testing.B) {
 			name := File{
-				GenLow:  ^uint32(0),
-				GenHigh: ^uint32(0),
-				Level:   ^uint8(0),
-				Kind:    ^uint8(0),
+				Low:  ^uint32(0),
+				High: ^uint32(0),
+				Kind: 3,
 			}.String()
 			b.ReportAllocs()
 			for range b.N {

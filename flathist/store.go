@@ -11,7 +11,7 @@ import (
 )
 
 // S arena allocates histograms.
-type S[T any] struct {
+type S struct {
 	_ [0]func() // no equality
 
 	l0  arena.T[layer0]
@@ -23,7 +23,7 @@ type S[T any] struct {
 	growing []growFinalize
 }
 
-func (s *S[T]) Size() uint64 {
+func (s *S) Size() uint64 {
 	return 0 +
 		/* l0      */ s.l0.Size() +
 		/* l1      */ s.l1.Size() +
@@ -42,9 +42,9 @@ type Stats struct {
 	L2L  uint32
 }
 
-func (s *S[T]) Count() uint32 { return s.l0.Allocated() }
+func (s *S) Count() uint32 { return s.l0.Allocated() }
 
-func (s *S[T]) Stats() Stats {
+func (s *S) Stats() Stats {
 	return Stats{
 		Size: s.Size(),
 		L0:   s.l0.Allocated(),
@@ -60,44 +60,53 @@ type growFinalize struct {
 	l2l  *layer2Large
 }
 
-type tag[T any] struct{}
-
 // H is a handle to a histogram.
-type H[T any] struct {
-	_ tag[T]
+type H struct {
 	v arena.P[layer0]
 }
 
-// UnsafeRawH lets one construct a handle for any store from a raw pointer value.
-// It is obviously very unsafe and should only be used when you know what's up.
-func UnsafeRawH[T any](x uint32) H[T] { return H[T]{v: arena.Raw[layer0](x)} }
+// UnsafeRawH lets one construct a handle for any store from a raw pointer
+// value. It is obviously very unsafe and should only be used when you know
+// what's up.
+func UnsafeRawH(x uint32) H { return H{v: arena.Raw[layer0](x)} }
 
-func (h H[T]) Raw() uint32 { return h.v.Raw() }
+// Raw returns the raw value for the handle so that it can be reconstructed from
+// UnsafeRawH.
+func (h H) Raw() uint32 { return h.v.Raw() }
 
 // New allocates a new histogram and returns a handle.
-func (s *S[T]) New() H[T] { return H[T]{v: s.l0.New()} }
+func (s *S) New() H { return H{v: s.l0.New()} }
 
-func (s *S[T]) getL0(h H[T]) *layer0 {
+// Iterate calls the callback with every allocated handle.
+func (s *S) Iterate(cb func(h H) bool) {
+	for i := range s.Count() {
+		if !cb(UnsafeRawH(i + 1)) {
+			return
+		}
+	}
+}
+
+func (s *S) getL0(h H) *layer0 {
 	return s.l0.Get(h.v)
 }
 
-func (s *S[T]) getL1(v uint32) *layer1 {
+func (s *S) getL1(v uint32) *layer1 {
 	return s.l1.Get(arena.Raw[layer1](v & lAddrMask))
 }
 
-func (s *S[T]) getL2S(v uint32) *layer2Small {
+func (s *S) getL2S(v uint32) *layer2Small {
 	return s.l2s.Get(arena.Raw[layer2Small](v & lAddrMask))
 }
 
-func (s *S[T]) getL2L(v uint32) *layer2Large {
+func (s *S) getL2L(v uint32) *layer2Large {
 	return s.l2l.Get(arena.Raw[layer2Large](v & lAddrMask))
 }
 
-// Finalize updates all of the histograms that were growing and perhaps
-// missed an observation.
+// Finalize updates all of the histograms that were growing and perhaps missed
+// an observation.
 //
 // It is not safe to call concurrently with Observe.
-func (s *S[T]) Finalize() {
+func (s *S) Finalize() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -111,15 +120,15 @@ func (s *S[T]) Finalize() {
 	s.growing = nil
 }
 
-// Merge copies the data from h into g. It is not safe to call with
-// Observe on either g or h.
+// Merge copies the data from h into g. It is not safe to call with Observe on
+// either g or h.
 //
 // TODO: pass in a store for h that could be different from the store for g.
 //
-// TODO: maybe have an optimization in the arena for a small number of allocations
-// like maybe a static buffer of some small size that it uses first, but it
-// would suck to have to special case every Get call, so think more!
-func Merge[T, U any](s *S[T], g H[T], t *S[U], h H[U]) {
+// TODO: maybe have an optimization in the arena for a small number of
+// allocations like maybe a static buffer of some small size that it uses first,
+// but it would suck to have to special case every Get call, so think more!
+func Merge(s *S, g H, t *S, h H) {
 	gl0 := s.l0.Get(g.v)
 	hl0 := t.l0.Get(h.v)
 
@@ -202,7 +211,7 @@ func Merge[T, U any](s *S[T], g H[T], t *S[U], h H[U]) {
 // Observe adds the value to the histogram.
 //
 // It is safe to be called concurrently.
-func (s *S[T]) Observe(h H[T], v float32) {
+func (s *S) Observe(h H, v float32) {
 	if v != v || v > math.MaxFloat32 || v < -math.MaxFloat32 {
 		return
 	}
@@ -251,7 +260,7 @@ func (s *S[T]) Observe(h H[T], v float32) {
 	}
 }
 
-func (s *S[T]) growLayer2(l2so *layer2Small, l2a uint32, l2aSlot *uint32) {
+func (s *S) growLayer2(l2so *layer2Small, l2a uint32, l2aSlot *uint32) {
 	l2la := s.l2l.New()
 	l2l := s.getL2L(l2la.Raw())
 	l2sc := new(layer2Small)
@@ -276,7 +285,7 @@ func (s *S[T]) growLayer2(l2so *layer2Small, l2a uint32, l2aSlot *uint32) {
 // Min returns an approximation of the smallest value stored in the histogram.
 //
 // It is safe to be called concurrently with Observe.
-func (s *S[T]) Min(h H[T]) float32 {
+func (s *S) Min(h H) float32 {
 	l0 := s.l0.Get(h.v)
 
 	i := uint32(bitmap.New32(bitmask(&l0.l1)).Lowest())
@@ -314,7 +323,7 @@ func (s *S[T]) Min(h H[T]) float32 {
 // Max returns an approximation of the largest value stored in the histogram.
 //
 // It is safe to be called concurrently with Observe.
-func (s *S[T]) Max(h H[T]) float32 {
+func (s *S) Max(h H) float32 {
 	l0 := s.l0.Get(h.v)
 
 	i := uint32(bitmap.New32(bitmask(&l0.l1)).Highest())
@@ -352,7 +361,7 @@ func (s *S[T]) Max(h H[T]) float32 {
 // Total returns the number of observations that have been recorded.
 //
 // It is safe to be called concurrently with Observe.
-func (s *S[T]) Total(h H[T]) (total uint64) {
+func (s *S) Total(h H) (total uint64) {
 	l0 := s.l0.Get(h.v)
 	for bm := bitmap.New32(bitmask(&l0.l1)); !bm.Empty(); bm.ClearLowest() {
 		l1 := s.getL1(atomic.LoadUint32(&l0.l1[bm.Lowest()]))
@@ -371,11 +380,11 @@ func (s *S[T]) Total(h H[T]) (total uint64) {
 	return total
 }
 
-// Quantile returns an estimate of the value with the property that the
-// fraction of values observed specified by q are smaller than it.
+// Quantile returns an estimate of the value with the property that the fraction
+// of values observed specified by q are smaller than it.
 //
 // It is safe to be called concurrently with Observe.
-func (s *S[T]) Quantile(h H[T], q float64) (v float32) {
+func (s *S) Quantile(h H, q float64) (v float32) {
 	target, acc := uint64(q*float64(s.Total(h))+0.5), uint64(0)
 
 	l0 := s.l0.Get(h.v) // TODO: total did this. hmm.
@@ -423,11 +432,11 @@ func (s *S[T]) Quantile(h H[T], q float64) (v float32) {
 	return s.Max(h)
 }
 
-// CDF returns an estimate of the fraction of values that are smaller than
-// the requested value.
+// CDF returns an estimate of the fraction of values that are smaller than the
+// requested value.
 //
 // It is safe to be called concurrently with Observe.
-func (s *S[T]) CDF(h H[T], v float32) float64 {
+func (s *S) CDF(h H, v float32) float64 {
 	obs := math.Float32bits(v)
 	obs ^= uint32(int32(obs)>>31) | (1 << 31)
 
@@ -478,12 +487,11 @@ func (s *S[T]) CDF(h H[T], v float32) float64 {
 	return float64(sum) / float64(total)
 }
 
-// Summary returns the total number of observations and estimates of the
-// sum of the values, the average of the values, and the variance of
-// the values.
+// Summary returns the total number of observations and estimates of the sum of
+// the values, the average of the values, and the variance of the values.
 //
 // It is safe to be called concurrently with Observe.
-func (s *S[T]) Summary(h H[T]) (total, sum, avg, vari float64) {
+func (s *S) Summary(h H) (total, sum, avg, vari float64) {
 	var total2 float64
 
 	l0 := s.l0.Get(h.v)
@@ -540,14 +548,14 @@ func (s *S[T]) Summary(h H[T]) (total, sum, avg, vari float64) {
 }
 
 // Distribution calls the callback with information about the distribution
-// observed by the histogram. Each call is provided with some value and
-// the estimated amount of values observed smaller than or equal to it
-// as well as the total number of observed values. The total may change
-// between successive callbacks but will only increase and will always
-// be at least as big as the count.
+// observed by the histogram. Each call is provided with some value and the
+// estimated amount of values observed smaller than or equal to it as well as
+// the total number of observed values. The total may change between successive
+// callbacks but will only increase and will always be at least as big as the
+// count.
 //
 // It is safe to be called concurrently with Observe.
-func (s *S[T]) Distribution(h H[T], cb func(value float32, count, total uint64)) {
+func (s *S) Distribution(h H, cb func(value float32, count, total uint64)) {
 	acc, total := uint64(0), s.Total(h)
 
 	l0 := s.l0.Get(h.v)

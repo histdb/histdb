@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/RoaringBitmap/roaring"
+	"github.com/RoaringBitmap/roaring/v2"
 
 	"github.com/histdb/histdb/num"
 	"github.com/histdb/histdb/sizeof"
@@ -26,26 +26,13 @@ func newBitmap() *Bitmap               { return roaring.New() }
 func bitmapOr(bms ...*Bitmap) *Bitmap  { return roaring.ParOr(0, bms...) }
 func bitmapAnd(bms ...*Bitmap) *Bitmap { return roaring.ParAnd(0, bms...) }
 
-// func bitmapAnd(bms ...*Bitmap) *Bitmap {
-// 	if len(bms) == 0 {
-// 		return newBitmap()
-// 	}
-// 	o := bms[0].Clone()
-// 	for _, bm := range bms[1:] {
-// 		o.And(bm)
-// 	}
-// 	return o
-// }
-
 //
 //
 //
 
-var bitmapPool = sync.Pool{New: func() interface{} { return newBitmap() }}
+var bitmapPool = sync.Pool{New: func() any { return newBitmap() }}
 
-func bitmapReplace(m *Bitmap) {
-	bitmapPool.Put(m)
-}
+func bitmapReplace(m *Bitmap) { bitmapPool.Put(m) }
 
 func bitmapAcquire() *Bitmap {
 	bm := bitmapPool.Get().(*Bitmap)
@@ -108,22 +95,22 @@ func addSet[T comparable](l []T, s map[T]struct{}, v T) ([]T, map[T]struct{}, bo
 	return l, s, true
 }
 
-func IterUsing(bm *Bitmap, buf []Id, cb func(Id) bool) {
+func IterUsing(bm *Bitmap, buf []Id, cb func(Id) bool) bool {
 	it := bm.ManyIterator()
 	for {
 		n := it.NextMany(buf[:])
 		if n == 0 {
-			return
+			return true
 		}
 		for _, u := range buf[:n] {
 			if !cb(u) {
-				return
+				return false
 			}
 		}
 	}
 }
 
-func Iter(bm *Bitmap, cb func(Id) bool) {
+func Iter(bm *Bitmap, cb func(Id) bool) bool {
 	var buf [64]Id
-	IterUsing(bm, buf[:], cb)
+	return IterUsing(bm, buf[:], cb)
 }

@@ -35,6 +35,10 @@ type W struct {
 	buf buffer.T
 }
 
+func (w *W) Reset() {
+	w.Init(w.Done().Reset())
+}
+
 func (w *W) Init(buf buffer.T) {
 	*w = W{buf: buf}
 }

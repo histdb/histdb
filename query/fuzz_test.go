@@ -12,7 +12,7 @@ func FuzzParseQuery(f *testing.F) {
 	f.Add(b(`|`))
 
 	var idx memindex.T
-	var q Query
+	var q Q
 
 	f.Fuzz(func(t *testing.T, query []byte) {
 		err := Parse(query, &q)

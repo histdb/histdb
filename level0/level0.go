@@ -35,7 +35,7 @@ type T struct {
 	_ [0]func() // no equality
 
 	buf   []byte
-	fh    filesystem.Handle
+	fh    filesystem.H
 	len   uint32
 	wrote int64
 	keys  []keyPos
@@ -44,7 +44,7 @@ type T struct {
 	ro    bool // readonly
 }
 
-func (t *T) reset(fh filesystem.Handle) {
+func (t *T) reset(fh filesystem.H) {
 	*t = T{
 		fh:   fh,
 		buf:  t.buf[:0],
@@ -52,7 +52,7 @@ func (t *T) reset(fh filesystem.Handle) {
 	}
 }
 
-func (t *T) InitFinished(fh filesystem.Handle) {
+func (t *T) InitFinished(fh filesystem.H) {
 	t.reset(fh)
 	t.ro = true
 	t.done = true
@@ -60,7 +60,7 @@ func (t *T) InitFinished(fh filesystem.Handle) {
 
 var ebufPool = sync.Pool{New: func() any { return new([1024]byte) }}
 
-func (t *T) Init(fh filesystem.Handle, cb func(key histdb.Key, name, value []byte)) (err error) {
+func (t *T) Init(fh filesystem.H, cb func(key histdb.Key, name, value []byte)) (err error) {
 	t.reset(fh)
 	t.ro = true
 
@@ -106,7 +106,7 @@ func (t *T) Init(fh filesystem.Handle, cb func(key histdb.Key, name, value []byt
 	return nil
 }
 
-func (t *T) File() filesystem.Handle {
+func (t *T) File() filesystem.H {
 	return t.fh
 }
 

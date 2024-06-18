@@ -12,11 +12,8 @@ import (
 
 func TestStore(t *testing.T) {
 	t.Run("Merge", func(t *testing.T) {
-		type t1 struct{}
-		type t2 struct{}
-
-		var s1 S[t1]
-		var s2 S[t2]
+		var s1 S
+		var s2 S
 
 		h1 := s1.New()
 		h2 := s2.New()
@@ -131,8 +128,26 @@ func TestStore(t *testing.T) {
 		})
 	})
 
+	t.Run("Iterate", func(t *testing.T) {
+		var s S
+
+		s.Observe(s.New(), 1)
+		s.Observe(s.New(), 2)
+		s.Observe(s.New(), 3)
+
+		assert.Equal(t, s.Count(), 3)
+
+		n := 1.
+		s.Iterate(func(h H) bool {
+			assert.Equal(t, s.Min(h), n)
+			n++
+			return true
+		})
+		assert.Equal(t, n, 4.)
+	})
+
 	t.Run("MinMax", func(t *testing.T) {
-		var s S[any]
+		var s S
 
 		h := s.New()
 		for i := float32(0); i < 1000; i++ {
@@ -144,7 +159,7 @@ func TestStore(t *testing.T) {
 	})
 
 	t.Run("Total", func(t *testing.T) {
-		var s S[any]
+		var s S
 
 		h := s.New()
 		for i := float32(0); i < 1000; i++ {
@@ -155,7 +170,7 @@ func TestStore(t *testing.T) {
 	})
 
 	t.Run("Quantile", func(t *testing.T) {
-		var s S[any]
+		var s S
 
 		h := s.New()
 		for i := float32(0); i < 1000; i++ {
@@ -172,7 +187,7 @@ func TestStore(t *testing.T) {
 
 func BenchmarkHistogram(b *testing.B) {
 	b.Run("Observe", func(b *testing.B) {
-		var s S[any]
+		var s S
 		h := s.New()
 
 		perfbench.Open(b)
@@ -185,7 +200,7 @@ func BenchmarkHistogram(b *testing.B) {
 	})
 
 	b.Run("Observe_Parallel", func(b *testing.B) {
-		var s S[any]
+		var s S
 		h := s.New()
 
 		b.ReportAllocs()
@@ -203,7 +218,7 @@ func BenchmarkHistogram(b *testing.B) {
 	b.Run("Min", func(b *testing.B) {
 		rng := mwc.Rand()
 
-		var s S[any]
+		var s S
 		h := s.New()
 
 		for i := 0; i < 1000000; i++ {
@@ -222,7 +237,7 @@ func BenchmarkHistogram(b *testing.B) {
 	b.Run("Max", func(b *testing.B) {
 		rng := mwc.Rand()
 
-		var s S[any]
+		var s S
 		h := s.New()
 
 		for i := 0; i < 1000000; i++ {
@@ -241,7 +256,7 @@ func BenchmarkHistogram(b *testing.B) {
 	b.Run("Total", func(b *testing.B) {
 		rng := mwc.Rand()
 
-		var s S[any]
+		var s S
 		h := s.New()
 
 		for i := 0; i < 1000000; i++ {
@@ -260,7 +275,7 @@ func BenchmarkHistogram(b *testing.B) {
 	b.Run("Total_Easy", func(b *testing.B) {
 		rng := mwc.Rand()
 
-		var s S[any]
+		var s S
 		h := s.New()
 
 		for i := 0; i < 1000000; i++ {
@@ -280,7 +295,7 @@ func BenchmarkHistogram(b *testing.B) {
 	b.Run("Quantile", func(b *testing.B) {
 		rng := mwc.Rand()
 
-		var s S[any]
+		var s S
 		h := s.New()
 
 		for i := 0; i < 1000000; i++ {
@@ -300,7 +315,7 @@ func BenchmarkHistogram(b *testing.B) {
 	b.Run("Quantile_Easy", func(b *testing.B) {
 		rng := mwc.Rand()
 
-		var s S[any]
+		var s S
 		h := s.New()
 
 		for i := 0; i < 1000000; i++ {
@@ -320,7 +335,7 @@ func BenchmarkHistogram(b *testing.B) {
 	b.Run("CDF", func(b *testing.B) {
 		rng := mwc.Rand()
 
-		var s S[any]
+		var s S
 		h := s.New()
 
 		for i := 0; i < 1000000; i++ {
@@ -340,7 +355,7 @@ func BenchmarkHistogram(b *testing.B) {
 	b.Run("CDF_Easy", func(b *testing.B) {
 		rng := mwc.Rand()
 
-		var s S[any]
+		var s S
 		h := s.New()
 
 		for i := 0; i < 1000000; i++ {
@@ -360,7 +375,7 @@ func BenchmarkHistogram(b *testing.B) {
 	b.Run("Summary", func(b *testing.B) {
 		rng := mwc.Rand()
 
-		var s S[any]
+		var s S
 		h := s.New()
 
 		for i := 0; i < 1000; i++ {

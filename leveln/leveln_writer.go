@@ -23,7 +23,7 @@ type Writer struct {
 	vw    valueWriter
 }
 
-func (w *Writer) Init(keys, values filesystem.Handle) {
+func (w *Writer) Init(keys, values filesystem.H) {
 	w.err = nil
 	w.key = histdb.Key{}
 	w.first = true
@@ -68,7 +68,7 @@ func (w *Writer) Append(key histdb.Key, value []byte) error {
 	}
 
 	// start the new span, and since it's new, the value must fit
-	w.vw.BeginSpan(key)
+	w.vw.BeginSpan(key.Hash())
 	w.key = key
 
 	if buf := w.vw.CanAppend(value); buf != nil {

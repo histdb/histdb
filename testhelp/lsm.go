@@ -39,6 +39,7 @@ func Metric(n int) (v []byte) {
 			v = append(v, 'a'+byte(mwc.Uint64n(26)))
 		}
 		v = append(v, '=')
+		// v = append(v, 'a'+byte(mwc.Uint64n(26)))
 		v = append(v, '0'+byte(mwc.Uint64n(10)))
 	}
 	return v

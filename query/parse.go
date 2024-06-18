@@ -13,7 +13,7 @@ type parseState struct {
 	query []byte
 	tokn  uint
 	tlock bool
-	into  *Query
+	into  *Q
 }
 
 func (ps *parseState) pushOp(op byte) { ps.pushInst(op, -1, -1) }
@@ -51,7 +51,7 @@ func (ps *parseState) next() token {
 	return token_invalid
 }
 
-func Parse(query []byte, into *Query) error {
+func Parse(query []byte, into *Q) error {
 	if cap(into.toks) < 32 {
 		into.toks = make([]token, 0, 32)
 	}
@@ -80,7 +80,6 @@ func Parse(query []byte, into *Query) error {
 	}
 	into.prog = into.prog[:0]
 	into.strs.reset()
-	into.vals.reset()
 	into.mchs = into.mchs[:0]
 
 	ps := &parseState{
@@ -389,17 +388,13 @@ func (ps *parseState) parseValue() (int16, bool) {
 		return 0, false
 	}
 
-	// numeric values
-	if ('0' <= lit[0] && lit[0] <= '9') || lit[0] == '-' {
-		if num, ok := parseInt(lit); ok {
-			return ps.into.vals.add(valInt(num)), true
-		}
-		if num, ok := parseFloat(lit); ok {
-			return ps.into.vals.add(valFloat(num)), true
-		}
-	}
+	// N.B.: could parse numeric values out here and put them into a val set so
+	// that we can do numeric comparisons, but that can't really be done
+	// efficiently: we have to iterate over every other tag, parse them and
+	// compare them so it's skipped in the name of avoiding performance
+	// footguns, though it would be useful so just left a note here about it.
 
-	return ps.into.vals.add(valBytes(lit)), true
+	return ps.into.strs.add(lit), true
 }
 
 func (ps *parseState) peekIdent() (int16, bool) {

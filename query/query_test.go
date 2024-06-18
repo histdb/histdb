@@ -27,13 +27,12 @@ func TestQuery(t *testing.T) {
 	// _, err := r.Done()
 	// assert.NoError(t, err)
 
-	q := new(Query)
+	q := new(Q)
 	err := Parse(b(`inst !* 12z & name='(*Dir).Commit' & field=successes`), q)
 	assert.NoError(t, err)
 
 	t.Log("prog:", q.prog)
 	t.Logf("strs: %q", q.strs.list)
-	t.Log("vals:", q.vals.list)
 	t.Logf("mchs: %q", q.mchs)
 
 	now = time.Now()
@@ -64,7 +63,7 @@ func BenchmarkQuery(b *testing.B) {
 	// _, err := r.Done()
 	// assert.NoError(b, err)
 
-	q := new(Query)
+	q := new(Q)
 	err := Parse([]byte(`inst !* 12z & name='(*Dir).Commit' & field=successes`), q)
 	assert.NoError(b, err)
 

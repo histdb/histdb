@@ -30,6 +30,7 @@ type T struct {
 
 func (t *T) Size() uint64 {
 	return 0 +
+		/* card            */ 4 +
 		/* metrics         */ t.metrics.Size() +
 		/* metric_names    */ t.metric_names.Size() +
 		/* tag_names       */ t.tag_names.Size() +
@@ -140,6 +141,15 @@ func (t *T) Add(metric, normalized []byte, cf *card.Fixer) (histdb.Hash, Id, []b
 	}
 
 	return hash, Id(id), normalized, ok
+}
+
+func (t *T) Iterate(cb func(Id) bool) bool {
+	for id := range t.metrics.Len() {
+		if !cb(Id(id)) {
+			return false
+		}
+	}
+	return true
 }
 
 func (t *T) GetIdByHash(hash histdb.Hash) (Id, bool) {

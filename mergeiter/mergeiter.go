@@ -10,7 +10,6 @@ import (
 type Iterator interface {
 	Next() bool
 	Key() histdb.Key
-	Name() []byte
 	Value() []byte
 	Err() error
 }
@@ -74,16 +73,11 @@ func (m *T) Init(iters []Iterator) {
 
 func (m *T) Err() error { return m.err }
 
+func (m *T) Iter() int { return m.win }
+
 func (m *T) Key() (k histdb.Key) {
 	if uint(m.win) < uint(len(m.iters)) {
 		k = m.iters[m.win].Key()
-	}
-	return
-}
-
-func (m *T) Name() (v []byte) {
-	if uint(m.win) < uint(len(m.iters)) {
-		v = m.iters[m.win].Name()
 	}
 	return
 }

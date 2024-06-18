@@ -26,10 +26,10 @@ type Iterator struct {
 	idxf []byte // reference into ibuf
 
 	err error
-	fh  filesystem.Handle
+	fh  filesystem.H
 }
 
-func (it *Iterator) Init(fh filesystem.Handle) {
+func (it *Iterator) Init(fh filesystem.H) {
 	it.fh = fh
 	it.idx = nil
 	it.idxf = nil

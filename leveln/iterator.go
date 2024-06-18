@@ -8,7 +8,6 @@ import (
 
 	"github.com/histdb/histdb"
 	"github.com/histdb/histdb/filesystem"
-	"github.com/histdb/histdb/memindex"
 )
 
 type Iterator struct {
@@ -20,99 +19,34 @@ type Iterator struct {
 
 	err    error
 	kr     keyReader
-	values filesystem.Handle
-	idx    *memindex.T
-	offset uint32
-	skey   histdb.Key
-	name   []byte
-	size   int
-	span   []byte
-	value  []byte
+	values filesystem.H
+	off    uint32
+
+	skey  histdb.Key
+	value []byte
+
+	coff  uint32 // current span offset
+	sboff uint32 // buffered span start offset
+	cpos  uint16 // current pos within span
+	sblen uint16 // buffered span length
 
 	sbuf [vwSpanSize]byte
 }
 
-func (it *Iterator) Init(keys, values filesystem.Handle, idx *memindex.T) {
-	*it = Iterator{
-		idx:    idx,
-		values: values,
-	}
+func (it *Iterator) Init(keys, values filesystem.H) {
+	it.stats.valueReads = 0
+	it.err = nil
 	it.kr.Init(keys)
-}
+	it.values = values
+	it.off = 0
 
-func (it *Iterator) Next() bool {
-	if it.err != nil {
-		return false
-	} else if len(it.span) < vwEntryHeaderSize || be.Uint16(it.span[0:2]) < vwEntryHeaderSize {
-		it.readNextSpan()
-		if it.err != nil {
-			return false
-		}
-	}
-
-	var vend uint
-	span := it.span
-
-	if len(span) < vwEntryHeaderSize {
-		goto corrupt
-	}
-
-	vend = uint(be.Uint16(span[0:2]))
-	it.skey.SetTimestamp(be.Uint32(span[2:6]))
-	it.skey.SetDuration(be.Uint32(span[6:10]))
-
-	if vwEntryHeaderSize <= vend && vend < uint(len(span)) {
-		it.value = span[vwEntryHeaderSize:vend]
-		it.span = span[vend:]
-
-		return true
-	}
-
-corrupt:
-	it.err = errs.Errorf("iterator data corruption: span too short")
-	return false
-}
-
-func (it *Iterator) readNextSpan() {
-	if it.err != nil {
-		return
-	}
-
-	// increment offset by the number of alignment blocks necessary
-	it.offset += uint32(((it.size - len(it.span)) + vwSpanMask) / vwSpanAlign)
-
-	// read a span into the buffer
-	it.stats.valueReads++
-	n, err := it.values.ReadAt(it.sbuf[:], int64(it.offset)*vwSpanAlign)
-	if n > 0 && n <= cap(it.sbuf) {
-		it.size = n
-		it.span = it.sbuf[:n:n]
-	} else if err != nil {
-		it.err = err
-		return
-	} else {
-		it.err = errs.Errorf("iterator short read")
-		return
-	}
-
-	if len(it.span) < histdb.HashSize {
-		it.err = errs.Errorf("iterator data corruption: span too short")
-		return
-	}
-
-	*it.skey.HashPtr() = (histdb.Hash)(it.span[0:histdb.HashSize])
-	it.span = it.span[histdb.HashSize:]
-
-	var ok bool
-	it.name, ok = it.idx.AppendNameByHash(it.skey.Hash(), it.name)
-	if !ok {
-		it.err = errs.Errorf("iterator data corruption: name not found")
-		return
-	}
+	it.coff = 0
+	it.sboff = 0
+	it.cpos = 0
+	it.sblen = 0
 }
 
 func (it *Iterator) Key() histdb.Key { return it.skey }
-func (it *Iterator) Name() []byte    { return it.name }
 func (it *Iterator) Value() []byte   { return it.value }
 
 func (it *Iterator) Err() error {
@@ -122,26 +56,100 @@ func (it *Iterator) Err() error {
 	return nil
 }
 
-func (it *Iterator) Seek(key histdb.Key) bool {
+func (it *Iterator) Next() bool {
+	// if we don't have enough data left to read an entry header, update
+	// our offset to point at the next span and ensure it's loaded
+	if it.err != nil {
+		return false
+	}
+
+again:
+
+	// we need to load the entry at {coff, cpos} so first check to see if
+	// that exists in the buffer
+	sblo := it.sboff * vwSpanAlign
+	sbhi := sblo + uint32(it.sblen)
+
+	clo := it.coff*vwSpanAlign + uint32(it.cpos)
+	chi := clo + 2
+
+	if sblo > clo || chi > sbhi {
+		// we need to load the span into the buffer
+		var n int
+		it.stats.valueReads++
+		n, it.err = it.values.ReadAt(it.sbuf[:], int64(it.coff*vwSpanAlign))
+		if errors.Is(it.err, io.EOF) {
+			if n == 0 {
+				return false
+			}
+			it.err = nil
+		}
+		if n&vwSpanMask != 0 {
+			it.err = errs.Errorf("values span not aligned")
+		}
+		if it.err != nil {
+			return false
+		}
+
+		it.sboff = it.coff
+		it.sblen = uint16(n)
+		goto again
+	}
+
+	// TODO: explicit bounds checking so no static panics and instead have
+	// errors.
+
+	prefix := it.sbuf[clo-sblo:]
+
+	// if we're at the start of a span group, we need to read in the hash
+	if it.cpos == 0 {
+		*it.skey.HashPtr() = histdb.Hash(prefix)
+		it.cpos += histdb.HashSize
+		prefix = prefix[histdb.HashSize:]
+	}
+
+	vend := be.Uint16(prefix)
+	if vend == 0 {
+		// we reached the end of the span. we have to round up to the next
+		// offset and try again
+		it.coff += uint32(it.cpos+vwSpanAlign+1) / vwSpanAlign
+		it.cpos = 0
+		goto again
+	}
+
+	// if the entry spans the buffer, we want to read starting at the current
+	// offset instead. we're guaranteed to get enough data because the value
+	// writer cannot write more than our buffer size before flushing.
+	if len(prefix) < vwEntryHeaderSize || int(vend) > len(prefix) {
+		it.sboff = 0
+		it.sblen = 0
+		goto again
+	}
+
+	it.skey.SetTimestamp(be.Uint32(prefix[2:]))
+	it.skey.SetDuration(be.Uint32(prefix[6:]))
+	it.value = prefix[vwEntryHeaderSize:vend]
+	it.cpos += vend
+
+	return true
+}
+
+func (it *Iterator) Seek(key histdb.Key) {
 	if errors.Is(it.err, io.EOF) {
 		it.err = nil
 	} else if it.err != nil {
-		return false
+		return
 	}
 
-	ent, _, err := it.kr.Search(key)
-	if err != nil {
-		it.err = err
-		return false
+	var ent kwEntry
+	ent, _, it.err = it.kr.Search(key)
+	if it.err != nil {
+		return
 	}
 
-	it.size = 0
-	it.span = nil
-	it.offset = ent.ValOffset()
+	it.coff = ent.ValOffset()
+	it.cpos = 0
 
-	// no fancy comparisons because the prefix likely matches.
 	for it.Next() && string(it.skey[:]) < string(key[:]) {
 	}
-
-	return it.err == nil
 }

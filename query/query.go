@@ -4,12 +4,11 @@ import (
 	"github.com/histdb/histdb/memindex"
 )
 
-type Query struct {
+type Q struct {
 	_ [0]func() // no equality
 
 	prog []inst
 	strs bytesSet
-	vals valueSet
 	mchs []matcher
 
 	// memory cache for parsing
@@ -17,7 +16,7 @@ type Query struct {
 	tkeys bytesSet
 }
 
-func (q *Query) Eval(m *memindex.T) *memindex.Bitmap {
+func (q *Q) Eval(m *memindex.T) *memindex.Bitmap {
 	buf := make([]byte, 0, 32)
 	stack := make([]*memindex.Bitmap, 1, 8)
 	stack[0] = new(memindex.Bitmap)
@@ -60,11 +59,11 @@ func (q *Query) Eval(m *memindex.T) *memindex.Bitmap {
 			m.QueryTrue(q.strs.list[i.s], push().Or)
 
 		case inst_eq:
-			buf = appendTag(buf[:0], q.strs.list[i.s], q.vals.list[i.v].AsString())
+			buf = appendTag(buf[:0], q.strs.list[i.s], q.strs.list[i.v])
 			m.QueryEqual(buf, push().Or)
 
 		case inst_neq:
-			buf = appendTag(buf[:0], q.strs.list[i.s], q.vals.list[i.v].AsString())
+			buf = appendTag(buf[:0], q.strs.list[i.s], q.strs.list[i.v])
 			m.QueryNotEqual(q.strs.list[i.s], buf, push().Or)
 
 		case inst_re, inst_glob:

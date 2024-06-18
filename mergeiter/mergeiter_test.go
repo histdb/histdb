@@ -131,7 +131,6 @@ func newFakeMergableIter(x string) *fakeMergableIter {
 
 func (f fakeMergableIter) Err() error        { return nil }
 func (f fakeMergableIter) Key() histdb.Key   { return newFixedKey(f[0]) }
-func (f fakeMergableIter) Name() []byte      { return nil }
 func (f fakeMergableIter) Timestamp() uint32 { return 0 }
 func (f fakeMergableIter) Value() []byte     { return nil }
 

@@ -1,29 +1,35 @@
 package leveln
 
 import (
+	"fmt"
 	"sort"
 
 	"github.com/histdb/histdb"
-	"github.com/histdb/histdb/memindex"
+	"github.com/histdb/histdb/metrics"
 	"github.com/histdb/histdb/testhelp"
 )
 
-type addedMetric struct {
+type hashedMetric struct {
 	hash histdb.Hash
 	norm []byte
 }
 
-func insertMetrics(idx *memindex.T, n uint64) []addedMetric {
-	var metrics []addedMetric
+func (a hashedMetric) String() string {
+	return fmt.Sprintf("%v %s", a.hash, a.norm)
+}
+
+func createMetrics(n uint64) []hashedMetric {
+	var ms []hashedMetric
 	for range n {
-		hash, _, norm, _ := idx.Add(testhelp.Metric(5), []byte{}, nil)
-		metrics = append(metrics, addedMetric{
+		norm := testhelp.Metric(5)
+		hash := metrics.Hash(norm)
+		ms = append(ms, hashedMetric{
 			hash: hash,
 			norm: norm,
 		})
 	}
-	sort.Slice(metrics, func(i, j int) bool {
-		return string(metrics[i].hash[:]) < string(metrics[j].hash[:])
+	sort.Slice(ms, func(i, j int) bool {
+		return string(ms[i].hash[:]) < string(ms[j].hash[:])
 	})
-	return metrics
+	return ms
 }
