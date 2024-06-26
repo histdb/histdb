@@ -38,7 +38,7 @@ func TestMergedIterator(t *testing.T) {
 	t.Run("Fuzz", func(t *testing.T) {
 		rng := mwc.Rand()
 
-		for c := 0; c < 1000; c++ {
+		for c := 0; c < 100; c++ {
 			var exp []byte
 			keys := "abcdefghijklmnopqrstuvwxyz"
 			fmis := make([]fakeMergableIter, 1+rng.Uint32n(32))

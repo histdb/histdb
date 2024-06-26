@@ -114,6 +114,18 @@ func (t *T[K, V]) index(k K) uint64 {
 	return (11400714819323198485 * k.Digest()) >> (t.shift % 64)
 }
 
+func (t *T[K, V]) Iterate(cb func(k K, v V) bool) bool {
+	for i, m := range t.metas {
+		if m&maskHit == flagsHit {
+			s := t.slots[i]
+			if !cb(s.k, s.v) {
+				return false
+			}
+		}
+	}
+	return true
+}
+
 func (t *T[K, V]) Find(k K) (v V, ok bool) {
 	if t.eles == 0 {
 		return v, false

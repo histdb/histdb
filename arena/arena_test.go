@@ -7,7 +7,7 @@ import (
 )
 
 func TestArena(t *testing.T) {
-	var s T[int]
+	var s T[int64]
 
 	p1 := s.New()
 	p2 := s.New()
@@ -32,4 +32,7 @@ func TestArena(t *testing.T) {
 	assert.Equal(t, *s.Get(p2), 6)
 	assert.Equal(t, *s.Get(p3), 7)
 	assert.Equal(t, *s.Get(p4), 8)
+
+	assert.Equal(t, s.Allocated(), 70*lAlloc*lBatch+4)
+	assert.Equal(t, s.Size(), (70*lAlloc+1)*lBatch*8+8+4+4+8)
 }

@@ -20,8 +20,8 @@ func (ps *parseState) pushOp(op byte) { ps.pushInst(op, -1, -1) }
 func (ps *parseState) pushInst(op byte, v1, v2 int16) {
 	ps.into.prog = append(ps.into.prog, inst{
 		op: op,
-		s:  v1,
-		v:  v2,
+		s1: v1,
+		s2: v2,
 	})
 }
 
@@ -197,7 +197,7 @@ done:
 	ps.into.tkeys.reset()
 
 	// push the intersection of the tagset for the metrics
-	ps.pushInst(inst_true, tn, -1)
+	ps.pushInst(inst_tags, tn, -1)
 
 	if !skipInter {
 		ps.pushOp(inst_inter)

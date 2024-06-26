@@ -6,3 +6,5 @@
 *.txt.gz
 *.idx
 *.l?
+
+/test.sh

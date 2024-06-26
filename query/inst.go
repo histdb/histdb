@@ -6,8 +6,8 @@ type inst struct {
 	_ [0]func() // no equality
 
 	op byte
-	s  int16
-	v  int16
+	s1 int16
+	s2 int16
 }
 
 const (
@@ -15,24 +15,21 @@ const (
 
 	// nop
 	inst_nop = iota
-	inst_true
+
+	// tags
+	inst_tags // push(tags(strs[i.arg1]))
 
 	// comparison operators
-	inst_eq  // push(query(eq,  i.tags, strs[i.arg1], strs[i.arg2]))
-	inst_neq // push(query(neq, i.tags, strs[i.arg1], strs[i.arg2]))
+	inst_eq  // push(sel(eq,  strs[i.arg1], strs[i.arg2]))
+	inst_neq // push(sel(neq, strs[i.arg1], strs[i.arg2]))
 
-	inst_re  // push(query(re,  i.tags, strs[i.arg1], strs[i.arg2]))
-	inst_nre // push(query(nre, i.tags, strs[i.arg1], strs[i.arg2]))
+	inst_re  // push(sel(re,  strs[i.arg1], strs[i.arg2]))
+	inst_nre // push(sel(nre, strs[i.arg1], strs[i.arg2]))
 
-	inst_glob  // push(query(glob,  i.tags, strs[i.arg1], strs[i.arg2]))
-	inst_nglob // push(query(nglob, i.tags, strs[i.arg1], strs[i.arg2]))
+	inst_glob  // push(sel(glob,  strs[i.arg1], strs[i.arg2]))
+	inst_nglob // push(sel(nglob, strs[i.arg1], strs[i.arg2]))
 
-	inst_gt  // push(query(gt,  i.tags, strs[i.arg1], strs[i.arg2]))
-	inst_gte // push(query(gte, i.tags, strs[i.arg1], strs[i.arg2]))
-	inst_lt  // push(query(lt,  i.tags, strs[i.arg1], strs[i.arg2]))
-	inst_lte // push(query(lte, i.tags, strs[i.arg1], strs[i.arg2]))
-
-	// selection operators
+	// binary operators
 	inst_union   // push(pop() | pop())
 	inst_inter   // push(pop() & pop())
 	inst_symdiff // push(pop() ^ pop())
@@ -45,32 +42,23 @@ func (i inst) String() string {
 	switch i.op {
 	case inst_nop:
 		return "nop"
-	case inst_true:
-		return fmt.Sprintf("query(true, s=%d)", i.s)
+	case inst_tags:
+		return fmt.Sprintf("(tags %d)", i.s1)
 
 	case inst_eq:
-		prefix = "query(eq, "
+		prefix = "(sel eq "
 	case inst_neq:
-		prefix = "query(neq, "
+		prefix = "(sel neq "
 
 	case inst_re:
-		prefix = "query(re, "
+		prefix = "(sel re "
 	case inst_nre:
-		prefix = "query(nre, "
+		prefix = "(sel nre "
 
 	case inst_glob:
-		prefix = "query(glob, "
+		prefix = "(sel glob "
 	case inst_nglob:
-		prefix = "query(nglob, "
-
-	case inst_gt:
-		prefix = "query(gt, "
-	case inst_gte:
-		prefix = "query(gte, "
-	case inst_lt:
-		prefix = "query(lt, "
-	case inst_lte:
-		prefix = "query(lte, "
+		prefix = "(sel nglob "
 
 	case inst_union:
 		return "union"
@@ -82,8 +70,8 @@ func (i inst) String() string {
 		return "modulo"
 
 	default:
-		prefix = fmt.Sprintf("op%d(", i.op)
+		prefix = fmt.Sprintf("(op%d ", i.op)
 	}
 
-	return fmt.Sprintf("%ss=%d, v=%d)", prefix, i.s, i.v)
+	return fmt.Sprintf("%s%d %d)", prefix, i.s1, i.s2)
 }

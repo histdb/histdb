@@ -1,42 +1,67 @@
 package bitmap
 
 import (
+	"fmt"
 	"math"
 	"runtime"
 	"testing"
+
+	"github.com/zeebo/assert"
 )
 
 func TestBitmap64(t *testing.T) {
-	var bm T64
-
 	for i := uint(0); i < 64; i++ {
+		var bm T64
+
+		assert.That(t, bm.Empty())
+		assert.That(t, !bm.AtomicHas(i))
+
 		bm.AtomicAddIdx(i)
 
-		got := bm.Lowest()
+		assert.That(t, !bm.Empty())
+		assert.That(t, bm.AtomicHas(i))
+		assert.Equal(t, bm.String(), fmt.Sprintf("%064b", bm.b))
+
+		assert.Equal(t, New64(bm.b), bm)
+		assert.Equal(t, bm.AtomicClone(), bm)
+
+		low := bm.Lowest()
+		high := bm.Highest()
+
 		bm.ClearLowest()
-		if !bm.Empty() || got != i {
-			t.Fatal(i)
-		}
-		if bm != (T64{}) {
-			t.Fatal(bm)
-		}
+
+		assert.That(t, bm.Empty())
+		assert.Equal(t, low, high)
+		assert.Equal(t, low, i)
+		assert.Equal(t, bm, T64{})
 	}
 }
 
 func TestBitmap32(t *testing.T) {
-	var bm T32
-
 	for i := uint(0); i < 32; i++ {
+		var bm T32
+
+		assert.That(t, bm.Empty())
+		assert.That(t, !bm.AtomicHas(i))
+
 		bm.AtomicAddIdx(i)
 
-		got := bm.Lowest()
+		assert.That(t, !bm.Empty())
+		assert.That(t, bm.AtomicHas(i))
+		assert.Equal(t, bm.String(), fmt.Sprintf("%032b", bm.b))
+
+		assert.Equal(t, New32(bm.b), bm)
+		assert.Equal(t, bm.AtomicClone(), bm)
+
+		low := bm.Lowest()
+		high := bm.Highest()
+
 		bm.ClearLowest()
-		if !bm.Empty() || got != i {
-			t.Fatal(i)
-		}
-		if bm != (T32{}) {
-			t.Fatal(bm)
-		}
+
+		assert.That(t, bm.Empty())
+		assert.Equal(t, low, high)
+		assert.Equal(t, low, i)
+		assert.Equal(t, bm, T32{})
 	}
 }
 

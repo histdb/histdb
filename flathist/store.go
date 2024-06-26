@@ -358,6 +358,32 @@ func (s *S) Max(h H) float32 {
 	return upperValue(i, j, 0)
 }
 
+// Reset clears all observations from the histogram.
+//
+// It is NOT safe to be called concurrently with any other method.
+func (s *S) Reset(h H) {
+	l0 := s.l0.Get(h.v)
+	for bm := bitmap.New32(bitmask(&l0.l1)); !bm.Empty(); bm.ClearLowest() {
+		l1 := s.getL1(l0.l1[bm.Lowest()])
+
+		for bm := bitmap.New32(bitmask(&l1.l2)); !bm.Empty(); bm.ClearLowest() {
+			l2a := l1.l2[bm.Lowest()]
+
+			if isAddrLarge(l2a) {
+				l2l := s.getL2L(l2a)
+				for i := range l2l.cs {
+					l2l.cs[i] = 0
+				}
+			} else {
+				l2s := s.getL2S(l2a)
+				for i := range l2s.cs {
+					l2s.cs[i] = 0
+				}
+			}
+		}
+	}
+}
+
 // Total returns the number of observations that have been recorded.
 //
 // It is safe to be called concurrently with Observe.

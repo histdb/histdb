@@ -22,7 +22,7 @@ type Iterator struct {
 	values filesystem.H
 	off    uint32
 
-	skey  histdb.Key
+	key   histdb.Key
 	value []byte
 
 	coff  uint32 // current span offset
@@ -35,10 +35,14 @@ type Iterator struct {
 
 func (it *Iterator) Init(keys, values filesystem.H) {
 	it.stats.valueReads = 0
+
 	it.err = nil
 	it.kr.Init(keys)
 	it.values = values
 	it.off = 0
+
+	it.key = histdb.Key{}
+	it.value = nil
 
 	it.coff = 0
 	it.sboff = 0
@@ -46,7 +50,7 @@ func (it *Iterator) Init(keys, values filesystem.H) {
 	it.sblen = 0
 }
 
-func (it *Iterator) Key() histdb.Key { return it.skey }
+func (it *Iterator) Key() histdb.Key { return it.key }
 func (it *Iterator) Value() []byte   { return it.value }
 
 func (it *Iterator) Err() error {
@@ -103,7 +107,7 @@ again:
 
 	// if we're at the start of a span group, we need to read in the hash
 	if it.cpos == 0 {
-		*it.skey.HashPtr() = histdb.Hash(prefix)
+		*it.key.HashPtr() = histdb.Hash(prefix)
 		it.cpos += histdb.HashSize
 		prefix = prefix[histdb.HashSize:]
 	}
@@ -126,8 +130,8 @@ again:
 		goto again
 	}
 
-	it.skey.SetTimestamp(be.Uint32(prefix[2:]))
-	it.skey.SetDuration(be.Uint32(prefix[6:]))
+	it.key.SetTimestamp(be.Uint32(prefix[2:]))
+	it.key.SetDuration(be.Uint32(prefix[6:]))
 	it.value = prefix[vwEntryHeaderSize:vend]
 	it.cpos += vend
 
@@ -150,6 +154,6 @@ func (it *Iterator) Seek(key histdb.Key) {
 	it.coff = ent.ValOffset()
 	it.cpos = 0
 
-	for it.Next() && string(it.skey[:]) < string(key[:]) {
+	for it.Next() && string(it.key[:]) < string(key[:]) {
 	}
 }

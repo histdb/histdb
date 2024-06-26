@@ -1,6 +1,8 @@
 package query
 
 import (
+	"strings"
+
 	"github.com/histdb/histdb/memindex"
 )
 
@@ -14,6 +16,80 @@ type Q struct {
 	// memory cache for parsing
 	toks  []token
 	tkeys bytesSet
+}
+
+func (q *Q) String() string {
+	var b strings.Builder
+	b.WriteString("(query (prog ")
+
+	for i, inst := range q.prog {
+		if i > 0 {
+			b.WriteByte(' ')
+		}
+
+		switch inst.op {
+		case inst_nop:
+			b.WriteString("nop")
+		case inst_tags:
+			b.WriteString("(tags ")
+			b.Write(q.strs.list[inst.s1])
+			b.WriteString(")")
+
+		case inst_eq:
+			b.WriteString("(sel eq ")
+			b.Write(q.strs.list[inst.s1])
+			b.WriteByte(' ')
+			b.Write(q.strs.list[inst.s2])
+			b.WriteByte(')')
+		case inst_neq:
+			b.WriteString("(sel neq ")
+			b.Write(q.strs.list[inst.s1])
+			b.WriteByte(' ')
+			b.Write(q.strs.list[inst.s2])
+			b.WriteByte(')')
+
+		case inst_re:
+			b.WriteString("(sel re")
+			b.Write(q.strs.list[inst.s1])
+			b.WriteByte(' ')
+			b.WriteString(q.mchs[inst.s2].q)
+			b.WriteByte(')')
+		case inst_nre:
+			b.WriteString("(sel nre")
+			b.Write(q.strs.list[inst.s1])
+			b.WriteByte(' ')
+			b.WriteString(q.mchs[inst.s2].q)
+			b.WriteByte(')')
+
+		case inst_glob:
+			b.WriteString("(sel glob")
+			b.Write(q.strs.list[inst.s1])
+			b.WriteByte(' ')
+			b.WriteString(q.mchs[inst.s2].q)
+			b.WriteByte(')')
+		case inst_nglob:
+			b.WriteString("(sel nglob")
+			b.Write(q.strs.list[inst.s1])
+			b.WriteByte(' ')
+			b.WriteString(q.mchs[inst.s2].q)
+			b.WriteByte(')')
+
+		case inst_union:
+			b.WriteString("union")
+		case inst_inter:
+			b.WriteString("inter")
+		case inst_symdiff:
+			b.WriteString("symdiff")
+		case inst_modulo:
+			b.WriteString("modulo")
+
+		default:
+			b.WriteString("unknown")
+		}
+	}
+	b.WriteString("))")
+
+	return b.String()
 }
 
 func (q *Q) Eval(m *memindex.T) *memindex.Bitmap {
@@ -55,21 +131,21 @@ func (q *Q) Eval(m *memindex.T) *memindex.Bitmap {
 		switch i.op & 15 {
 		case inst_nop:
 
-		case inst_true:
-			m.QueryTrue(q.strs.list[i.s], push().Or)
+		case inst_tags:
+			m.QueryTrue(q.strs.list[i.s1], push().Or)
 
 		case inst_eq:
-			buf = appendTag(buf[:0], q.strs.list[i.s], q.strs.list[i.v])
+			buf = appendTag(buf[:0], q.strs.list[i.s1], q.strs.list[i.s2])
 			m.QueryEqual(buf, push().Or)
 
 		case inst_neq:
-			buf = appendTag(buf[:0], q.strs.list[i.s], q.strs.list[i.v])
-			m.QueryNotEqual(q.strs.list[i.s], buf, push().Or)
+			buf = appendTag(buf[:0], q.strs.list[i.s1], q.strs.list[i.s2])
+			m.QueryNotEqual(q.strs.list[i.s1], buf, push().Or)
 
 		case inst_re, inst_glob:
-			m.QueryFilter(q.strs.list[i.s], q.mchs[i.v].fn, push().Or)
+			m.QueryFilter(q.strs.list[i.s1], q.mchs[i.s2].fn, push().Or)
 		case inst_nre, inst_nglob:
-			m.QueryFilterNot(q.strs.list[i.s], q.mchs[i.v].fn, push().Or)
+			m.QueryFilterNot(q.strs.list[i.s1], q.mchs[i.s2].fn, push().Or)
 
 		case inst_union:
 			b := pop()

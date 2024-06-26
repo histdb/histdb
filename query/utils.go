@@ -30,6 +30,8 @@ func newBytesSet() bytesSet {
 	return bytesSet{}
 }
 
+func (s *bytesSet) String() string { return fmt.Sprintf("%s", s.list) }
+
 func (s *bytesSet) reset() {
 	clear(s.set)
 	clear(s.list)

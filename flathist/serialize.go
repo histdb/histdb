@@ -19,8 +19,8 @@ import (
 //   3. maybe some other l2 serialization options?
 
 const (
-	_ uint = (l0Bits - 5) * (5 - l0Bits) // assumption: l0 is 2^4 bits
-	_ uint = (l1Bits - 5) * (5 - l1Bits) // assumption: l1 is 2^4 bits
+	_ uint = (l0Bits - 5) * (5 - l0Bits) // assumption: l0 is 2^5 bits
+	_ uint = (l1Bits - 5) * (5 - l1Bits) // assumption: l1 is 2^5 bits
 	_ uint = (l2Bits - 6) * (6 - l2Bits) // assumption: l2 is 2^6 bits
 )
 

@@ -11,7 +11,7 @@ const (
 	lBatch = 1024
 	lAlloc = 8
 
-	ptrSize = unsafe.Sizeof((*int)(nil))
+	ptrSize = unsafe.Sizeof(unsafe.Pointer(nil))
 )
 
 type T[V any] struct {

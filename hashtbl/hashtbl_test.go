@@ -47,6 +47,24 @@ func TestTable(t *testing.T) {
 	}
 }
 
+func TestTableIterate(t *testing.T) {
+	var tb T[num.U64, num.U32]
+	exp := make(map[num.U64]num.U32)
+	for i := uint64(0); i < 1000; i++ {
+		_, ok := tb.Insert(num.U64(i), num.U32(i))
+		exp[num.U64(i)] = num.U32(i)
+		assert.That(t, ok)
+	}
+
+	got := make(map[num.U64]num.U32)
+	tb.Iterate(func(k num.U64, v num.U32) bool {
+		got[k] = v
+		return true
+	})
+
+	assert.Equal(t, exp, got)
+}
+
 func TestTableSerialize(t *testing.T) {
 	var tb T[num.U64, num.U32]
 

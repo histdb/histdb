@@ -38,7 +38,7 @@ func (h *H) Remove() error {
 	}
 	err := errs.Combine(
 		h.Close(),
-		h.fs.Remove(h.Name()),
+		os.Remove(h.fh.Name()), // N.B. not h.fs.Remove
 	)
 	h.fs = nil
 	h.fh = nil

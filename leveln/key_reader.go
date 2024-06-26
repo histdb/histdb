@@ -45,8 +45,8 @@ func (k *keyReader) cachePage(depth uint, id uint32) (*kwPage, error) {
 	}
 
 	p := krPage{id: id}
-	if depth < uint(len(k.cache)) {
-		p.page = k.cache[depth].page
+	if depth < uint(cap(k.cache)) {
+		p.page = k.cache[:depth+1][depth].page
 	} else {
 		p.page = new(kwPage)
 	}
@@ -54,7 +54,7 @@ func (k *keyReader) cachePage(depth uint, id uint32) (*kwPage, error) {
 	k.stats.reads++
 	_, err := k.fh.ReadAt(p.page.Buf()[:], int64(id)*kwPageSize)
 	if err != nil {
-		p.page = nil
+		return nil, errs.Wrap(err)
 	}
 
 	if depth < uint(len(k.cache)) {
