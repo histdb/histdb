@@ -43,7 +43,7 @@ func doReload() {
 	count := 0
 
 	lstats := start
-	lcard := uint64(0)
+	lcard := 0
 	lcount := 0
 
 	stats := func() {

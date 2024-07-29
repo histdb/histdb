@@ -2,6 +2,7 @@ package rwutils
 
 import (
 	"encoding/binary"
+	"math"
 
 	"github.com/zeebo/errs/v2"
 
@@ -107,6 +108,12 @@ func (w *W) Bytes24(x [24]byte) {
 	w.buf = w.buf.Advance(24)
 }
 
+func (w *W) Int(x int) {
+	w.buf = w.buf.Grow(8)
+	le.PutUint64(w.buf.Front8()[:], uint64(x))
+	w.buf = w.buf.Advance(8)
+}
+
 func (w *W) Uint64(x uint64) {
 	w.buf = w.buf.Grow(8)
 	le.PutUint64(w.buf.Front8()[:], x)
@@ -161,6 +168,21 @@ func (r *R) Varint() (x uint64) {
 	x, r.buf, ok = varint.Consume(r.buf)
 	if !ok {
 		r.Invalid(errs.Errorf("short buffer: varint truncated"))
+	}
+	return
+}
+
+func (r *R) Int() (x int) {
+	if r.buf.Remaining() >= 8 {
+		u64x := le.Uint64(r.buf.Front8()[:])
+		r.buf = r.buf.Advance(8)
+		if math.MinInt <= x && x <= math.MaxInt {
+			x = int(u64x)
+		} else {
+			r.Invalid(errs.Errorf("value too large to fit into int"))
+		}
+	} else {
+		r.Invalid(errs.Errorf("short buffer: needed 8 bytes"))
 	}
 	return
 }

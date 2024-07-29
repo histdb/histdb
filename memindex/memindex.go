@@ -16,8 +16,6 @@ import (
 type T struct {
 	_ [0]func() // no equality
 
-	card RWId
-
 	metrics      hashtbl.T[histdb.Hash, RWId] // for dedupe
 	metric_names petname.B[RWId]              // to quickly append name
 	tag_names    petname.T[histdb.TagHash, RWId]
@@ -41,7 +39,7 @@ func (t *T) Size() uint64 {
 		0
 }
 
-func (t *T) Cardinality() uint64 { return uint64(t.card) }
+func (t *T) Cardinality() int { return t.metrics.Len() }
 
 // Add includes the metric in to the index. It returns the hash of the metric,
 // the id of the metric, the normalized metric (if the incoming normalized buf
@@ -93,8 +91,6 @@ func (t *T) Add(metric, normalized []byte, cf *card.Fixer) (histdb.Hash, Id, []b
 
 	id, ok := t.metrics.Insert(hash, RWId(t.metrics.Len()))
 	if ok {
-		t.card++
-
 		for i, tagi := range tagis {
 			tkeyi := tkeyis[i]
 			bitmapIndex(&t.tag_to_metrics, tagi).Add(Id(id))

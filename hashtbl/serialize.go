@@ -12,11 +12,11 @@ func (rw *RW[K, RWK, V, RWV]) AppendTo(w *rwutils.W) { AppendTo[K, RWK, V, RWV](
 func (rw *RW[K, RWK, V, RWV]) ReadFrom(r *rwutils.R) { ReadFrom[K, RWK, V, RWV]((*T[K, V])(rw), r) }
 
 func AppendTo[K Key[K], KRW rwutils.RW[K], V any, VRW rwutils.RW[V]](t *T[K, V], w *rwutils.W) {
-	w.Uint64(uint64(len(t.slots)))
+	w.Int(len(t.slots))
 	w.Uint64(t.mask)
 	w.Uint64(t.shift)
-	w.Uint64(uint64(t.eles))
-	w.Uint64(uint64(t.full))
+	w.Int(t.eles)
+	w.Int(t.full)
 
 	for i := range t.slots {
 		s := &t.slots[i]
@@ -28,13 +28,13 @@ func AppendTo[K Key[K], KRW rwutils.RW[K], V any, VRW rwutils.RW[V]](t *T[K, V],
 }
 
 func ReadFrom[K Key[K], KRW rwutils.RW[K], V any, VRW rwutils.RW[V]](t *T[K, V], r *rwutils.R) {
-	n := r.Uint64()
+	n := r.Int()
 	t.mask = r.Uint64()
 	t.shift = r.Uint64()
-	t.eles = int(r.Uint64())
-	t.full = int(r.Uint64())
+	t.eles = r.Int()
+	t.full = r.Int()
 
-	if n > uint64(r.Remaining()) {
+	if uint64(n) > uint64(r.Remaining()) {
 		r.Invalid(errs.Errorf("hash table has too many slots: %d", n))
 		t.slots = nil
 		t.metas = nil
