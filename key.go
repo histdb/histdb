@@ -9,14 +9,6 @@ import (
 
 type Key [KeySize]byte
 
-func (k Key) Digest() uint64 {
-	return 0 +
-		le.Uint64(k[0:8]) +
-		le.Uint64(k[8:16]) +
-		le.Uint64(k[16:24]) +
-		0
-}
-
 func (k Key) AppendTo(w *rwutils.W)  { w.Bytes(k[:]) }
 func (k *Key) ReadFrom(r *rwutils.R) { copy(k[:], r.Bytes(len(k))) }
 

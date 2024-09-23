@@ -18,23 +18,23 @@ type T[V any] struct {
 	_ [0]func() // no equality
 
 	s atomic.Pointer[*[lBatch]V]
-	p uint32
-	t uint32
+	p atomic.Uint32
+	t atomic.Uint32
 
 	mu sync.Mutex // protects realloc
 }
 
 func (t *T[V]) Size() uint64 {
 	return 0 +
-		/* buf */ uint64(((t.t+lBatch-1)/lBatch)*lBatch)*uint64(unsafe.Sizeof(*new(V))) +
+		/* buf */ uint64(((t.t.Load()+lBatch-1)/lBatch)*lBatch)*uint64(unsafe.Sizeof(*new(V))) +
 		/* s   */ 8 +
 		/* p   */ 4 +
 		/* t   */ 4 +
-		/* mu  */ 8 +
+		/* mu  */ uint64(unsafe.Sizeof(sync.Mutex{})) +
 		0
 }
 
-func (t *T[V]) Allocated() uint32 { return atomic.LoadUint32(&t.p) }
+func (t *T[V]) Allocated() uint32 { return t.p.Load() }
 
 type tag[V any] struct{}
 
@@ -46,18 +46,14 @@ type P[V any] struct {
 func Raw[V any](v uint32) P[V] { return P[V]{v: v} }
 func (p P[V]) Raw() uint32     { return p.v }
 
-// Full returns true if the next call to New would reallocate. It is not safe
-// to call concurrently with New.
-func (l *T[V]) Full() bool { return l.p >= l.t-1 }
-
 func (l *T[V]) Get(p P[V]) *V {
 	b := unsafe.Add(unsafe.Pointer(l.s.Load()), uintptr(p.v/lBatch)*ptrSize)
 	return &(*(**[lBatch]V)(b))[p.v%lBatch]
 }
 
 func (l *T[V]) New() (p P[V]) {
-	p.v = atomic.AddUint32(&l.p, 1)
-	if p.v >= atomic.LoadUint32(&l.t) {
+	p.v = l.p.Add(1)
+	if p.v >= l.t.Load() {
 		l.realloc(p.v)
 	}
 	return
@@ -67,7 +63,7 @@ func (l *T[V]) realloc(v uint32) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
-	for t := atomic.LoadUint32(&l.t); v >= t; t += lBatch {
+	for t := l.t.Load(); v >= t; t += lBatch {
 		var arr []*[lBatch]V
 
 		switch {
@@ -89,6 +85,6 @@ func (l *T[V]) realloc(v uint32) {
 		}
 
 		arr[t/lBatch] = new([lBatch]V)
-		atomic.AddUint32(&l.t, lBatch) // synchronizes arr reads
+		l.t.Add(lBatch) // synchronizes arr reads
 	}
 }

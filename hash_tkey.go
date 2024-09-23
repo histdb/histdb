@@ -8,14 +8,6 @@ import (
 
 type TagKeyHash [TagKeyHashSize]byte
 
-func (h TagKeyHash) Equal(g TagKeyHash) bool { return h == g }
-
-func (h TagKeyHash) Digest() uint64 {
-	return 0 +
-		le.Uint64(h[0:8]) +
-		0
-}
-
 func NewTagKeyHash(tkey []byte) (th TagKeyHash) {
 	le.PutUint64(th[:], uint64(xxh3.Hash(tkey)))
 	return th

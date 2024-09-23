@@ -20,7 +20,7 @@ func AppendBTo[V num.T, RWV rwutils.RW[V]](b *B[V], w *rwutils.W) {
 	}
 }
 
-func AppendTTo[K hashtbl.Key[K], RWK rwutils.RW[K], V num.T, RWV rwutils.RW[V]](t *T[K, V], w *rwutils.W) {
+func AppendTTo[K comparable, RWK rwutils.RW[K], V num.T, RWV rwutils.RW[V]](t *T[K, V], w *rwutils.W) {
 	hashtbl.AppendTo[K, RWK, V, RWV](&t.idxs, w)
 	AppendBTo[V, RWV](&t.buf, w)
 }
@@ -42,7 +42,7 @@ func ReadBFrom[V num.T, RWV rwutils.RW[V]](b *B[V], r *rwutils.R) {
 	}
 }
 
-func ReadTFrom[K hashtbl.Key[K], RWK rwutils.RW[K], V num.T, RWV rwutils.RW[V]](t *T[K, V], r *rwutils.R) {
+func ReadTFrom[K comparable, RWK rwutils.RW[K], V num.T, RWV rwutils.RW[V]](t *T[K, V], r *rwutils.R) {
 	hashtbl.ReadFrom[K, RWK, V, RWV](&t.idxs, r)
 	ReadBFrom[V, RWV](&t.buf, r)
 }

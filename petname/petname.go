@@ -48,7 +48,7 @@ func (b *B[V]) Get(n V) []byte {
 	return nil
 }
 
-type T[K hashtbl.Key[K], V num.T] struct {
+type T[K comparable, V num.T] struct {
 	_ [0]func() // no equality
 
 	idxs hashtbl.T[K, V]

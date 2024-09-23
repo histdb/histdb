@@ -4,15 +4,11 @@ import (
 	"math"
 	"math/bits"
 
+	"github.com/histdb/histdb/hashany"
 	"github.com/histdb/histdb/sizeof"
 )
 
 // https://probablydance.com/2018/05/28/a-new-fast-hash-table-in-response-to-googles-new-fast-hash-table/
-
-type Key[T any] interface {
-	Equal(T) bool
-	Digest() uint64
-}
 
 const (
 	flagsEmpty    = 0b00000000
@@ -69,7 +65,7 @@ func (si slotIndex[K, V]) setJump(ji uint8) { si.setMeta(si.meta()&^maskDistance
 func (si slotIndex[K, V]) hasJump() bool    { return si.meta()&maskDistance != 0 }
 func (si slotIndex[K, V]) jump() uint8      { return si.meta() & maskDistance }
 
-type T[K Key[K], V any] struct {
+type T[K comparable, V any] struct {
 	_ [0]func() // no equality
 
 	slots []slot[K, V]
@@ -111,7 +107,7 @@ func (t *T[K, V]) next(si slotIndex[K, V], ji uint8) slotIndex[K, V] {
 }
 
 func (t *T[K, V]) index(k K) uint64 {
-	return (11400714819323198485 * k.Digest()) >> (t.shift % 64)
+	return (11400714819323198485 * hashany.Hash(k)) >> (t.shift % 64)
 }
 
 func (t *T[K, V]) Iterate(cb func(k K, v V) bool) bool {
@@ -135,7 +131,7 @@ func (t *T[K, V]) Find(k K) (v V, ok bool) {
 		return v, false
 	}
 	for {
-		if s := si.slot(); s.k.Equal(k) {
+		if s := si.slot(); s.k == k {
 			return s.v, true
 		}
 		ji := si.jump()
@@ -155,7 +151,7 @@ func (t *T[K, V]) Insert(k K, v V) (V, bool) {
 		return t.insertDirectHit(si, k, v)
 	}
 	for {
-		if s := si.slot(); s.k.Equal(k) {
+		if s := si.slot(); s.k == k {
 			return s.v, false
 		}
 		ji := si.jump()

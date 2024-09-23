@@ -6,12 +6,12 @@ import (
 	"github.com/histdb/histdb/rwutils"
 )
 
-type RW[K Key[K], RWK rwutils.RW[K], V any, RWV rwutils.RW[V]] T[K, V]
+type RW[K comparable, RWK rwutils.RW[K], V any, RWV rwutils.RW[V]] T[K, V]
 
 func (rw *RW[K, RWK, V, RWV]) AppendTo(w *rwutils.W) { AppendTo[K, RWK, V, RWV]((*T[K, V])(rw), w) }
 func (rw *RW[K, RWK, V, RWV]) ReadFrom(r *rwutils.R) { ReadFrom[K, RWK, V, RWV]((*T[K, V])(rw), r) }
 
-func AppendTo[K Key[K], KRW rwutils.RW[K], V any, VRW rwutils.RW[V]](t *T[K, V], w *rwutils.W) {
+func AppendTo[K comparable, KRW rwutils.RW[K], V any, VRW rwutils.RW[V]](t *T[K, V], w *rwutils.W) {
 	w.Int(len(t.slots))
 	w.Uint64(t.mask)
 	w.Uint64(t.shift)
@@ -27,7 +27,7 @@ func AppendTo[K Key[K], KRW rwutils.RW[K], V any, VRW rwutils.RW[V]](t *T[K, V],
 	w.Bytes(t.metas)
 }
 
-func ReadFrom[K Key[K], KRW rwutils.RW[K], V any, VRW rwutils.RW[V]](t *T[K, V], r *rwutils.R) {
+func ReadFrom[K comparable, KRW rwutils.RW[K], V any, VRW rwutils.RW[V]](t *T[K, V], r *rwutils.R) {
 	n := r.Int()
 	t.mask = r.Uint64()
 	t.shift = r.Uint64()

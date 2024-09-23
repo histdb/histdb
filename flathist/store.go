@@ -123,8 +123,6 @@ func (s *S) Finalize() {
 // Merge copies the data from h into g. It is not safe to call with Observe on
 // either g or h.
 //
-// TODO: pass in a store for h that could be different from the store for g.
-//
 // TODO: maybe have an optimization in the arena for a small number of
 // allocations like maybe a static buffer of some small size that it uses first,
 // but it would suck to have to special case every Get call, so think more!
@@ -565,12 +563,14 @@ func (s *S) Summary(h H) (total, sum, avg, vari float64) {
 		}
 	}
 
-	if total == 0 {
+	switch total {
+	case 0:
 		return 0, 0, 0, 0
-	} else if total == 1 {
+	case 1:
 		return 1, sum, sum, 0
+	default:
+		return total, sum, sum / total, vari / (total - 1)
 	}
-	return total, sum, sum / total, vari / (total - 1)
 }
 
 // Distribution calls the callback with information about the distribution

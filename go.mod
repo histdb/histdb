@@ -9,6 +9,7 @@ require (
 	github.com/zeebo/errs/v2 v2.0.5
 	github.com/zeebo/mwc v0.0.5
 	github.com/zeebo/xxh3 v1.0.2
+	golang.org/x/image v0.18.0
 )
 
 require (
