@@ -4,7 +4,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"syscall"
 
 	"github.com/zeebo/errs/v2"
 )
@@ -47,10 +46,6 @@ func (h *H) Remove() error {
 
 func (h H) Filesystem() *T {
 	return h.fs
-}
-
-func (h H) Fd() int {
-	return int(h.fh.Fd())
 }
 
 func (h H) Name() string {
@@ -100,15 +95,6 @@ func (h H) Size() (int64, error) {
 		return 0, wrap(err)
 	}
 	return fi.Size(), nil
-}
-
-func (h H) Fallocate(n int64) (err error) {
-intr:
-	err = fallocate(h.Fd(), 0, 0, n)
-	if err == syscall.EINTR {
-		goto intr
-	}
-	return wrap(err)
 }
 
 func (h H) Readdirnames(n int) (names []string, err error) {

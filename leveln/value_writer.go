@@ -8,12 +8,12 @@ import (
 )
 
 const (
-	vwSpanSize = 4096 * 4
+	vwSpanSize = 4096 * 8
 
 	vwSpanAlignBits   = 8
 	vwSpanAlign       = 1 << vwSpanAlignBits
 	vwSpanMask        = vwSpanAlign - 1
-	vwEntryHeaderSize = 2 + 4 + 4
+	vwEntryHeaderSize = 2 + 4 + 4 // elen + ts + dur
 )
 
 type valueWriter struct {

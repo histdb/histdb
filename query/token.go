@@ -15,8 +15,6 @@ const (
 	// where L and B are the length and byte offset of the token
 	// and F is a flag for if the literal was quoted.
 
-	token_and2  token = '&'<<8 | '&'
-	token_or2   token = '|'<<8 | '|'
 	token_eq2   token = '='<<8 | '='
 	token_neq   token = '!'<<8 | '='
 	token_re    token = '='<<8 | '~'

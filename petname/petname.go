@@ -48,7 +48,16 @@ func (b *B[V]) Get(n V) []byte {
 	return nil
 }
 
-type T[K comparable, V num.T] struct {
+func (b *B[V]) Iter(cb func(n V, v []byte) bool) bool {
+	for n := range b.spans {
+		if !cb(V(n), b.Get(V(n))) {
+			return false
+		}
+	}
+	return true
+}
+
+type T[K hashtbl.Key, V num.T] struct {
 	_ [0]func() // no equality
 
 	idxs hashtbl.T[K, V]
@@ -82,3 +91,9 @@ func (t *T[K, V]) Put(h K, v []byte) V {
 func (t *T[K, V]) Find(h K) (V, bool) { return t.idxs.Find(h) }
 
 func (t *T[K, V]) Get(n V) []byte { return t.buf.Get(n) }
+
+func (t *T[K, V]) Iter(cb func(h K, v []byte) bool) bool {
+	return t.idxs.Iterate(func(k K, v V) bool {
+		return cb(k, t.buf.Get(v))
+	})
+}

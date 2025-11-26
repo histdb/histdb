@@ -8,10 +8,27 @@ import (
 	"github.com/zeebo/mwc"
 
 	"github.com/histdb/histdb"
+	"github.com/histdb/histdb/filesystem"
 	"github.com/histdb/histdb/flathist"
 	"github.com/histdb/histdb/query"
 	"github.com/histdb/histdb/testhelp"
 )
+
+func TestReopen(t *testing.T) {
+	var st T
+
+	fs := &filesystem.T{Base: "/home/jeff/tmp/histdbtest"}
+
+	t.Log(st.Init(fs, Config{}))
+	defer st.Close()
+
+	var q query.Q
+	t.Log(query.Parse([]byte("{app|}"), &q))
+	t.Log(st.QueryMetrics(&q, func(hash histdb.Hash, name []byte) bool {
+		t.Logf("%v %s", hash, name)
+		return true
+	}))
+}
 
 func TestStore(t *testing.T) {
 	const (

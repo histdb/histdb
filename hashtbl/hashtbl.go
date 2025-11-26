@@ -4,7 +4,6 @@ import (
 	"math"
 	"math/bits"
 
-	"github.com/histdb/histdb/hashany"
 	"github.com/histdb/histdb/sizeof"
 )
 
@@ -21,6 +20,11 @@ const (
 
 	maxLoadFactor = 0.9
 )
+
+type Key interface {
+	comparable
+	Hash() uint64
+}
 
 var jumpDistances = [64]uint16{
 	0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
@@ -65,7 +69,7 @@ func (si slotIndex[K, V]) setJump(ji uint8) { si.setMeta(si.meta()&^maskDistance
 func (si slotIndex[K, V]) hasJump() bool    { return si.meta()&maskDistance != 0 }
 func (si slotIndex[K, V]) jump() uint8      { return si.meta() & maskDistance }
 
-type T[K comparable, V any] struct {
+type T[K Key, V any] struct {
 	_ [0]func() // no equality
 
 	slots []slot[K, V]
@@ -107,7 +111,7 @@ func (t *T[K, V]) next(si slotIndex[K, V], ji uint8) slotIndex[K, V] {
 }
 
 func (t *T[K, V]) index(k K) uint64 {
-	return (11400714819323198485 * hashany.Hash(k)) >> (t.shift % 64)
+	return (11400714819323198485 * k.Hash()) >> (t.shift % 64)
 }
 
 func (t *T[K, V]) Iterate(cb func(k K, v V) bool) bool {

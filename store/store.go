@@ -281,8 +281,9 @@ func (t *T) Observe(metric []byte, val float32) {
 	// those to not contend with each other. meh. maybe the index can
 	// periodically publish a read-only set of hash->id pairs?
 	t.imu.Lock()
+	defer t.imu.Unlock()
+
 	_, id, _, ok := ms.I.Add(metric, nil, t.cfg.CardFix)
-	t.imu.Unlock()
 
 	var h flathist.H
 	if ok {
@@ -298,13 +299,23 @@ func (t *T) WriteLevel(ts, dur uint32) (err error) {
 	t.wmu.Lock()
 	defer t.wmu.Unlock()
 
-	ms := t.ms.Load()
-	if ms == nil {
-		return errs.Errorf("memstore is nil (store closed or not initialized)")
+	ms, err := func() (*MemStore, error) {
+		t.imu.Lock()
+		defer t.imu.Unlock()
+
+		ms := t.ms.Load()
+		if ms == nil {
+			return nil, errs.Errorf("memstore is nil (store closed or not initialized)")
+		}
+		if !t.ms.CompareAndSwap(ms, new(MemStore)) {
+			return nil, errs.Errorf("impossible compare and swap failed")
+		}
+		return ms, nil
+	}()
+	if err != nil {
+		return err
 	}
-	if !t.ms.CompareAndSwap(ms, new(MemStore)) {
-		return errs.Errorf("impossible compare and swap failed")
-	}
+
 	ms.S.Finalize()
 
 	type idHash struct {
