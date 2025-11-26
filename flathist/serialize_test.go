@@ -17,10 +17,23 @@ func TestSerialize(t *testing.T) {
 
 		var s S
 		h := s.New()
-		for i := int64(0); i < 10000; i++ {
+		for range int64(10000) {
 			r := float32(rng.Uint32n(1000) + 500)
 			s.Observe(h, r)
 		}
+
+		var w rwutils.W
+		AppendTo(&s, h, &w)
+		data := w.Done().Prefix()
+		t.Logf("%d\n%s", len(data), hex.Dump(data))
+	})
+
+	t.Run("Write_SingleObs", func(t *testing.T) {
+		rng := mwc.Rand()
+
+		var s S
+		h := s.New()
+		s.Observe(h, float32(rng.Uint32n(1000)+500))
 
 		var w rwutils.W
 		AppendTo(&s, h, &w)
@@ -35,7 +48,7 @@ func TestSerialize(t *testing.T) {
 		h1 := s.New()
 		h2 := s.New()
 
-		for i := int64(0); i < 10000; i++ {
+		for range int64(10000) {
 			r := float32(rng.Uint32n(1000) + 500)
 			s.Observe(h1, r)
 		}
@@ -65,7 +78,7 @@ func BenchmarkSerialize(b *testing.B) {
 
 		var s S
 		h := s.New()
-		for i := int64(0); i < 100000; i++ {
+		for range int64(100000) {
 			s.Observe(h, rng.Float32())
 		}
 
@@ -79,7 +92,7 @@ func BenchmarkSerialize(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 
-		for range b.N {
+		for b.Loop() {
 			w.Init(w.Done().Reset())
 			AppendTo(&s, h, &w)
 		}
@@ -90,7 +103,7 @@ func BenchmarkSerialize(b *testing.B) {
 
 		var s S
 		h := s.New()
-		for i := int64(0); i < 100000; i++ {
+		for range int64(100000) {
 			s.Observe(h, rng.Float32())
 		}
 
@@ -104,7 +117,7 @@ func BenchmarkSerialize(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 
-		for range b.N {
+		for b.Loop() {
 			var r rwutils.R
 			r.Init(w.Done().Reset())
 

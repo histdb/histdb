@@ -10,7 +10,7 @@ import (
 )
 
 func TestBitmap64(t *testing.T) {
-	for i := uint(0); i < 64; i++ {
+	for i := range uint(64) {
 		var bm T64
 
 		assert.That(t, bm.Empty())
@@ -38,7 +38,7 @@ func TestBitmap64(t *testing.T) {
 }
 
 func TestBitmap32(t *testing.T) {
-	for i := uint(0); i < 32; i++ {
+	for i := range uint(32) {
 		var bm T32
 
 		assert.That(t, bm.Empty())
@@ -69,7 +69,7 @@ func BenchmarkBitmap64(b *testing.B) {
 	b.Run("Next", func(b *testing.B) {
 		var bm T64
 		idx := uint(0)
-		for range b.N {
+		for b.Loop() {
 			idx = bm.Lowest()
 			bm.ClearLowest()
 		}
@@ -78,7 +78,7 @@ func BenchmarkBitmap64(b *testing.B) {
 	})
 
 	b.Run("NextAll", func(b *testing.B) {
-		for range b.N {
+		for b.Loop() {
 			b := T64{math.MaxUint64}
 			for !b.Empty() {
 				b.ClearLowest()
@@ -91,7 +91,7 @@ func BenchmarkBitmap32(b *testing.B) {
 	b.Run("Next", func(b *testing.B) {
 		var bm T32
 		idx := uint(0)
-		for range b.N {
+		for b.Loop() {
 			idx = bm.Lowest()
 			bm.ClearLowest()
 		}
@@ -100,7 +100,7 @@ func BenchmarkBitmap32(b *testing.B) {
 	})
 
 	b.Run("NextAll", func(b *testing.B) {
-		for range b.N {
+		for b.Loop() {
 			b := T32{math.MaxUint32}
 			for !b.Empty() {
 				b.ClearLowest()

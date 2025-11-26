@@ -12,14 +12,14 @@ import (
 
 func TestTable(t *testing.T) {
 	var ta T[int, int]
-	for i := uint32(0); i < 100; i++ {
+	for i := range uint32(100) {
 		ta.Insert(getKey(i), getHash(i), getValue)
 		if v, ok := ta.Find(getKey(i), getHash(i)); !ok || v != 1 {
 			ta.Dump(os.Stderr)
 			t.Fatal(i)
 		}
 	}
-	for i := uint32(0); i < 100; i++ {
+	for i := range uint32(100) {
 		if v, ok := ta.Find(getKey(i), getHash(i)); !ok || v != 1 {
 			ta.Dump(os.Stderr)
 			t.Fatal(i)
@@ -34,9 +34,9 @@ func TestTable(t *testing.T) {
 }
 
 func TestTable_Iterator(t *testing.T) {
-	for i := 0; i < 1; i++ {
+	for range 1 {
 		var ta T[int, int]
-		for i := uint32(0); i < 100; i++ {
+		for i := range uint32(100) {
 			ta.Insert(getKey(i), getHash(i), getValue)
 		}
 
@@ -79,7 +79,7 @@ func TestTable_Iterator(t *testing.T) {
 			total += <-count
 		}
 
-		for i := uint32(0); i < 100; i++ {
+		for i := range uint32(100) {
 			if _, ok := got[getKey(i)]; !ok {
 				t.Fatal(total, len(got), i)
 			}
@@ -99,9 +99,9 @@ func BenchmarkLFHT(b *testing.B) {
 		rng := mwc.Rand()
 		b.ReportAllocs()
 
-		for range b.N {
+		for b.Loop() {
 			var t T[int, int]
-			for i := 0; i < kSize; i++ {
+			for range kSize {
 				n := rng.Uint32n(kSize)
 				t.Insert(getKey(n), getHash(n), getValue)
 			}
@@ -113,7 +113,7 @@ func BenchmarkLFHT(b *testing.B) {
 		var t T[int, int]
 		b.ReportAllocs()
 
-		for range b.N {
+		for b.Loop() {
 			n := rng.Uint32n(kSize)
 			t.Insert(getKey(n), getHash(n), getValue)
 		}
@@ -125,13 +125,13 @@ func BenchmarkLFHT(b *testing.B) {
 		var sink1 int
 		var sink2 bool
 
-		for i := uint32(0); i < kSize; i++ {
+		for i := range uint32(kSize) {
 			t.Insert(getKey(i), getHash(i), getValue)
 		}
 		b.ReportAllocs()
 		b.ResetTimer()
 
-		for range b.N {
+		for b.Loop() {
 			n := rng.Uint32n(kSize)
 			sink1, sink2 = t.Find(getKey(n), getHash(n))
 		}
@@ -159,15 +159,15 @@ func BenchmarkLFHT(b *testing.B) {
 		iters := kSize / procs
 		b.ReportAllocs()
 
-		for range b.N {
+		for b.Loop() {
 			var t T[int, int]
 			var wg sync.WaitGroup
 
-			for i := 0; i < procs; i++ {
+			for range procs {
 				wg.Add(1)
 				go func() {
 					rng := mwc.Rand()
-					for i := 0; i < iters; i++ {
+					for range iters {
 						n := rng.Uint32n(kSize)
 						t.Insert(getKey(n), getHash(n), getValue)
 					}
@@ -180,14 +180,14 @@ func BenchmarkLFHT(b *testing.B) {
 
 	b.Run("Iterate", func(b *testing.B) {
 		var t T[int, int]
-		for i := uint32(0); i < kSize; i++ {
+		for i := range uint32(kSize) {
 			t.Insert(getKey(i), getHash(i), getValue)
 		}
 		b.ReportAllocs()
 		b.ResetTimer()
 
 		iter := t.Iterator()
-		for range b.N {
+		for b.Loop() {
 			if !iter.Next() {
 				iter = t.Iterator()
 			}

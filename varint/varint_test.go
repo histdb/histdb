@@ -73,7 +73,7 @@ func TestVarint(t *testing.T) {
 				mask = 1<<64 - 1
 			}
 
-			for i := 0; i < 10; i++ {
+			for i := range 10 {
 				exp := rng.Uint64() & mask
 				buf := buffer.OfCap(make([]byte, 9))
 
@@ -99,7 +99,7 @@ func TestVarint(t *testing.T) {
 				mask = 1<<64 - 1
 			}
 
-			for i := 0; i < 10; i++ {
+			for i := range 10 {
 				exp := rng.Uint64() & mask
 				buf := buffer.OfCap(make([]byte, 9))
 
@@ -137,7 +137,7 @@ func BenchmarkVarint(b *testing.B) {
 				n := uint64(1<<i - 1)
 				buf := buffer.OfCap(make([]byte, 16))
 
-				for range b.N {
+				for b.Loop() {
 					buf = buf.Grow9()
 					Append(buf.Front9(), n)
 				}
@@ -162,7 +162,7 @@ func BenchmarkVarint(b *testing.B) {
 				nbytes := Append(buf.Front9(), n)
 				buf = buf.Advance(nbytes)
 
-				for range b.N {
+				for b.Loop() {
 					Consume(buf)
 				}
 			})
@@ -170,7 +170,7 @@ func BenchmarkVarint(b *testing.B) {
 
 		b.Run("Rand", func(b *testing.B) {
 			buf := randBuf.Reset()
-			for range b.N {
+			for b.Loop() {
 				if buf.Remaining() == 0 {
 					buf = buf.Reset()
 				}
@@ -188,7 +188,7 @@ func BenchmarkVarint(b *testing.B) {
 				buf = buf.Advance(nbytes)
 
 				var dec uint64
-				for range b.N {
+				for b.Loop() {
 					_, dec = FastConsume(buf.Front9())
 				}
 				runtime.KeepAlive(dec)
@@ -200,7 +200,7 @@ func BenchmarkVarint(b *testing.B) {
 			var dec uint64
 
 			buf := randBuf.Reset()
-			for range b.N {
+			for b.Loop() {
 				if buf.Remaining() < 9 {
 					buf = buf.Reset()
 				}

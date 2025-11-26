@@ -29,7 +29,7 @@ func BenchmarkBitmask(b *testing.B) {
 		perfbench.Open(b)
 
 		var count uint32
-		for range b.N {
+		for b.Loop() {
 			count += bitmask(a)
 		}
 		runtime.KeepAlive(count)
@@ -39,7 +39,7 @@ func BenchmarkBitmask(b *testing.B) {
 		perfbench.Open(b)
 
 		var count uint32
-		for range b.N {
+		for b.Loop() {
 			count += bitmaskFallback(a)
 		}
 		runtime.KeepAlive(count)

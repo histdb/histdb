@@ -23,9 +23,8 @@ func BenchmarkParse(b *testing.B) {
 	into := new(Q)
 
 	b.ReportAllocs()
-	b.ResetTimer()
 
-	for range b.N {
+	for b.Loop() {
 		_ = Parse(query, into)
 	}
 }

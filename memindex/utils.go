@@ -2,6 +2,7 @@ package memindex
 
 import (
 	"fmt"
+	"slices"
 	"sync"
 
 	"github.com/RoaringBitmap/roaring/v2"
@@ -78,10 +79,8 @@ func addSet[T comparable](l []T, s map[T]struct{}, v T) ([]T, map[T]struct{}, bo
 		return l, s, true
 	}
 
-	for _, u := range l {
-		if u == v {
-			return l, s, false
-		}
+	if slices.Contains(l, v) {
+		return l, s, false
 	}
 
 	l = append(l, v)

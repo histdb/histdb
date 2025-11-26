@@ -188,7 +188,7 @@ func BenchmarkMemindex(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 
-		for range b.N {
+		for b.Loop() {
 			_, ok := idx.GetIdByHash(hash)
 			assert.That(b, ok)
 		}
@@ -205,7 +205,7 @@ func BenchmarkMemindex(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 
-		for range b.N {
+		for b.Loop() {
 			_, ok = idx.AppendNameByHash(hash, buf[:0])
 			assert.That(b, ok)
 		}
@@ -215,7 +215,7 @@ func BenchmarkMemindex(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 
-		for range b.N {
+		for b.Loop() {
 			_, ok := idx.GetHashById(10)
 			assert.That(b, ok)
 		}
@@ -229,7 +229,7 @@ func BenchmarkMemindex(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 
-		for range b.N {
+		for b.Loop() {
 			_, ok := idx.AppendNameById(10, buf)
 			assert.That(b, ok)
 		}
@@ -243,7 +243,7 @@ func BenchmarkMemindex(b *testing.B) {
 		b.ResetTimer()
 		b.ReportAllocs()
 
-		for range b.N {
+		for b.Loop() {
 			idx.Add(buf, nil, nil)
 		}
 
@@ -260,7 +260,7 @@ func BenchmarkMemindex(b *testing.B) {
 		b.ResetTimer()
 		b.ReportAllocs()
 
-		for range b.N {
+		for b.Loop() {
 			var idx T
 			for _, m := range metrics {
 				idx.Add(m, nil, nil)
@@ -278,7 +278,7 @@ func BenchmarkMemindex(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 
-		for range b.N {
+		for b.Loop() {
 			w.Init(w.Done().Reset())
 			AppendTo(&idx, &w)
 		}
@@ -289,7 +289,7 @@ func BenchmarkMemindex(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 
-		for range b.N {
+		for b.Loop() {
 			var r rwutils.R
 			r.Init(buffer.OfLen(data))
 

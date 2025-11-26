@@ -75,7 +75,7 @@ func BenchmarkIterator(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 
-		for range b.N {
+		for b.Loop() {
 			key := testhelp.KeyFrom(mwc.Uint64(), 0, 0, 0)
 			it.Seek(key)
 		}

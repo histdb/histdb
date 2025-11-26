@@ -108,7 +108,7 @@ func ReadFrom(s *S, h H, r *rwutils.R) {
 					l1.l2[l2i] = l2a
 
 					l2l = s.getL2L(l2a)
-					for i := 0; i < l2Size; i++ {
+					for i := range l2Size {
 						l2l.cs[i] = uint64(l2s.cs[i])
 					}
 

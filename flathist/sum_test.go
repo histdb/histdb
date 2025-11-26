@@ -39,7 +39,7 @@ type testSumCase[T any] struct {
 func runTestSum[T any](t *testing.T, tc testSumCase[T]) {
 	{
 		l2 := tc.new()
-		for k := 0; k < l2Size; k++ {
+		for k := range l2Size {
 			tc.set(l2, k, 1)
 		}
 		assert.Equal(t, 64, int(tc.sum(l2)))
@@ -47,10 +47,10 @@ func runTestSum[T any](t *testing.T, tc testSumCase[T]) {
 
 	rng := mwc.Rand()
 
-	for i := 0; i < 1000; i++ {
+	for range 1000 {
 		l2 := tc.new()
 		var total uint64
-		for k := 0; k < l2Size; k++ {
+		for k := range l2Size {
 			v := rng.Uint64n(2 * l2GrowAt)
 			total += v
 			tc.set(l2, k, v)
@@ -63,15 +63,14 @@ func runBenchSum[T any](b *testing.B, tc testSumCase[T]) {
 	l2 := tc.new()
 	rng := mwc.Rand()
 
-	for k := 0; k < l2Size; k++ {
+	for k := range l2Size {
 		tc.set(l2, k, rng.Uint64n(2*l2GrowAt))
 	}
 
 	perfbench.Open(b)
 	b.ReportAllocs()
-	b.ResetTimer()
 
-	for range b.N {
+	for b.Loop() {
 		tc.sum(l2)
 	}
 }

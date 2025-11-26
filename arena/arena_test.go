@@ -18,7 +18,7 @@ func TestArena(t *testing.T) {
 	assert.Equal(t, *s.Get(p1), 5)
 	assert.Equal(t, *s.Get(p2), 6)
 
-	for i := 0; i < 70*lAlloc*lBatch; i++ {
+	for range 70 * lAlloc * lBatch {
 		*s.Get(s.New()) = 1
 	}
 

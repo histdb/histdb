@@ -50,7 +50,7 @@ func TestKeyWriterPage(t *testing.T) {
 
 	// check payload bytes
 	for i := 0; len(data) > 0; i++ {
-		for j := 0; j < kwEntrySize; j++ {
+		for j := range kwEntrySize {
 			assert.Equal(t, data[j], byte(i))
 		}
 		data = data[kwEntrySize:]
@@ -69,14 +69,14 @@ func BenchmarkKeyWriterAppend(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 
-		for range b.N {
+		for b.Loop() {
 			_, _ = fh.Seek(0, io.SeekStart)
 			fh.Truncate(0)
 
 			kw := new(keyWriter)
 			kw.Init(fh)
 
-			for j := 0; j < n; j++ {
+			for range n {
 				_ = kw.Append(kwEntry{})
 			}
 			_ = kw.Finish()

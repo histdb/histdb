@@ -67,10 +67,9 @@ func BenchmarkQuery(b *testing.B) {
 	err := Parse([]byte(`inst !* 12z & name='(*Dir).Commit' & field=successes`), q)
 	assert.NoError(b, err)
 
-	b.ResetTimer()
 	b.ReportAllocs()
 
-	for range b.N {
+	for b.Loop() {
 		_ = q.Eval(&idx)
 	}
 }

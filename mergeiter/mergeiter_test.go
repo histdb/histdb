@@ -38,7 +38,7 @@ func TestMergedIterator(t *testing.T) {
 	t.Run("Fuzz", func(t *testing.T) {
 		rng := mwc.Rand()
 
-		for c := 0; c < 100; c++ {
+		for range 100 {
 			var exp []byte
 			keys := "abcdefghijklmnopqrstuvwxyz"
 			fmis := make([]fakeMergableIter, 1+rng.Uint32n(32))
@@ -47,7 +47,7 @@ func TestMergedIterator(t *testing.T) {
 			}
 
 			for i := range keys {
-				for j := 0; j < len(fmis); j++ {
+				for j := range fmis {
 					if rng.Uint32n(2) == 0 {
 						fmis[j] = append(fmis[j], keys[i:i+1])
 						exp = append(exp, keys[i])
@@ -83,7 +83,7 @@ func BenchmarkMergedIterator(b *testing.B) {
 			b.ReportAllocs()
 			b.ResetTimer()
 
-			for range b.N {
+			for b.Loop() {
 				for j := range is {
 					*is[j] = fakeMergableIter(vs[j])
 					mis[j] = is[j]

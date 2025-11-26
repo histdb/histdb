@@ -144,7 +144,7 @@ func BenchmarkStore_Query(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 
-		for range b.N {
+		for b.Loop() {
 			calls := 0
 			st.QueryData(&qOne, 0, func(key histdb.Key, name []byte, st *flathist.S, h flathist.H) bool {
 				calls++
@@ -159,7 +159,7 @@ func BenchmarkStore_Query(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 
-		for range b.N {
+		for b.Loop() {
 			calls := 0
 			st.QueryData(&qAll, 0, func(key histdb.Key, name []byte, st *flathist.S, h flathist.H) bool {
 				calls++

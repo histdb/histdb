@@ -251,7 +251,7 @@ func partialInsertionSort(data T, a, b int) bool {
 		shortestShifting = 50 // don't shift any elements on short arrays
 	)
 	i := a + 1
-	for j := 0; j < maxSteps; j++ {
+	for range maxSteps {
 		for i < b && !data.Less(i, i-1) {
 			i++
 		}

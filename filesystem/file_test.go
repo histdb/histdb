@@ -41,14 +41,14 @@ func BenchmarkFileName(b *testing.B) {
 	b.Run("Name", func(b *testing.B) {
 		b.Run("Easy", func(b *testing.B) {
 			b.ReportAllocs()
-			for range b.N {
+			for b.Loop() {
 				_ = File{}.String()
 			}
 		})
 
 		b.Run("Hard", func(b *testing.B) {
 			b.ReportAllocs()
-			for range b.N {
+			for b.Loop() {
 				_ = File{
 					Low:  ^uint32(0),
 					High: ^uint32(0),
@@ -62,7 +62,7 @@ func BenchmarkFileName(b *testing.B) {
 		b.Run("Easy", func(b *testing.B) {
 			name := File{}.String()
 			b.ReportAllocs()
-			for range b.N {
+			for b.Loop() {
 				_, _ = ParseFile(name)
 			}
 		})
@@ -74,7 +74,7 @@ func BenchmarkFileName(b *testing.B) {
 				Kind: 3,
 			}.String()
 			b.ReportAllocs()
-			for range b.N {
+			for b.Loop() {
 				_, _ = ParseFile(name)
 			}
 		})

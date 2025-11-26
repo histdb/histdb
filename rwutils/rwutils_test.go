@@ -23,7 +23,7 @@ func testRoundTrip[T any](
 	)
 
 	w.Init(buffer.T{})
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		v := gen(rng)
 		write(&w, v)
 		vs = append(vs, v)

@@ -111,7 +111,7 @@ func (s *S) Finalize() {
 	defer s.mu.Unlock()
 
 	for _, gf := range s.growing {
-		for i := 0; i < l2Size; i++ {
+		for i := range l2Size {
 			if d := gf.l2so.cs[i] - gf.l2sc.cs[i]; d > 0 {
 				gf.l2l.cs[i] += uint64(d)
 			}
@@ -174,7 +174,7 @@ func Merge(s *S, g H, t *S, h H) {
 				gl2s = s.getL2S(gl2a)
 			}
 
-			for k := 0; k < l2Size; k++ {
+			for k := range l2Size {
 				var hv uint64
 				if hl2l != nil {
 					hv = hl2l.cs[k]
@@ -194,7 +194,7 @@ func Merge(s *S, g H, t *S, h H) {
 					gl1.l2[l2idx] = gl2a
 
 					gl2l = s.getL2L(gl2a)
-					for i := 0; i < l2Size; i++ {
+					for i := range l2Size {
 						gl2l.cs[i] = uint64(gl2s.cs[i])
 					}
 					gl2l.cs[k] += hv
@@ -263,7 +263,7 @@ func (s *S) growLayer2(l2so *layer2Small, l2a uint32, l2aSlot *uint32) {
 	l2l := s.getL2L(l2la.Raw())
 	l2sc := new(layer2Small)
 
-	for i := 0; i < l2Size; i++ {
+	for i := range l2Size {
 		v := atomic.LoadUint32(&l2so.cs[i])
 		l2l.cs[i] = uint64(v)
 		l2sc.cs[i] = v
@@ -301,14 +301,14 @@ func (s *S) Min(h H) float32 {
 
 	if isAddrLarge(l2a) {
 		l2l := s.getL2L(l2a)
-		for k := 0; k < l2Size; k++ {
+		for k := range l2Size {
 			if atomic.LoadUint64(&l2l.cs[k]) > 0 {
 				return lowerValue(i, j, uint32(k))
 			}
 		}
 	} else {
 		l2s := s.getL2S(l2a)
-		for k := 0; k < l2Size; k++ {
+		for k := range l2Size {
 			if atomic.LoadUint32(&l2s.cs[k]) > 0 {
 				return lowerValue(i, j, uint32(k))
 			}
@@ -435,7 +435,7 @@ func (s *S) Quantile(h H, q float64) (v float32) {
 
 			if isAddrLarge(l2a) {
 				l2l := s.getL2L(l2a)
-				for k := uint32(0); k < l2Size; k++ {
+				for k := range uint32(l2Size) {
 					acc += atomic.LoadUint64(&l2l.cs[k])
 					if acc > target {
 						return lowerValue(i, j, k)
@@ -443,7 +443,7 @@ func (s *S) Quantile(h H, q float64) (v float32) {
 				}
 			} else {
 				l2s := s.getL2S(l2a)
-				for k := uint32(0); k < l2Size; k++ {
+				for k := range uint32(l2Size) {
 					acc += uint64(atomic.LoadUint32(&l2s.cs[k]))
 					if acc > target {
 						return lowerValue(i, j, k)
@@ -493,13 +493,13 @@ func (s *S) CDF(h H, v float32) float64 {
 			} else if target == obsTarget {
 				if isAddrLarge(l2a) {
 					l2l := s.getL2L(l2a)
-					for k := uint32(0); k < obsCounters; k++ {
+					for k := range obsCounters {
 						sum += atomic.LoadUint64(&l2l.cs[k])
 					}
 					sum += atomic.LoadUint64(&l2l.cs[obsCounters]) / 2
 				} else {
 					l2s := s.getL2S(l2a)
-					for k := uint32(0); k < obsCounters; k++ {
+					for k := range obsCounters {
 						sum += uint64(atomic.LoadUint32(&l2s.cs[k]))
 					}
 					sum += uint64(atomic.LoadUint32(&l2s.cs[obsCounters])) / 2
@@ -529,7 +529,7 @@ func (s *S) Summary(h H) (total, sum, avg, vari float64) {
 
 			if isAddrLarge(l2a) {
 				l2l := s.getL2L(l2a)
-				for k := uint32(0); k < l2Size; k++ {
+				for k := range uint32(l2Size) {
 					count := float64(atomic.LoadUint64(&l2l.cs[k]))
 					if count == 0 {
 						continue
@@ -545,7 +545,7 @@ func (s *S) Summary(h H) (total, sum, avg, vari float64) {
 				}
 			} else {
 				l2s := s.getL2S(l2a)
-				for k := uint32(0); k < l2Size; k++ {
+				for k := range uint32(l2Size) {
 					count := float64(atomic.LoadUint32(&l2s.cs[k]))
 					if count == 0 {
 						continue
@@ -595,7 +595,7 @@ func (s *S) Distribution(h H, cb func(value float32, count, total uint64)) {
 
 			if isAddrLarge(l2a) {
 				l2l := s.getL2L(l2a)
-				for k := uint32(0); k < l2Size; k++ {
+				for k := range uint32(l2Size) {
 					count := atomic.LoadUint64(&l2l.cs[k])
 					if count == 0 {
 						continue
@@ -604,17 +604,14 @@ func (s *S) Distribution(h H, cb func(value float32, count, total uint64)) {
 
 					acc += count
 					if acc > total {
-						total = s.Total(h)
-						if acc > total {
-							total = acc
-						}
+						total = max(acc, s.Total(h))
 					}
 
 					cb(value, acc, total)
 				}
 			} else {
 				l2s := s.getL2S(l2a)
-				for k := uint32(0); k < l2Size; k++ {
+				for k := range uint32(l2Size) {
 					count := uint64(atomic.LoadUint32(&l2s.cs[k]))
 					if count == 0 {
 						continue
@@ -623,10 +620,7 @@ func (s *S) Distribution(h H, cb func(value float32, count, total uint64)) {
 
 					acc += count
 					if acc > total {
-						total = s.Total(h)
-						if acc > total {
-							total = acc
-						}
+						total = max(acc, s.Total(h))
 					}
 
 					cb(value, acc, total)

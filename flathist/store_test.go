@@ -194,7 +194,7 @@ func BenchmarkHistogram(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 
-		for range b.N {
+		for b.Loop() {
 			s.Observe(h, 1)
 		}
 	})
@@ -221,7 +221,7 @@ func BenchmarkHistogram(b *testing.B) {
 		var s S
 		h := s.New()
 
-		for i := 0; i < 1000000; i++ {
+		for range 1000000 {
 			s.Observe(h, math.Float32frombits(rng.Uint32()&^((1<<10-1)<<22)))
 		}
 
@@ -229,7 +229,7 @@ func BenchmarkHistogram(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 
-		for range b.N {
+		for b.Loop() {
 			s.Min(h)
 		}
 	})
@@ -240,7 +240,7 @@ func BenchmarkHistogram(b *testing.B) {
 		var s S
 		h := s.New()
 
-		for i := 0; i < 1000000; i++ {
+		for range 1000000 {
 			s.Observe(h, math.Float32frombits(rng.Uint32()&^((1<<10-1)<<22)))
 		}
 
@@ -248,7 +248,7 @@ func BenchmarkHistogram(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 
-		for range b.N {
+		for b.Loop() {
 			s.Max(h)
 		}
 	})
@@ -259,7 +259,7 @@ func BenchmarkHistogram(b *testing.B) {
 		var s S
 		h := s.New()
 
-		for i := 0; i < 1000000; i++ {
+		for range 1000000 {
 			s.Observe(h, rng.Float32())
 		}
 
@@ -267,7 +267,7 @@ func BenchmarkHistogram(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 
-		for range b.N {
+		for b.Loop() {
 			s.Total(h)
 		}
 	})
@@ -278,7 +278,7 @@ func BenchmarkHistogram(b *testing.B) {
 		var s S
 		h := s.New()
 
-		for i := 0; i < 1000000; i++ {
+		for range 1000000 {
 			s.Observe(h, math.Float32frombits(rng.Uint32()&^((1<<10-1)<<22)))
 		}
 		assert.Equal(b, s.Total(h), 1000000)
@@ -287,7 +287,7 @@ func BenchmarkHistogram(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 
-		for range b.N {
+		for b.Loop() {
 			s.Total(h)
 		}
 	})
@@ -298,7 +298,7 @@ func BenchmarkHistogram(b *testing.B) {
 		var s S
 		h := s.New()
 
-		for i := 0; i < 1000000; i++ {
+		for range 1000000 {
 			s.Observe(h, rng.Float32())
 		}
 		assert.Equal(b, s.Total(h), 1000000)
@@ -307,7 +307,7 @@ func BenchmarkHistogram(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 
-		for range b.N {
+		for b.Loop() {
 			s.Quantile(h, .95)
 		}
 	})
@@ -318,7 +318,7 @@ func BenchmarkHistogram(b *testing.B) {
 		var s S
 		h := s.New()
 
-		for i := 0; i < 1000000; i++ {
+		for range 1000000 {
 			s.Observe(h, math.Float32frombits(rng.Uint32()&^((1<<10-1)<<22)))
 		}
 		assert.Equal(b, s.Total(h), 1000000)
@@ -327,7 +327,7 @@ func BenchmarkHistogram(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 
-		for range b.N {
+		for b.Loop() {
 			s.Quantile(h, rng.Float64())
 		}
 	})
@@ -338,7 +338,7 @@ func BenchmarkHistogram(b *testing.B) {
 		var s S
 		h := s.New()
 
-		for i := 0; i < 1000000; i++ {
+		for range 1000000 {
 			s.Observe(h, rng.Float32())
 		}
 		assert.Equal(b, s.Total(h), 1000000)
@@ -347,7 +347,7 @@ func BenchmarkHistogram(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 
-		for range b.N {
+		for b.Loop() {
 			s.CDF(h, rng.Float32())
 		}
 	})
@@ -358,7 +358,7 @@ func BenchmarkHistogram(b *testing.B) {
 		var s S
 		h := s.New()
 
-		for i := 0; i < 1000000; i++ {
+		for range 1000000 {
 			s.Observe(h, math.Float32frombits(rng.Uint32()&^((1<<10-1)<<22)))
 		}
 		assert.Equal(b, s.Total(h), 1000000)
@@ -367,7 +367,7 @@ func BenchmarkHistogram(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 
-		for range b.N {
+		for b.Loop() {
 			s.CDF(h, rng.Float32())
 		}
 	})
@@ -378,7 +378,7 @@ func BenchmarkHistogram(b *testing.B) {
 		var s S
 		h := s.New()
 
-		for i := 0; i < 1000; i++ {
+		for range 1000 {
 			s.Observe(h, rng.Float32())
 		}
 		assert.Equal(b, s.Total(h), 1000)
@@ -387,7 +387,7 @@ func BenchmarkHistogram(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 
-		for range b.N {
+		for b.Loop() {
 			_, _, _, _ = s.Summary(h)
 		}
 	})

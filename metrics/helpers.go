@@ -1,5 +1,7 @@
 package metrics
 
+import "slices"
+
 func addSet[T comparable](l []T, s map[T]struct{}, v T) ([]T, map[T]struct{}, bool) {
 	if s != nil {
 		if _, ok := s[v]; ok {
@@ -10,10 +12,8 @@ func addSet[T comparable](l []T, s map[T]struct{}, v T) ([]T, map[T]struct{}, bo
 		return l, s, true
 	}
 
-	for _, u := range l {
-		if u == v {
-			return l, s, false
-		}
+	if slices.Contains(l, v) {
+		return l, s, false
 	}
 
 	l = append(l, v)

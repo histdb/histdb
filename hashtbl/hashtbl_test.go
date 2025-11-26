@@ -20,27 +20,27 @@ func TestTable(t *testing.T) {
 	assert.That(t, !ok)
 
 	rng := mwc.New(1, 1)
-	for i := 0; i < iters; i++ {
+	for i := range int(iters) {
 		_, ok := tb.Insert(num.U64(rng.Uint64()), num.U32(i))
 		assert.That(t, ok)
 	}
 
 	rng = mwc.New(1, 1)
-	for i := 0; i < iters; i++ {
+	for i := range int(iters) {
 		n, ok := tb.Find(num.U64(rng.Uint64()))
 		assert.That(t, ok)
 		assert.Equal(t, i, n)
 	}
 
 	rng = mwc.New(1, 1)
-	for i := 0; i < iters; i++ {
+	for i := range int(iters) {
 		n, ok := tb.Insert(num.U64(rng.Uint64()), num.U32(i+1))
 		assert.That(t, !ok)
 		assert.Equal(t, i, n)
 	}
 
 	rng = mwc.New(1, 1)
-	for i := 0; i < iters; i++ {
+	for i := range int(iters) {
 		n, ok := tb.Find(num.U64(rng.Uint64()))
 		assert.That(t, ok)
 		assert.Equal(t, i, n)
@@ -50,7 +50,7 @@ func TestTable(t *testing.T) {
 func TestTableIterate(t *testing.T) {
 	var tb T[num.U64, num.U32]
 	exp := make(map[num.U64]num.U32)
-	for i := uint64(0); i < 1000; i++ {
+	for i := range uint64(1000) {
 		_, ok := tb.Insert(num.U64(i), num.U32(i))
 		exp[num.U64(i)] = num.U32(i)
 		assert.That(t, ok)
@@ -68,7 +68,7 @@ func TestTableIterate(t *testing.T) {
 func TestTableSerialize(t *testing.T) {
 	var tb T[num.U64, num.U32]
 
-	for i := uint64(0); i < 1000; i++ {
+	for i := range uint64(1000) {
 		val, ok := tb.Insert(num.U64(i), num.U32(i))
 		assert.That(t, ok)
 		assert.Equal(t, val, i)
@@ -92,7 +92,7 @@ func TestTableSerialize(t *testing.T) {
 
 	assert.Equal(t, tb, tb2)
 
-	for i := uint64(0); i < 1000; i++ {
+	for i := range uint64(1000) {
 		val, ok := tb2.Insert(num.U64(i), ^num.U32(0))
 		assert.That(t, !ok)
 		assert.Equal(t, val, i)
@@ -108,9 +108,9 @@ func BenchmarkTable(b *testing.B) {
 		b.ResetTimer()
 
 		var tb T[num.U64, num.U32]
-		for range b.N {
+		for b.Loop() {
 			tb = T[num.U64, num.U32]{}
-			for j := 0; j < n; j++ {
+			for range n {
 				tb.Insert(num.U64(rng.Uint64()), num.U32(0))
 			}
 		}
@@ -137,10 +137,10 @@ func BenchmarkStdlib(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 
-		for range b.N {
+		for b.Loop() {
 			tb := make(map[num.U64]uint32)
 
-			for j := 0; j < n; j++ {
+			for j := range n {
 				tb[num.U64(rng.Uint64())] = uint32(j)
 			}
 		}
@@ -161,7 +161,7 @@ func BenchmarkStdlib(b *testing.B) {
 func BenchmarkTableSerialize(b *testing.B) {
 	mk := func(n int) *T[num.U64, num.U32] {
 		var tb T[num.U64, num.U32]
-		for i := 0; i < n; i++ {
+		for i := range n {
 			tb.Insert(num.U64(i), num.U32(i))
 		}
 		return &tb
@@ -180,7 +180,7 @@ func BenchmarkTableSerialize(b *testing.B) {
 			b.ReportAllocs()
 			b.ResetTimer()
 
-			for range b.N {
+			for b.Loop() {
 				w.Init(w.Done())
 				AppendTo(tb, &w)
 			}
@@ -210,7 +210,7 @@ func BenchmarkTableSerialize(b *testing.B) {
 			b.ReportAllocs()
 			b.ResetTimer()
 
-			for range b.N {
+			for b.Loop() {
 				r.Init(w.Done().Reset())
 				ReadFrom(tb, &r)
 			}

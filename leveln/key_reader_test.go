@@ -22,7 +22,7 @@ func TestKeyReader(t *testing.T) {
 	var kw keyWriter
 	kw.Init(fh)
 
-	for i := 0; i < count; i++ {
+	for i := range int(count) {
 		var key histdb.Key
 		key.SetTimestamp(uint32(i*2 + 1))
 		var ent kwEntry
@@ -43,7 +43,7 @@ func TestKeyReader(t *testing.T) {
 		}
 	}
 
-	for i := 0; i < count; i++ {
+	for i := range int(count) {
 		var key histdb.Key
 		key.SetTimestamp(uint32(i*2 + 1))
 		check(i, key)(kr.Search(key))
@@ -70,7 +70,7 @@ func BenchmarkKeyReader(b *testing.B) {
 		var kw keyWriter
 		kw.Init(fh)
 
-		for i := uint64(0); i < n; i++ {
+		for i := range n {
 			var ent kwEntry
 			ent.Set(testhelp.KeyFrom(i, 0, 0, 0), uint32(i), uint8(i))
 			kw.Append(ent)
@@ -83,7 +83,7 @@ func BenchmarkKeyReader(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 
-		for range b.N {
+		for b.Loop() {
 			key := testhelp.KeyFrom(rng.Uint64n(n), 0, 0, 0)
 			_, _, _ = kr.Search(key)
 		}
