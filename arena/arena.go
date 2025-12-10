@@ -10,8 +10,6 @@ import (
 const (
 	lBatch = 1024
 	lAlloc = 8
-
-	ptrSize = unsafe.Sizeof(unsafe.Pointer(nil))
 )
 
 type T[V any] struct {
@@ -47,13 +45,11 @@ func Raw[V any](v uint32) P[V] { return P[V]{v: v} }
 func (p P[V]) Raw() uint32     { return p.v }
 
 func (l *T[V]) Get(p P[V]) *V {
-	b := unsafe.Add(unsafe.Pointer(l.s.Load()), uintptr(p.v/lBatch)*ptrSize)
-	return &(*(**[lBatch]V)(b))[p.v%lBatch]
+	return &unsafe.Slice(l.s.Load(), l.t.Load()/lBatch)[p.v/lBatch][p.v%lBatch]
 }
 
 func (l *T[V]) New() (p P[V]) {
-	p.v = l.p.Add(1)
-	if p.v >= l.t.Load() {
+	if p.v = l.p.Add(1); p.v >= l.t.Load() {
 		l.realloc(p.v)
 	}
 	return
@@ -71,14 +67,14 @@ func (l *T[V]) realloc(v uint32) {
 		// first time through we initally alloc lAlloc
 		case t == 0:
 			arr = make([]*[lBatch]V, lAlloc)
-			l.s.Store(&arr[0])
+			l.s.Store(unsafe.SliceData(arr))
 
 		// we need to reallocate if we're at at least lBatch*lAlloc and we've
 		// just hit a new power of 2
 		case t >= lBatch*lAlloc && bits.OnesCount32(t) == 1:
 			arr = make([]*[lBatch]V, t/(lBatch/2))
 			copy(arr, unsafe.Slice(l.s.Load(), t/lBatch))
-			l.s.Store(&arr[0])
+			l.s.Store(unsafe.SliceData(arr))
 
 		// otherwise, load arr so we can allocate a new batch
 		default:

@@ -5,6 +5,7 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"github.com/histdb/histdb/arena"
 	"github.com/histdb/histdb/bitmap"
 	"github.com/histdb/histdb/sizeof"
 )
@@ -13,14 +14,21 @@ import (
 type S struct {
 	_ [0]func() // no equality
 
-	sl      storeLayers
+	l0  arena.T[layer0]
+	l1  arena.T[layer1]
+	l2s arena.T[layer2Small]
+	l2l arena.T[layer2Large]
+
 	mu      sync.Mutex
 	growing []growFinalize
 }
 
 func (s *S) Size() uint64 {
 	return 0 +
-		/* sl      */ s.sl.Size() +
+		/* l0      */ s.l0.Size() +
+		/* l1      */ s.l1.Size() +
+		/* l2s     */ s.l2s.Size() +
+		/* l2l     */ s.l2l.Size() +
 		/* mu      */ 8 +
 		/* growing */ sizeof.Slice(s.growing) +
 		0
@@ -34,26 +42,15 @@ type Stats struct {
 	L2L  uint32
 }
 
-func (s *S) Count() uint32 {
-	if s.sl == nil {
-		s.sl = newDefaultStoreLayers()
-	}
-
-	return s.sl.Allocated()[0]
-}
+func (s *S) Count() uint32 { return s.l0.Allocated() }
 
 func (s *S) Stats() Stats {
-	if s.sl == nil {
-		s.sl = newDefaultStoreLayers()
-	}
-
-	a := s.sl.Allocated()
 	return Stats{
 		Size: s.Size(),
-		L0:   a[0],
-		L1:   a[1],
-		L2S:  a[2],
-		L2L:  a[3],
+		L0:   s.l0.Allocated(),
+		L1:   s.l1.Allocated(),
+		L2S:  s.l2s.Allocated(),
+		L2L:  s.l2l.Allocated(),
 	}
 }
 
@@ -65,32 +62,23 @@ type growFinalize struct {
 
 // H is a handle to a histogram.
 type H struct {
-	v pointer[layer0]
+	v arena.P[layer0]
 }
 
 // UnsafeRawH lets one construct a handle for any store from a raw pointer
 // value. It is obviously very unsafe and should only be used when you know
 // what's up.
-func UnsafeRawH(x uint32) H { return H{v: raw[layer0](x)} }
+func UnsafeRawH(x uint32) H { return H{v: arena.Raw[layer0](x)} }
 
 // Raw returns the raw value for the handle so that it can be reconstructed from
 // UnsafeRawH.
 func (h H) Raw() uint32 { return h.v.Raw() }
 
 // New allocates a new histogram and returns a handle.
-func (s *S) New() H {
-	if s.sl == nil {
-		s.sl = newDefaultStoreLayers()
-	}
-	return H{v: s.sl.New0()}
-}
+func (s *S) New() H { return H{v: s.l0.New()} }
 
 // Iterate calls the callback with every allocated handle.
 func (s *S) Iterate(cb func(h H) bool) {
-	if s.sl == nil {
-		s.sl = newDefaultStoreLayers()
-	}
-
 	for i := range s.Count() {
 		if !cb(UnsafeRawH(i + 1)) {
 			return
@@ -99,19 +87,19 @@ func (s *S) Iterate(cb func(h H) bool) {
 }
 
 func (s *S) getL0(h H) *layer0 {
-	return s.sl.Get0(h.v)
+	return s.l0.Get(h.v)
 }
 
 func (s *S) getL1(v uint32) *layer1 {
-	return s.sl.Get1(raw[layer1](v & lAddrMask))
+	return s.l1.Get(arena.Raw[layer1](v & lAddrMask))
 }
 
 func (s *S) getL2S(v uint32) *layer2Small {
-	return s.sl.Get2S(raw[layer2Small](v & lAddrMask))
+	return s.l2s.Get(arena.Raw[layer2Small](v & lAddrMask))
 }
 
 func (s *S) getL2L(v uint32) *layer2Large {
-	return s.sl.Get2L(raw[layer2Large](v & lAddrMask))
+	return s.l2l.Get(arena.Raw[layer2Large](v & lAddrMask))
 }
 
 // Finalize updates all of the histograms that were growing and perhaps missed
@@ -119,10 +107,6 @@ func (s *S) getL2L(v uint32) *layer2Large {
 //
 // It is not safe to call concurrently with Observe.
 func (s *S) Finalize() {
-	if s.sl == nil {
-		s.sl = newDefaultStoreLayers()
-	}
-
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -136,29 +120,22 @@ func (s *S) Finalize() {
 	s.growing = nil
 }
 
-// Merge copies the data from `from` into `into`. It is not safe to call with Observe on either
-// `into` or `from`.
-func Merge(s *S, into H, t *S, from H) {
-	// TODO: maybe have an optimization in the arena for a small number of allocations like maybe a
-	// static buffer of some small size that it uses first, but it would suck to have to special
-	// case every Get call, so think more!
-
-	if s.sl == nil {
-		s.sl = newDefaultStoreLayers()
-	}
-	if t.sl == nil {
-		t.sl = newDefaultStoreLayers()
-	}
-
-	gl0 := s.sl.Get0(into.v)
-	hl0 := t.sl.Get0(from.v)
+// Merge copies the data from h into g. It is not safe to call with Observe on
+// either g or h.
+//
+// TODO: maybe have an optimization in the arena for a small number of
+// allocations like maybe a static buffer of some small size that it uses first,
+// but it would suck to have to special case every Get call, so think more!
+func Merge(s *S, g H, t *S, h H) {
+	gl0 := s.l0.Get(g.v)
+	hl0 := t.l0.Get(h.v)
 
 	for bm := bitmap.New32(bitmask(&hl0.l1)); !bm.Empty(); bm.ClearLowest() {
 		l1idx := bm.Lowest()
 
 		gl1a := gl0.l1[l1idx]
 		if gl1a == 0 {
-			gl1a = s.sl.New1().Raw() | (l2TagSmall << 29)
+			gl1a = s.l1.New().Raw() | (l2TagSmall << 29)
 			gl0.l1[l1idx] = gl1a
 		}
 
@@ -173,10 +150,10 @@ func Merge(s *S, into H, t *S, from H) {
 			gl2a := gl1.l2[l2idx]
 			if gl2a == 0 {
 				if isAddrLarge(hl2a) {
-					gl2a = s.sl.New2L().Raw() | (l2TagLarge << 29)
+					gl2a = s.l2l.New().Raw() | (l2TagLarge << 29)
 					gl1.l2[l2idx] = gl2a
 				} else {
-					gl2a = s.sl.New2S().Raw() | (l2TagSmall << 29)
+					gl2a = s.l2s.New().Raw() | (l2TagSmall << 29)
 					gl1.l2[l2idx] = gl2a
 				}
 			}
@@ -213,7 +190,7 @@ func Merge(s *S, into H, t *S, from H) {
 				gv := uint64(gl2s.cs[k])
 
 				if hv > l2GrowAt || hv+gv > l2GrowAt {
-					gl2a = s.sl.New2L().Raw() | (l2TagLarge << 29)
+					gl2a = s.l2l.New().Raw() | (l2TagLarge << 29)
 					gl1.l2[l2idx] = gl2a
 
 					gl2l = s.getL2L(gl2a)
@@ -236,11 +213,8 @@ func (s *S) Observe(h H, v float32) {
 	if v != v || v > math.MaxFloat32 || v < -math.MaxFloat32 {
 		return
 	}
-	if s.sl == nil {
-		s.sl = newDefaultStoreLayers()
-	}
 
-	l0 := s.sl.Get0(h.v)
+	l0 := s.l0.Get(h.v)
 
 	bits := math.Float32bits(v)
 	bits ^= uint32(int32(bits)>>31) | (1 << 31)
@@ -251,7 +225,7 @@ func (s *S) Observe(h H, v float32) {
 
 	l1a := atomic.LoadUint32(&l0.l1[l0i])
 	if l1a == 0 {
-		l1a = s.sl.New1().Raw() | (l2TagSmall << 29)
+		l1a = s.l1.New().Raw() | (l2TagSmall << 29)
 		if !atomic.CompareAndSwapUint32(&l0.l1[l0i], 0, l1a) {
 			l1a = atomic.LoadUint32(&l0.l1[l0i])
 		}
@@ -260,7 +234,7 @@ func (s *S) Observe(h H, v float32) {
 
 	l2a := atomic.LoadUint32(&l1.l2[l1i])
 	if l2a == 0 {
-		l2a = s.sl.New2S().Raw() | (l2TagSmall << 29)
+		l2a = s.l2s.New().Raw() | (l2TagSmall << 29)
 		if !atomic.CompareAndSwapUint32(&l1.l2[l1i], 0, l2a) {
 			l2a = atomic.LoadUint32(&l1.l2[l1i])
 		}
@@ -285,7 +259,7 @@ func (s *S) Observe(h H, v float32) {
 }
 
 func (s *S) growLayer2(l2so *layer2Small, l2a uint32, l2aSlot *uint32) {
-	l2la := s.sl.New2L()
+	l2la := s.l2l.New()
 	l2l := s.getL2L(l2la.Raw())
 	l2sc := new(layer2Small)
 
@@ -310,10 +284,7 @@ func (s *S) growLayer2(l2so *layer2Small, l2a uint32, l2aSlot *uint32) {
 //
 // It is safe to be called concurrently with Observe.
 func (s *S) Min(h H) float32 {
-	if s.sl == nil {
-		s.sl = newDefaultStoreLayers()
-	}
-	l0 := s.sl.Get0(h.v)
+	l0 := s.l0.Get(h.v)
 
 	i := uint32(bitmap.New32(bitmask(&l0.l1)).Lowest())
 	l1a := atomic.LoadUint32(&l0.l1[i])
@@ -351,11 +322,7 @@ func (s *S) Min(h H) float32 {
 //
 // It is safe to be called concurrently with Observe.
 func (s *S) Max(h H) float32 {
-	if s.sl == nil {
-		s.sl = newDefaultStoreLayers()
-	}
-
-	l0 := s.sl.Get0(h.v)
+	l0 := s.l0.Get(h.v)
 
 	i := uint32(bitmap.New32(bitmask(&l0.l1)).Highest())
 	l1a := atomic.LoadUint32(&l0.l1[i])
@@ -393,11 +360,7 @@ func (s *S) Max(h H) float32 {
 //
 // It is NOT safe to be called concurrently with any other method.
 func (s *S) Reset(h H) {
-	if s.sl == nil {
-		s.sl = newDefaultStoreLayers()
-	}
-
-	l0 := s.sl.Get0(h.v)
+	l0 := s.l0.Get(h.v)
 	for bm := bitmap.New32(bitmask(&l0.l1)); !bm.Empty(); bm.ClearLowest() {
 		l1 := s.getL1(l0.l1[bm.Lowest()])
 
@@ -423,11 +386,7 @@ func (s *S) Reset(h H) {
 //
 // It is safe to be called concurrently with Observe.
 func (s *S) Total(h H) (total uint64) {
-	if s.sl == nil {
-		s.sl = newDefaultStoreLayers()
-	}
-
-	l0 := s.sl.Get0(h.v)
+	l0 := s.l0.Get(h.v)
 	for bm := bitmap.New32(bitmask(&l0.l1)); !bm.Empty(); bm.ClearLowest() {
 		l1 := s.getL1(atomic.LoadUint32(&l0.l1[bm.Lowest()]))
 
@@ -450,13 +409,9 @@ func (s *S) Total(h H) (total uint64) {
 //
 // It is safe to be called concurrently with Observe.
 func (s *S) Quantile(h H, q float64) (v float32) {
-	if s.sl == nil {
-		s.sl = newDefaultStoreLayers()
-	}
-
 	target, acc := uint64(q*float64(s.Total(h))+0.5), uint64(0)
 
-	l0 := s.sl.Get0(h.v) // TODO: total did this. hmm.
+	l0 := s.l0.Get(h.v) // TODO: total did this. hmm.
 
 	for bm := bitmap.New32(bitmask(&l0.l1)); !bm.Empty(); bm.ClearLowest() {
 		i := uint32(bm.Lowest())
@@ -506,10 +461,6 @@ func (s *S) Quantile(h H, q float64) (v float32) {
 //
 // It is safe to be called concurrently with Observe.
 func (s *S) CDF(h H, v float32) float64 {
-	if s.sl == nil {
-		s.sl = newDefaultStoreLayers()
-	}
-
 	obs := math.Float32bits(v)
 	obs ^= uint32(int32(obs)>>31) | (1 << 31)
 
@@ -518,7 +469,7 @@ func (s *S) CDF(h H, v float32) float64 {
 
 	var sum, total uint64
 
-	l0 := s.sl.Get0(h.v)
+	l0 := s.l0.Get(h.v)
 	for bm := bitmap.New32(bitmask(&l0.l1)); !bm.Empty(); bm.ClearLowest() {
 		i := uint32(bm.Lowest())
 		l1 := s.getL1(atomic.LoadUint32(&l0.l1[i]))
@@ -565,13 +516,9 @@ func (s *S) CDF(h H, v float32) float64 {
 //
 // It is safe to be called concurrently with Observe.
 func (s *S) Summary(h H) (total, sum, avg, vari float64) {
-	if s.sl == nil {
-		s.sl = newDefaultStoreLayers()
-	}
-
 	var total2 float64
 
-	l0 := s.sl.Get0(h.v)
+	l0 := s.l0.Get(h.v)
 	for bm := bitmap.New32(bitmask(&l0.l1)); !bm.Empty(); bm.ClearLowest() {
 		i := uint32(bm.Lowest())
 		l1 := s.getL1(atomic.LoadUint32(&l0.l1[i]))
@@ -635,13 +582,9 @@ func (s *S) Summary(h H) (total, sum, avg, vari float64) {
 //
 // It is safe to be called concurrently with Observe.
 func (s *S) Distribution(h H, cb func(value float32, count, total uint64)) {
-	if s.sl == nil {
-		s.sl = newDefaultStoreLayers()
-	}
-
 	acc, total := uint64(0), s.Total(h)
 
-	l0 := s.sl.Get0(h.v)
+	l0 := s.l0.Get(h.v)
 	for bm := bitmap.New32(bitmask(&l0.l1)); !bm.Empty(); bm.ClearLowest() {
 		i := uint32(bm.Lowest())
 		l1 := s.getL1(atomic.LoadUint32(&l0.l1[i]))

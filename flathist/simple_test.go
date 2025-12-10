@@ -12,7 +12,7 @@ import (
 
 func TestSimple(t *testing.T) {
 	t.Run("MinMax", func(t *testing.T) {
-		h := NewHist()
+		h := NewHistogram()
 
 		for i := float32(0); i < 1000; i++ {
 			h.Observe(i)
@@ -23,7 +23,7 @@ func TestSimple(t *testing.T) {
 	})
 
 	t.Run("Total", func(t *testing.T) {
-		h := NewHist()
+		h := NewHistogram()
 
 		for i := float32(0); i < 1000; i++ {
 			h.Observe(i)
@@ -33,7 +33,7 @@ func TestSimple(t *testing.T) {
 	})
 
 	t.Run("Quantile", func(t *testing.T) {
-		h := NewHist()
+		h := NewHistogram()
 
 		for i := float32(0); i < 1000; i++ {
 			h.Observe(i)
@@ -49,7 +49,7 @@ func TestSimple(t *testing.T) {
 
 func BenchmarkSimple(b *testing.B) {
 	b.Run("Observe", func(b *testing.B) {
-		h := NewHist()
+		h := NewHistogram()
 
 		perfbench.Open(b)
 		b.ReportAllocs()
@@ -61,7 +61,7 @@ func BenchmarkSimple(b *testing.B) {
 	})
 
 	b.Run("Observe_Parallel", func(b *testing.B) {
-		h := NewHist()
+		h := NewHistogram()
 
 		b.ReportAllocs()
 		b.ResetTimer()
@@ -78,7 +78,7 @@ func BenchmarkSimple(b *testing.B) {
 	b.Run("Min", func(b *testing.B) {
 		rng := mwc.Rand()
 
-		h := NewHist()
+		h := NewHistogram()
 
 		for range 1000000 {
 			h.Observe(math.Float32frombits(rng.Uint32() &^ ((1<<10 - 1) << 22)))
@@ -96,7 +96,7 @@ func BenchmarkSimple(b *testing.B) {
 	b.Run("Max", func(b *testing.B) {
 		rng := mwc.Rand()
 
-		h := NewHist()
+		h := NewHistogram()
 
 		for range 1000000 {
 			h.Observe(math.Float32frombits(rng.Uint32() &^ ((1<<10 - 1) << 22)))
@@ -114,7 +114,7 @@ func BenchmarkSimple(b *testing.B) {
 	b.Run("Total", func(b *testing.B) {
 		rng := mwc.Rand()
 
-		h := NewHist()
+		h := NewHistogram()
 
 		for range 1000000 {
 			h.Observe(rng.Float32())
@@ -132,7 +132,7 @@ func BenchmarkSimple(b *testing.B) {
 	b.Run("Total_Easy", func(b *testing.B) {
 		rng := mwc.Rand()
 
-		h := NewHist()
+		h := NewHistogram()
 
 		for range 1000000 {
 			h.Observe(math.Float32frombits(rng.Uint32() &^ ((1<<10 - 1) << 22)))
@@ -151,7 +151,7 @@ func BenchmarkSimple(b *testing.B) {
 	b.Run("Quantile", func(b *testing.B) {
 		rng := mwc.Rand()
 
-		h := NewHist()
+		h := NewHistogram()
 
 		for range 1000000 {
 			h.Observe(rng.Float32())
@@ -170,7 +170,7 @@ func BenchmarkSimple(b *testing.B) {
 	b.Run("Quantile_Easy", func(b *testing.B) {
 		rng := mwc.Rand()
 
-		h := NewHist()
+		h := NewHistogram()
 
 		for range 1000000 {
 			h.Observe(math.Float32frombits(rng.Uint32() &^ ((1<<10 - 1) << 22)))
@@ -189,7 +189,7 @@ func BenchmarkSimple(b *testing.B) {
 	b.Run("CDF", func(b *testing.B) {
 		rng := mwc.Rand()
 
-		h := NewHist()
+		h := NewHistogram()
 
 		for range 1000000 {
 			h.Observe(rng.Float32())
@@ -208,7 +208,7 @@ func BenchmarkSimple(b *testing.B) {
 	b.Run("CDF_Easy", func(b *testing.B) {
 		rng := mwc.Rand()
 
-		h := NewHist()
+		h := NewHistogram()
 
 		for range 1000000 {
 			h.Observe(math.Float32frombits(rng.Uint32() &^ ((1<<10 - 1) << 22)))
@@ -227,7 +227,7 @@ func BenchmarkSimple(b *testing.B) {
 	b.Run("Summary", func(b *testing.B) {
 		rng := mwc.Rand()
 
-		h := NewHist()
+		h := NewHistogram()
 
 		for range 1000 {
 			h.Observe(rng.Float32())
@@ -249,7 +249,7 @@ func BenchmarkSimple(b *testing.B) {
 		b.ResetTimer()
 
 		for b.Loop() {
-			NewHist().Observe(1)
+			NewHistogram().Observe(1)
 		}
 	})
 
@@ -260,7 +260,7 @@ func BenchmarkSimple(b *testing.B) {
 
 		for b.Loop() {
 			for range 1000 {
-				NewHist().Observe(1)
+				NewHistogram().Observe(1)
 			}
 		}
 	})
