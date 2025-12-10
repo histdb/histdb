@@ -29,26 +29,26 @@ func TestStore(t *testing.T) {
 		// 8. merge large into empty
 
 		h1l0 := s1.getL0(h1)
-		h1l0.l1[0] = s1.l1.New().Raw() | 1<<31
+		h1l0.l1[0] = s1.sl.New1().Raw() | 1<<31
 		h1l1 := s1.getL1(h1l0.l1[0])
-		h1l1.l2[0] = s1.l2l.New().Raw() | (l2TagLarge << 29)
-		h1l1.l2[1] = s1.l2l.New().Raw() | (l2TagLarge << 29)
-		h1l1.l2[2] = s1.l2s.New().Raw() | (l2TagSmall << 29)
-		h1l1.l2[3] = s1.l2s.New().Raw() | (l2TagSmall << 29)
-		h1l1.l2[4] = s1.l2s.New().Raw() | (l2TagSmall << 29)
-		h1l1.l2[5] = s1.l2s.New().Raw() | (l2TagSmall << 29)
+		h1l1.l2[0] = s1.sl.New2L().Raw() | (l2TagLarge << 29)
+		h1l1.l2[1] = s1.sl.New2L().Raw() | (l2TagLarge << 29)
+		h1l1.l2[2] = s1.sl.New2S().Raw() | (l2TagSmall << 29)
+		h1l1.l2[3] = s1.sl.New2S().Raw() | (l2TagSmall << 29)
+		h1l1.l2[4] = s1.sl.New2S().Raw() | (l2TagSmall << 29)
+		h1l1.l2[5] = s1.sl.New2S().Raw() | (l2TagSmall << 29)
 
 		h2l0 := s2.getL0(h2)
-		h2l0.l1[0] = s2.l1.New().Raw() | 1<<31
+		h2l0.l1[0] = s2.sl.New1().Raw() | 1<<31
 		h2l1 := s2.getL1(h2l0.l1[0])
-		h2l1.l2[0] = s2.l2s.New().Raw() | (l2TagSmall << 29)
-		h2l1.l2[1] = s2.l2l.New().Raw() | (l2TagLarge << 29)
-		h2l1.l2[2] = s2.l2s.New().Raw() | (l2TagSmall << 29)
-		h2l1.l2[3] = s2.l2l.New().Raw() | (l2TagLarge << 29)
-		h2l1.l2[4] = s2.l2s.New().Raw() | (l2TagSmall << 29)
-		h2l1.l2[5] = s2.l2l.New().Raw() | (l2TagLarge << 29)
-		h2l1.l2[6] = s2.l2s.New().Raw() | (l2TagSmall << 29)
-		h2l1.l2[7] = s2.l2l.New().Raw() | (l2TagLarge << 29)
+		h2l1.l2[0] = s2.sl.New2S().Raw() | (l2TagSmall << 29)
+		h2l1.l2[1] = s2.sl.New2L().Raw() | (l2TagLarge << 29)
+		h2l1.l2[2] = s2.sl.New2S().Raw() | (l2TagSmall << 29)
+		h2l1.l2[3] = s2.sl.New2L().Raw() | (l2TagLarge << 29)
+		h2l1.l2[4] = s2.sl.New2S().Raw() | (l2TagSmall << 29)
+		h2l1.l2[5] = s2.sl.New2L().Raw() | (l2TagLarge << 29)
+		h2l1.l2[6] = s2.sl.New2S().Raw() | (l2TagSmall << 29)
+		h2l1.l2[7] = s2.sl.New2L().Raw() | (l2TagLarge << 29)
 
 		// case 1.
 		s1.getL2L(h1l1.l2[0]).cs[0] = l2GrowAt + 1
@@ -185,7 +185,7 @@ func TestStore(t *testing.T) {
 	})
 }
 
-func BenchmarkHistogram(b *testing.B) {
+func BenchmarkStore(b *testing.B) {
 	b.Run("Observe", func(b *testing.B) {
 		var s S
 		h := s.New()
@@ -389,6 +389,30 @@ func BenchmarkHistogram(b *testing.B) {
 
 		for b.Loop() {
 			_, _, _, _ = s.Summary(h)
+		}
+	})
+
+	b.Run("Alloc_One", func(b *testing.B) {
+		perfbench.Open(b)
+		b.ReportAllocs()
+		b.ResetTimer()
+
+		for b.Loop() {
+			var s S
+			s.Observe(s.New(), 1)
+		}
+	})
+
+	b.Run("Alloc_Many", func(b *testing.B) {
+		perfbench.Open(b)
+		b.ReportAllocs()
+		b.ResetTimer()
+
+		for b.Loop() {
+			var s S
+			for range 1000 {
+				s.Observe(s.New(), 1)
+			}
 		}
 	})
 }

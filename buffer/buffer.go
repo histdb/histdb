@@ -46,10 +46,6 @@ func (buf T) Valid() bool {
 	return buf.pos < buf.cap
 }
 
-func (buf T) Base() ptr {
-	return buf.base
-}
-
 func (buf T) Pos() uptr {
 	return buf.pos
 }
@@ -137,7 +133,7 @@ func (buf T) grow(n uintptr) T {
 	buf.cap = buf.cap*2 + n
 	nb := make([]byte, buf.cap)
 	copy(nb, buf.Prefix())
-	buf.base = *(*ptr)(ptr(&nb))
+	buf.base = ptr(unsafe.SliceData(nb))
 	return buf
 }
 

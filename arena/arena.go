@@ -59,6 +59,7 @@ func (l *T[V]) New() (p P[V]) {
 	return
 }
 
+//go:noinline
 func (l *T[V]) realloc(v uint32) {
 	l.mu.Lock()
 	defer l.mu.Unlock()

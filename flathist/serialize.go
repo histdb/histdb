@@ -26,7 +26,7 @@ const (
 
 // AppendTo implements rwutils.RW and is not safe to call with concurrent mutations.
 func AppendTo(s *S, h H, w *rwutils.W) {
-	l0 := s.l0.Get(h.v)
+	l0 := s.sl.Get0(h.v)
 
 	bm := bitmask(&l0.l1)
 	w.Uint32(bm)
@@ -68,14 +68,14 @@ func AppendTo(s *S, h H, w *rwutils.W) {
 
 // ReadFrom implements rwutils.RW and is not safe to call with concurrent mutations.
 func ReadFrom(s *S, h H, r *rwutils.R) {
-	l0 := s.l0.Get(h.v)
+	l0 := s.sl.Get0(h.v)
 
 	for bm := bitmap.New32(r.Uint32()); !bm.Empty(); bm.ClearLowest() {
 		l1i := bm.Lowest()
 
 		l1a := l0.l1[l1i]
 		if l1a == 0 {
-			l1a = s.l1.New().Raw() | (l2TagSmall << 29)
+			l1a = s.sl.New1().Raw() | (l2TagSmall << 29)
 			l0.l1[l1i] = l1a
 		}
 		l1 := s.getL1(l1a)
@@ -85,7 +85,7 @@ func ReadFrom(s *S, h H, r *rwutils.R) {
 
 			l2a := l1.l2[l2i]
 			if l2a == 0 {
-				l2a = s.l2s.New().Raw() | (l2TagSmall << 29)
+				l2a = s.sl.New2S().Raw() | (l2TagSmall << 29)
 				l1.l2[l2i] = l2a
 			}
 
@@ -104,7 +104,7 @@ func ReadFrom(s *S, h H, r *rwutils.R) {
 				if l2l != nil {
 					l2l.cs[k] += v
 				} else if x := l2s.cs[k]; v > l2GrowAt || uint64(x)+v > l2GrowAt {
-					l2a = s.l2l.New().Raw() | (l2TagLarge << 29)
+					l2a = s.sl.New2L().Raw() | (l2TagLarge << 29)
 					l1.l2[l2i] = l2a
 
 					l2l = s.getL2L(l2a)
