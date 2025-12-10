@@ -128,6 +128,28 @@ func TestStore(t *testing.T) {
 		})
 	})
 
+	t.Run("Equal", func(t *testing.T) {
+		rng := mwc.Rand()
+
+		var s1 S
+		var s2 S
+
+		h1 := s1.New()
+		h2 := s2.New()
+
+		for range 10000 {
+			r := rng.Float32()
+			s1.Observe(h1, r)
+			s2.Observe(h2, r)
+		}
+
+		assert.That(t, Equal(&s1, h1, &s2, h2))
+
+		s1.Observe(h1, 1)
+
+		assert.That(t, !Equal(&s1, h1, &s2, h2))
+	})
+
 	t.Run("Iterate", func(t *testing.T) {
 		var s S
 

@@ -11,6 +11,25 @@ import (
 )
 
 func TestSimple(t *testing.T) {
+	t.Run("Equal", func(t *testing.T) {
+		rng := mwc.Rand()
+
+		h1 := NewHistogram()
+		h2 := NewHistogram()
+
+		for range 10000 {
+			r := rng.Float32()
+			h1.Observe(r)
+			h2.Observe(r)
+		}
+
+		assert.That(t, h1.Equal(h2))
+
+		h1.Observe(1)
+
+		assert.That(t, !h1.Equal(h2))
+	})
+
 	t.Run("MinMax", func(t *testing.T) {
 		h := NewHistogram()
 

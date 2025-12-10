@@ -27,14 +27,15 @@ func NewHistogram() *Histogram {
 
 func (h *Histogram) Finalize() { h.s.Finalize() }
 
-func (h *Histogram) Merge(other *Histogram)     { Merge(h.s, h.h, other.s, other.h) }
-func (h *Histogram) Observe(v float32)          { h.s.Observe(h.h, v) }
-func (h *Histogram) Min() float32               { return h.s.Min(h.h) }
-func (h *Histogram) Max() float32               { return h.s.Max(h.h) }
-func (h *Histogram) Reset()                     { h.s.Reset(h.h) }
-func (h *Histogram) Total() uint64              { return h.s.Total(h.h) }
-func (h *Histogram) Quantile(q float64) float32 { return h.s.Quantile(h.h, q) }
-func (h *Histogram) CDF(q float32) float64      { return h.s.CDF(h.h, q) }
+func (h *Histogram) Merge(other *Histogram)      { Merge(h.s, h.h, other.s, other.h) }
+func (h *Histogram) Equal(other *Histogram) bool { return Equal(h.s, h.h, other.s, other.h) }
+func (h *Histogram) Observe(v float32)           { h.s.Observe(h.h, v) }
+func (h *Histogram) Min() float32                { return h.s.Min(h.h) }
+func (h *Histogram) Max() float32                { return h.s.Max(h.h) }
+func (h *Histogram) Reset()                      { h.s.Reset(h.h) }
+func (h *Histogram) Total() uint64               { return h.s.Total(h.h) }
+func (h *Histogram) Quantile(q float64) float32  { return h.s.Quantile(h.h, q) }
+func (h *Histogram) CDF(q float32) float64       { return h.s.CDF(h.h, q) }
 
 func (h *Histogram) Summary() (total, sum, avg, vari float64) {
 	return h.s.Summary(h.h)

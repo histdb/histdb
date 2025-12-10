@@ -47,12 +47,10 @@ type layer1 struct {
 }
 
 type layer2Small struct {
-	_  [0]func() // no equality
 	cs [l2Size]uint32
 }
 
 type layer2Large struct {
-	_  [0]func() // no equality
 	cs [l2Size]uint64
 }
 

@@ -126,84 +126,131 @@ func (s *S) Finalize() {
 // TODO: maybe have an optimization in the arena for a small number of
 // allocations like maybe a static buffer of some small size that it uses first,
 // but it would suck to have to special case every Get call, so think more!
-func Merge(s *S, g H, t *S, h H) {
-	gl0 := s.l0.Get(g.v)
-	hl0 := t.l0.Get(h.v)
+func Merge(s *S, h H, t *S, g H) {
+	hl0 := s.l0.Get(h.v)
+	gl0 := t.l0.Get(g.v)
 
-	for bm := bitmap.New32(bitmask(&hl0.l1)); !bm.Empty(); bm.ClearLowest() {
+	for bm := bitmap.New32(bitmask(&gl0.l1)); !bm.Empty(); bm.ClearLowest() {
 		l1idx := bm.Lowest()
 
-		gl1a := gl0.l1[l1idx]
-		if gl1a == 0 {
-			gl1a = s.l1.New().Raw() | (l2TagSmall << 29)
-			gl0.l1[l1idx] = gl1a
+		hl1a := hl0.l1[l1idx]
+		if hl1a == 0 {
+			hl1a = s.l1.New().Raw() | (l2TagSmall << 29)
+			hl0.l1[l1idx] = hl1a
 		}
 
-		gl1 := s.getL1(gl1a)
-		hl1 := t.getL1(hl0.l1[l1idx])
+		hl1 := s.getL1(hl1a)
+		gl1 := t.getL1(gl0.l1[l1idx])
 
-		for bm := bitmap.New32(bitmask(&hl1.l2)); !bm.Empty(); bm.ClearLowest() {
+		for bm := bitmap.New32(bitmask(&gl1.l2)); !bm.Empty(); bm.ClearLowest() {
 			l2idx := bm.Lowest()
 
-			hl2a := hl1.l2[l2idx]
-
 			gl2a := gl1.l2[l2idx]
-			if gl2a == 0 {
-				if isAddrLarge(hl2a) {
-					gl2a = s.l2l.New().Raw() | (l2TagLarge << 29)
-					gl1.l2[l2idx] = gl2a
-				} else {
-					gl2a = s.l2s.New().Raw() | (l2TagSmall << 29)
-					gl1.l2[l2idx] = gl2a
-				}
-			}
 
-			var hl2l *layer2Large
-			var hl2s *layer2Small
-			if isAddrLarge(hl2a) {
-				hl2l = t.getL2L(hl2a)
-			} else {
-				hl2s = t.getL2S(hl2a)
+			hl2a := hl1.l2[l2idx]
+			if hl2a == 0 {
+				if isAddrLarge(gl2a) {
+					hl2a = s.l2l.New().Raw() | (l2TagLarge << 29)
+					hl1.l2[l2idx] = hl2a
+				} else {
+					hl2a = s.l2s.New().Raw() | (l2TagSmall << 29)
+					hl1.l2[l2idx] = hl2a
+				}
 			}
 
 			var gl2l *layer2Large
 			var gl2s *layer2Small
 			if isAddrLarge(gl2a) {
-				gl2l = s.getL2L(gl2a)
+				gl2l = t.getL2L(gl2a)
 			} else {
-				gl2s = s.getL2S(gl2a)
+				gl2s = t.getL2S(gl2a)
+			}
+
+			var hl2l *layer2Large
+			var hl2s *layer2Small
+			if isAddrLarge(hl2a) {
+				hl2l = s.getL2L(hl2a)
+			} else {
+				hl2s = s.getL2S(hl2a)
 			}
 
 			for k := range l2Size {
-				var hv uint64
-				if hl2l != nil {
-					hv = hl2l.cs[k]
+				var gv uint64
+				if gl2l != nil {
+					gv = gl2l.cs[k]
 				} else {
-					hv = uint64(hl2s.cs[k])
+					gv = uint64(gl2s.cs[k])
 				}
 
-				if gl2l != nil {
-					gl2l.cs[k] += hv
+				if hl2l != nil {
+					hl2l.cs[k] += gv
 					continue
 				}
 
-				gv := uint64(gl2s.cs[k])
+				hv := uint64(hl2s.cs[k])
 
-				if hv > l2GrowAt || hv+gv > l2GrowAt {
-					gl2a = s.l2l.New().Raw() | (l2TagLarge << 29)
-					gl1.l2[l2idx] = gl2a
+				if gv > l2GrowAt || gv+hv > l2GrowAt {
+					hl2a = s.l2l.New().Raw() | (l2TagLarge << 29)
+					hl1.l2[l2idx] = hl2a
 
-					gl2l = s.getL2L(gl2a)
+					hl2l = s.getL2L(hl2a)
 					for i := range l2Size {
-						gl2l.cs[i] = uint64(gl2s.cs[i])
+						hl2l.cs[i] = uint64(hl2s.cs[i])
 					}
-					gl2l.cs[k] += hv
+					hl2l.cs[k] += gv
 				} else {
-					gl2s.cs[k] = uint32(gv + hv)
+					hl2s.cs[k] = uint32(hv + gv)
 				}
 			}
 		}
 	}
+}
+
+func Equal(s *S, h H, t *S, g H) bool {
+	hl0 := s.l0.Get(h.v)
+	gl0 := t.l0.Get(g.v)
+	if bitmask(&gl0.l1) != bitmask(&hl0.l1) {
+		return false
+	}
+
+	for bm := bitmap.New32(bitmask(&gl0.l1)); !bm.Empty(); bm.ClearLowest() {
+		l1idx := bm.Lowest()
+
+		hl1 := s.getL1(hl0.l1[l1idx])
+		gl1 := t.getL1(gl0.l1[l1idx])
+		if bitmask(&gl1.l2) != bitmask(&hl1.l2) {
+			return false
+		}
+
+		for bm := bitmap.New32(bitmask(&gl1.l2)); !bm.Empty(); bm.ClearLowest() {
+			l2idx := bm.Lowest()
+
+			gl2a := gl1.l2[l2idx]
+			hl2a := hl1.l2[l2idx]
+
+			if isAddrLarge(gl2a) != isAddrLarge(hl2a) {
+				return false
+			}
+
+			if isAddrLarge(gl2a) {
+				gl2l := t.getL2L(gl2a)
+				hl2l := s.getL2L(hl2a)
+
+				if *gl2l != *hl2l {
+					return false
+				}
+			} else {
+				gl2s := t.getL2S(gl2a)
+				hl2s := s.getL2S(hl2a)
+
+				if *gl2s != *hl2s {
+					return false
+				}
+			}
+		}
+	}
+
+	return true
 }
 
 // Observe adds the value to the histogram.
