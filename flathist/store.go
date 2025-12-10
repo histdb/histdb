@@ -208,42 +208,47 @@ func Merge(s *S, h H, t *S, g H) {
 
 func Equal(s *S, h H, t *S, g H) bool {
 	hl0 := s.l0.Get(h.v)
+	hl0bm := bitmask(&hl0.l1)
+
 	gl0 := t.l0.Get(g.v)
-	if bitmask(&gl0.l1) != bitmask(&hl0.l1) {
+	gl0bm := bitmask(&gl0.l1)
+
+	if hl0bm != gl0bm {
 		return false
 	}
 
-	for bm := bitmap.New32(bitmask(&gl0.l1)); !bm.Empty(); bm.ClearLowest() {
+	for bm := bitmap.New32(hl0bm); !bm.Empty(); bm.ClearLowest() {
 		l1idx := bm.Lowest()
 
 		hl1 := s.getL1(hl0.l1[l1idx])
+		hl1bm := bitmask(&hl1.l2)
+
 		gl1 := t.getL1(gl0.l1[l1idx])
-		if bitmask(&gl1.l2) != bitmask(&hl1.l2) {
+		gl1bm := bitmask(&gl1.l2)
+
+		if hl1bm != gl1bm {
 			return false
 		}
 
-		for bm := bitmap.New32(bitmask(&gl1.l2)); !bm.Empty(); bm.ClearLowest() {
+		for bm := bitmap.New32(hl1bm); !bm.Empty(); bm.ClearLowest() {
 			l2idx := bm.Lowest()
 
 			gl2a := gl1.l2[l2idx]
-			hl2a := hl1.l2[l2idx]
+			gl2aLarge := isAddrLarge(gl2a)
 
-			if isAddrLarge(gl2a) != isAddrLarge(hl2a) {
+			hl2a := hl1.l2[l2idx]
+			hl2aLarge := isAddrLarge(hl2a)
+
+			if hl2aLarge != gl2aLarge {
 				return false
 			}
 
-			if isAddrLarge(gl2a) {
-				gl2l := t.getL2L(gl2a)
-				hl2l := s.getL2L(hl2a)
-
-				if *gl2l != *hl2l {
+			if hl2aLarge {
+				if *s.getL2L(hl2a) != *t.getL2L(gl2a) {
 					return false
 				}
 			} else {
-				gl2s := t.getL2S(gl2a)
-				hl2s := s.getL2S(hl2a)
-
-				if *gl2s != *hl2s {
+				if *s.getL2S(hl2a) != *t.getL2S(gl2a) {
 					return false
 				}
 			}
