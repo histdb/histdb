@@ -63,8 +63,8 @@ func (buf T) Prefix() []byte {
 	return unsafe.Slice((*byte)(buf.base), buf.pos)
 }
 
-func (buf T) At(n uptr) ptr {
-	return ptr(uptr(buf.base) + buf.pos + n)
+func (buf T) At(n uptr) *byte {
+	return (*byte)(unsafe.Add(buf.base, buf.pos+n))
 }
 
 func (buf T) Reset() T {
@@ -117,11 +117,11 @@ func (buf T) Front24() *[24]byte {
 }
 
 func (buf T) FrontN(n int) (x []byte) {
-	return unsafe.Slice((*byte)(buf.At(0)), n)
+	return unsafe.Slice(buf.At(0), n)
 }
 
 func (buf T) Suffix() (x []byte) {
-	return unsafe.Slice((*byte)(buf.At(0)), buf.Remaining())
+	return unsafe.Slice(buf.At(0), buf.Remaining())
 }
 
 func (buf T) Remaining() uptr {

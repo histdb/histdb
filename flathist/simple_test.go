@@ -64,6 +64,27 @@ func TestSimple(t *testing.T) {
 		assert.Equal(t, h.Quantile(1), 998.)
 		assert.Equal(t, h.Quantile(2), 998.)
 	})
+
+	t.Run("Serialize", func(t *testing.T) {
+		rng := mwc.Rand()
+
+		h1 := NewHistogram()
+
+		for range 10000 {
+			r := rng.Float32()
+			h1.Observe(r)
+		}
+
+		buf := h1.AppendTo(nil)
+		buf = append(buf, 1, 2, 3, 4)
+
+		h2 := NewHistogram()
+		rem, err := h2.ReadFrom(buf)
+		assert.NoError(t, err)
+		assert.Equal(t, rem, []byte{1, 2, 3, 4})
+
+		assert.That(t, h1.Equal(h2))
+	})
 }
 
 func BenchmarkSimple(b *testing.B) {

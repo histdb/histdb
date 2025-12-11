@@ -3,8 +3,6 @@ package flathist
 import (
 	"sync"
 
-	"github.com/zeebo/errs/v2"
-
 	"github.com/histdb/histdb/buffer"
 	"github.com/histdb/histdb/rwutils"
 )
@@ -19,7 +17,7 @@ type Histogram struct {
 func NewHistogram() *Histogram {
 	s := storePool.Get().(*S)
 	h := &Histogram{s: s, h: s.New()}
-	if s.l0.Allocated() < 1024 {
+	if s.l0.Allocated() < 1023 { // number chosen to avoid realloc of l0
 		storePool.Put(s)
 	}
 	return h
@@ -52,15 +50,13 @@ func (h *Histogram) AppendTo(buf []byte) []byte {
 	return w.Done().Prefix()
 }
 
-func (h *Histogram) ReadFrom(buf []byte) error {
+func (h *Histogram) ReadFrom(buf []byte) ([]byte, error) {
 	var r rwutils.R
 	r.Init(buffer.OfLen(buf))
 	ReadFrom(h.s, h.h, &r)
 	rem, err := r.Done()
 	if err != nil {
-		return err
-	} else if n := rem.Remaining(); n != 0 {
-		return errs.Errorf("trailing data after hist read: %d bytes", n)
+		return nil, err
 	}
-	return nil
+	return rem.Suffix(), nil
 }

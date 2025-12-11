@@ -60,25 +60,25 @@ func Consume(buf buffer.T) (uint64, buffer.T, bool) {
 
 	switch nbytes {
 	case 9:
-		out |= le.Uint64((*[8]byte)(buf.At(1))[:])
+		out |= le.Uint64(buf.Index8(1)[:])
 	case 8:
-		out |= uint64(le.Uint32((*[4]byte)(buf.At(1))[:]))
-		out |= uint64(le.Uint32((*[4]byte)(buf.At(4))[:])) << 24
+		out |= uint64(le.Uint32(buf.Index4(1)[:]))
+		out |= uint64(le.Uint32(buf.Index4(4)[:])) << 24
 	case 7:
-		out |= uint64(le.Uint32((*[4]byte)(buf.At(1))[:])) << 1
-		out |= uint64(le.Uint16((*[2]byte)(buf.At(5))[:])) << 33
+		out |= uint64(le.Uint32(buf.Index4(1)[:])) << 1
+		out |= uint64(le.Uint16(buf.Index2(5)[:])) << 33
 	case 6:
-		out |= uint64(le.Uint32((*[4]byte)(buf.At(1))[:])) << 2
-		out |= uint64(*(*byte)(buf.At(5))) << 34
+		out |= uint64(le.Uint32(buf.Index4(1)[:])) << 2
+		out |= uint64(*buf.Index(5)) << 34
 	case 5:
-		out |= uint64(le.Uint32((*[4]byte)(buf.At(1))[:])) << 3
+		out |= uint64(le.Uint32(buf.Index4(1)[:])) << 3
 	case 4:
-		out |= uint64(le.Uint16((*[2]byte)(buf.At(1))[:])) << 4
-		out |= uint64(*(*byte)(buf.At(3))) << 20
+		out |= uint64(le.Uint16(buf.Index2(1)[:])) << 4
+		out |= uint64(*buf.Index(3)) << 20
 	case 3:
-		out |= uint64(le.Uint16((*[2]byte)(buf.At(1))[:])) << 5
+		out |= uint64(le.Uint16(buf.Index2(1)[:])) << 5
 	case 2:
-		out |= uint64(*(*byte)(buf.At(1))) << 6
+		out |= uint64(*buf.Index(1)) << 6
 	}
 
 	return out, buf.Advance(uintptr(nbytes)), true
