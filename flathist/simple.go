@@ -36,7 +36,7 @@ func (h *Histogram) Total() uint64               { return h.s.Total(h.h) }
 func (h *Histogram) Quantile(q float64) float32  { return h.s.Quantile(h.h, q) }
 func (h *Histogram) CDF(q float32) float64       { return h.s.CDF(h.h, q) }
 
-func (h *Histogram) Summary() (total, sum, avg, vari float64) {
+func (h *Histogram) Summary() (total uint64, sum, avg, vari float64) {
 	return h.s.Summary(h.h)
 }
 

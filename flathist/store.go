@@ -567,7 +567,8 @@ func (s *S) CDF(h H, v float32) float64 {
 // the values, the average of the values, and the variance of the values.
 //
 // It is safe to be called concurrently with Observe.
-func (s *S) Summary(h H) (total, sum, avg, vari float64) {
+func (s *S) Summary(h H) (total uint64, sum, avg, vari float64) {
+	var ftotal float64
 	var total2 float64
 
 	l0 := s.l0.Get(h.v)
@@ -582,34 +583,38 @@ func (s *S) Summary(h H) (total, sum, avg, vari float64) {
 			if isAddrLarge(l2a) {
 				l2l := s.getL2L(l2a)
 				for k := range uint32(l2Size) {
-					count := float64(atomic.LoadUint64(&l2l.cs[k]))
+					count := atomic.LoadUint64(&l2l.cs[k])
 					if count == 0 {
 						continue
 					}
+					fcount := float64(count)
 					value := float64(upperValue(i, j, k))
 
 					total += count
-					total2 += count * count
+					ftotal += fcount
+					total2 += fcount * fcount
 					avg_ := avg
-					avg += (count / total) * (value - avg_)
-					sum += count * value
-					vari += count * (value - avg_) * (value - avg)
+					avg += (fcount / ftotal) * (value - avg_)
+					sum += fcount * value
+					vari += fcount * (value - avg_) * (value - avg)
 				}
 			} else {
 				l2s := s.getL2S(l2a)
 				for k := range uint32(l2Size) {
-					count := float64(atomic.LoadUint32(&l2s.cs[k]))
+					count := atomic.LoadUint32(&l2s.cs[k])
 					if count == 0 {
 						continue
 					}
+					fcount := float64(count)
 					value := float64(upperValue(i, j, k))
 
-					total += count
-					total2 += count * count
+					total += uint64(count)
+					ftotal += fcount
+					total2 += fcount * fcount
 					avg_ := avg
-					avg += (count / total) * (value - avg_)
-					sum += count * value
-					vari += count * (value - avg_) * (value - avg)
+					avg += (fcount / ftotal) * (value - avg_)
+					sum += fcount * value
+					vari += fcount * (value - avg_) * (value - avg)
 				}
 			}
 		}
@@ -621,7 +626,7 @@ func (s *S) Summary(h H) (total, sum, avg, vari float64) {
 	case 1:
 		return 1, sum, sum, 0
 	default:
-		return total, sum, sum / total, vari / (total - 1)
+		return total, sum, sum / ftotal, vari / (ftotal - 1)
 	}
 }
 

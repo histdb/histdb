@@ -57,7 +57,7 @@ func TestSerialize(t *testing.T) {
 		var r rwutils.R
 		AppendTo(&s, h1, &w)
 
-		for i := float64(1); i < 10; i++ {
+		for i := range uint64(10) {
 			r.Init(w.Done().Reset())
 			ReadFrom(&s, h2, &r)
 			_, err := r.Done()
@@ -65,8 +65,8 @@ func TestSerialize(t *testing.T) {
 
 			tot1, sum1, avg1, _ := s.Summary(h1)
 			tot2, sum2, avg2, _ := s.Summary(h2)
-			assert.Equal(t, i*tot1, tot2)
-			assert.Equal(t, i*sum1, sum2)
+			assert.Equal(t, (i+1)*tot1, tot2)
+			assert.Equal(t, float64(i+1)*sum1, sum2)
 			assert.Equal(t, avg1, avg2)
 		}
 	})
