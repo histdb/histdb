@@ -27,6 +27,7 @@ func (h *Histogram) Finalize() { h.s.Finalize() }
 
 func (h *Histogram) Merge(other *Histogram)      { Merge(h.s, h.h, other.s, other.h) }
 func (h *Histogram) Equal(other *Histogram) bool { return Equal(h.s, h.h, other.s, other.h) }
+func (h *Histogram) Clone() *Histogram           { c := NewHistogram(); c.Merge(h); return c }
 func (h *Histogram) Observe(v float32)           { h.s.Observe(h.h, v) }
 func (h *Histogram) Min() float32                { return h.s.Min(h.h) }
 func (h *Histogram) Max() float32                { return h.s.Max(h.h) }
