@@ -11,8 +11,6 @@ import (
 	"github.com/histdb/histdb/sizeof"
 )
 
-const orParallelism = 0
-
 //
 // bitmap parameters
 //

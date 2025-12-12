@@ -148,6 +148,29 @@ func (t *T) Iterate(cb func(Id) bool) bool {
 	return true
 }
 
+func (t *T) TagKeys(cb func([]byte) bool) bool {
+	return t.tkey_names.Iter(func(h histdb.TagKeyHash, v []byte) bool {
+		return cb(v)
+	})
+}
+
+func (t *T) TagValues(tkey []byte, cb func([]byte) bool) bool {
+	tkeyn, ok := t.tkey_names.Find(histdb.NewTagKeyHash(tkey))
+	if !ok {
+		return true
+	}
+
+	return Iter(t.tkey_to_tvals[tkeyn], func(tagn Id) bool {
+		return cb(tagValue(tkey, t.tag_names.Get(RWId(tagn))))
+	})
+}
+
+func (t *T) Tags(cb func([]byte) bool) bool {
+	return t.tag_names.Iter(func(h histdb.TagHash, v []byte) bool {
+		return cb(v)
+	})
+}
+
 func (t *T) GetIdByHash(hash histdb.Hash) (Id, bool) {
 	id, ok := t.metrics.Find(hash)
 	return Id(id), ok
@@ -241,7 +264,7 @@ func (t *T) QueryTrue(tkeys []byte, cb func(*Bitmap)) {
 		bms = append(bms, t.tkey_to_metrics[tkeyn])
 	}
 
-	cb(bitmapOr(bms...))
+	cb(bitmapAnd(bms...))
 }
 
 func (t *T) QueryEqual(tag []byte, cb func(*Bitmap)) {
@@ -285,7 +308,7 @@ func (t *T) QueryFilter(tkey []byte, fn func([]byte) bool, cb func(*Bitmap)) {
 	var bms []*Bitmap
 
 	Iter(t.tkey_to_tvals[tkeyn], func(tagn Id) bool {
-		if fn(tagValue(tkey, t.tag_names.Get(RWId(tagn)))) {
+		if fn == nil || fn(tagValue(tkey, t.tag_names.Get(RWId(tagn)))) {
 			bms = append(bms, t.tag_to_metrics[tagn])
 		}
 		return true
@@ -296,7 +319,7 @@ func (t *T) QueryFilter(tkey []byte, fn func([]byte) bool, cb func(*Bitmap)) {
 
 func (t *T) QueryFilterNot(tkey []byte, fn func([]byte) bool, cb func(*Bitmap)) {
 	tkeyn, ok := t.tkey_names.Find(histdb.NewTagKeyHash(tkey))
-	if !ok {
+	if !ok || fn == nil {
 		cb(new(Bitmap))
 		return
 	}
